@@ -388,7 +388,9 @@ internal sealed partial class Transaction
             StagingRules.EnsureTargetMatchesKind(kind, targetPath);
         }
 
-        string stagingPath = WorkPath.StagingFilePath(targetPath, _transactionId);
+        JournalOperation? previous = existingIndex >= 0 ? _operations[existingIndex] : null;
+        string stagingPath = previous?.StagingPath
+            ?? WorkPath.StagingFilePath(targetPath, _transactionId);
         await StagingFile.WriteAsync(stagingPath, content, cancellationToken).ConfigureAwait(false);
 
         JournalOperation operation = new JournalOperation(recordedKind, targetPath, stagingPath);
@@ -412,8 +414,22 @@ internal sealed partial class Transaction
                 _operations.Remove(operation);
                 StagingFile.TryDelete(stagingPath);
             }
+            else
+            {
+                _operations[existingIndex] = previous!;
+                if (!string.Equals(previous!.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    StagingFile.TryDelete(stagingPath);
+                }
+            }
 
             throw;
+        }
+
+        if (previous?.StagingPath is not null
+            && !string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase))
+        {
+            StagingFile.TryDelete(previous.StagingPath);
         }
     }
 }

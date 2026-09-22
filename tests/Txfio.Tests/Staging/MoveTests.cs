@@ -151,6 +151,71 @@ public sealed class MoveTests
     }
 
     /// <summary>
+    /// Add を付け替えたあと移動先を Update しても .txnew は元の場所のままである
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add のあと別ディレクトリへ Move している</para>
+    /// <para>手順: 移動先へ UpdateAsync する</para>
+    /// <para>期待: pending は Add（移動先）1 件で、.txnew は元の場所に 1 件だけある</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_Addを付け替えた先でもtxnewは元の場所のままであること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
+        await tx.AddAsync("a.txt", first);
+        await tx.MoveAsync("a.txt", "sub/b.txt");
+        await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
+        await tx.UpdateAsync("sub/b.txt", second);
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Add, pending.Kind);
+        Assert.Equal(
+            System.IO.Path.Combine(work.Path, "sub", "b.txt"),
+            pending.Path,
+            StringComparer.OrdinalIgnoreCase);
+        string[] sidecars = Directory.GetFiles(work.Path, "*.txnew");
+        Assert.Single(sidecars);
+        Assert.Equal("second", await File.ReadAllTextAsync(sidecars[0]));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+    }
+
+    /// <summary>
+    /// Add を付け替えた先の Update で journal 書き込みに失敗しても .txnew は元の場所のままである
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add のあと Move し、journal を排他ロックしている</para>
+    /// <para>手順: 移動先へ UpdateAsync する</para>
+    /// <para>期待: 例外は IOException で、pending は Add のまま、.txnew は元の場所に 1 件である</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_Addを付け替えた先でjournal書き込みに失敗するとtxnewは元のままであること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
+        await tx.AddAsync("a.txt", first);
+        await tx.MoveAsync("a.txt", "sub/b.txt");
+        await using FileStream journalLock = LockJournal(work.Path);
+        await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
+
+        IOException ex = await Assert.ThrowsAsync<IOException>(() => tx.UpdateAsync("sub/b.txt", second));
+        Assert.Null(ex.InnerException);
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Add, pending.Kind);
+        Assert.Equal(
+            System.IO.Path.Combine(work.Path, "sub", "b.txt"),
+            pending.Path,
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+    }
+
+    /// <summary>
     /// Update のあと Move は移動先への Add と元の Delete になる
     /// </summary>
     /// <remarks>
