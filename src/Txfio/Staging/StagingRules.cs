@@ -167,15 +167,15 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// メタデータフォルダを削除対象から外す
+    /// メタデータフォルダとその配下を操作対象から除外する
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <param name="targetPath">対象パス</param>
     internal static void EnsureNotMetadataFolder(string workFolder, string targetPath)
     {
-        if (string.Equals(targetPath, MetadataNames.FolderPath(workFolder), StringComparison.OrdinalIgnoreCase))
+        if (WorkPath.IsInMetadataFolder(workFolder, targetPath))
         {
-            throw new IOException("メタデータフォルダは削除できません: " + targetPath);
+            throw new IOException("メタデータフォルダとその配下のパスは操作できません: " + targetPath);
         }
     }
 

@@ -105,6 +105,8 @@ internal sealed partial class Transaction
         }
 
         StagingRules.EnsureParentDirectoryExists(destPath);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, destPath);
         StagingRules.EnsureSameVolume(sourcePath, destPath);
         StagingRules.EnsureMoveDestinationIsFree(destPath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, sourcePath);
@@ -168,6 +170,7 @@ internal sealed partial class Transaction
     {
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
 
@@ -304,6 +307,7 @@ internal sealed partial class Transaction
         ArgumentNullException.ThrowIfNull(content);
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
 

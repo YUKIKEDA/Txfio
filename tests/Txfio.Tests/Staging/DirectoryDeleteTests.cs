@@ -166,6 +166,85 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
+    /// メタデータフォルダ配下の Add は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: トランザクションを開始している</para>
+    /// <para>手順: .txfio 配下へ AddAsync する</para>
+    /// <para>期待: IOException になり .txnew は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task AddAsync_メタデータフォルダ配下だとIOExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await Assert.ThrowsAsync<IOException>(() => tx.AddAsync(".txfio/foo", content));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "*.txnew"));
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
+    /// <summary>
+    /// メタデータフォルダ配下の Update / Attach は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: .txfio 配下にファイルがある</para>
+    /// <para>手順: UpdateAsync と AttachAsync する</para>
+    /// <para>期待: どちらも IOException になる</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateとAttach_メタデータフォルダ配下だとIOExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
+        string inside = System.IO.Path.Combine(work.Path, ".txfio", "foo");
+        await File.WriteAllTextAsync(inside, "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await Assert.ThrowsAsync<IOException>(() => tx.UpdateAsync(".txfio/foo", content));
+        await Assert.ThrowsAsync<IOException>(() => tx.AttachAsync(".txfio/foo"));
+        Assert.Equal("keep", await File.ReadAllTextAsync(inside));
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
+    /// <summary>
+    /// メタデータフォルダ配下への Move は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ワークフォルダにファイルがある</para>
+    /// <para>手順: .txfio 配下へ MoveAsync する</para>
+    /// <para>期待: IOException になる</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_メタデータフォルダ配下だとIOExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await Assert.ThrowsAsync<IOException>(() => tx.MoveAsync("a.txt", ".txfio/a.txt"));
+        Assert.True(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
+    /// <summary>
+    /// メタデータフォルダ配下の Delete は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: .txfio 配下にファイルがある</para>
+    /// <para>手順: そのパスを DeleteAsync する</para>
+    /// <para>期待: IOException になる</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteAsync_メタデータフォルダ配下だとIOExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, ".txfio", "foo"), "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync(".txfio/foo"));
+    }
+
+    /// <summary>
     /// 残っている Add がある親ディレクトリは Delete できない
     /// </summary>
     /// <remarks>

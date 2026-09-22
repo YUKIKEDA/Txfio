@@ -28,6 +28,17 @@ internal static class WorkPath
     }
 
     /// <summary>
+    /// メタデータフォルダそのもの、またはその配下かどうかを判定する
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="fullPath">正規化した絶対パス</param>
+    /// <returns>メタデータフォルダそのもの、またはその配下なら <see langword="true"/></returns>
+    internal static bool IsInMetadataFolder(string workFolder, string fullPath)
+    {
+        return IsEqualOrUnder(MetadataNames.FolderPath(workFolder), fullPath);
+    }
+
+    /// <summary>
     /// 対象ファイルと同じディレクトリの `.txnew` パスを返す
     /// </summary>
     /// <param name="targetPath">対象ファイルの絶対パス</param>
@@ -62,12 +73,18 @@ internal static class WorkPath
 
     private static bool IsInsideWorkFolder(string workFolder, string fullPath)
     {
-        if (string.Equals(workFolder, fullPath, StringComparison.OrdinalIgnoreCase))
+        return !string.Equals(workFolder, fullPath, StringComparison.OrdinalIgnoreCase)
+            && IsEqualOrUnder(workFolder, fullPath);
+    }
+
+    private static bool IsEqualOrUnder(string parent, string fullPath)
+    {
+        if (string.Equals(parent, fullPath, StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            return true;
         }
 
-        string prefix = workFolder.TrimEnd(
+        string prefix = parent.TrimEnd(
             System.IO.Path.DirectorySeparatorChar,
             System.IO.Path.AltDirectorySeparatorChar)
             + System.IO.Path.DirectorySeparatorChar;
