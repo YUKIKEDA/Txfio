@@ -194,4 +194,46 @@ public sealed class AddUpdateTests
         Assert.True(content.CanRead);
         content.Dispose();
     }
+
+    /// <summary>
+    /// 同一パスの再ステージで journal 書き込みに失敗しても .txnew は元の内容のまま
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add したあと、journal を排他ロックしている</para>
+    /// <para>手順: 同じパスへ再度 AddAsync する</para>
+    /// <para>期待: IOException になり、pending は Add 1 件で、.txnew の内容は前者</para>
+    /// </remarks>
+    [Fact]
+    public async Task AddAsync_再ステージでjournal書き込みに失敗するとtxnewは元の内容のままであること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string workPath = work.Path;
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(workPath))
+        {
+            await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
+            await tx.AddAsync("a.txt", first);
+            await using FileStream journalLock = LockJournal(workPath);
+            await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
+
+            IOException ex = await Assert.ThrowsAsync<IOException>(() => tx.AddAsync("a.txt", second));
+            Assert.Null(ex.InnerException);
+
+            PendingChange pending = Assert.Single(tx.GetPendingChanges());
+            Assert.Equal(PendingChangeKind.Add, pending.Kind);
+            string[] sidecars = Directory.GetFiles(workPath, "*.txnew");
+            Assert.Single(sidecars);
+            Assert.Equal("first", await File.ReadAllTextAsync(sidecars[0]));
+            Assert.Empty(Directory.GetFiles(workPath, "*.prev"));
+        }
+
+        Assert.Empty(Directory.GetFiles(workPath, "*.txnew"));
+        Assert.Empty(Directory.GetFiles(workPath, "*.prev"));
+    }
+
+    private static FileStream LockJournal(string workFolder)
+    {
+        string journal = Assert.Single(
+            Directory.GetFiles(System.IO.Path.Combine(workFolder, ".txfio"), "tx-*.journal"));
+        return new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None);
+    }
 }
