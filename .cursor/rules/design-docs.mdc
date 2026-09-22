@@ -1,0 +1,21 @@
+---
+description: Design doc location and change process to prevent drift
+alwaysApply: true
+---
+
+# Design docs
+
+## Locations
+
+- Canonical design: `docs/design.md`
+- Canonical roadmap: `docs/roadmap.md` (phases are provisional)
+- Conventions: `docs/conventions.md`
+- `.dev/` is temporary (reviews, scratch). Do not leave permanent decisions only there
+
+## Changing the design
+
+- **Contract / public API / semantics / phase boundaries / exception policy:** open a Design Issue and a design-only PR updating `docs/design.md` first; merge before implementation issues
+- **Docs-only clarifications** (typos, wording, examples): may ship in the same PR as code
+- Do not implement first and "update the design later"
+
+When implementing, follow `docs/design.md`. If code and design conflict, stop and fix the design via the process above.
