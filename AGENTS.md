@@ -43,6 +43,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - Commits / PR titles: Conventional Commits (Japanese subject OK)
 - Local verification gate: `./build.ps1` against **`Txfio.slnx`** on Windows
 - Layout: `src/Txfio` ↔ `tests/Txfio.Tests`, TFM `net8.0`, namespace `Txfio`
+- Private fields: `_camelCase`. Do not prefix members with `this.` unless needed for disambiguation
 - Comments (XML docs / inline) in **Japanese**; do not end them with `。` or `.`
 - New or changed `src/` XML docs: Gemini reviews natural Japanese before the PR is ready (`.cursor/rules/japanese-docs.mdc`)
 - Test methods use natural Japanese names plus 前提 / 手順 / 期待 in remarks

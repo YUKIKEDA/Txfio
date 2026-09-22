@@ -83,5 +83,10 @@ tests/Txfio.Tests/
 - 行末は **LF**（`.gitattributes` で固定）
 - 提出前に `dotnet format` を通す。CI / `build.ps1` は `--verify-no-changes` で確認する
 - コンパイラ警告はエラーにする（`TreatWarningsAsErrors`）
+- 命名は **.NET の慣例**に合わせる
+  - private フィールド（静的含む）は `_camelCase`
+  - 定数は PascalCase
+  - インスタンスメンバーに `this.` は付けない（識別子の衝突回避が必要なときだけ）
+  - StyleCop の SA1101 / SA1306 / SA1309 / SA1310 / SA1311 は無効化する（上記と衝突するため）
 - インターフェース名は `I` プレフィックス必須（SA1302 を無効化しない）
 - ライブラリにログフレームワークを入れない。診断は戻り値と例外だけとする

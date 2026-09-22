@@ -6,6 +6,24 @@ namespace Txfio;
 public interface ITransaction : IAsyncDisposable
 {
     /// <summary>
+    /// 新規ファイルの内容をステージングする
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    Task AddAsync(string path, Stream content, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 既存ファイルを新しい内容でステージングする
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    Task UpdateAsync(string path, Stream content, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ステージングした変更をワークフォルダへ確定する
     /// </summary>
     /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>

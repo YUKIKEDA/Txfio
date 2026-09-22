@@ -13,12 +13,18 @@ internal sealed class JournalDocument
     /// <param name="version">文書形式の版</param>
     /// <param name="transactionId">対象トランザクションの ID</param>
     /// <param name="committing">コミットの適用中なら <see langword="true"/></param>
+    /// <param name="operations">未確定の操作一覧</param>
     [JsonConstructor]
-    public JournalDocument(int version, Guid transactionId, bool committing)
+    public JournalDocument(
+        int version,
+        Guid transactionId,
+        bool committing,
+        IReadOnlyList<JournalOperation>? operations = null)
     {
-        this.Version = version;
-        this.TransactionId = transactionId;
-        this.Committing = committing;
+        Version = version;
+        TransactionId = transactionId;
+        Committing = committing;
+        Operations = operations ?? Array.Empty<JournalOperation>();
     }
 
     /// <summary>
@@ -35,4 +41,9 @@ internal sealed class JournalDocument
     /// コミットの適用中かどうか
     /// </summary>
     public bool Committing { get; }
+
+    /// <summary>
+    /// 未確定の操作一覧
+    /// </summary>
+    public IReadOnlyList<JournalOperation> Operations { get; }
 }
