@@ -1,0 +1,44 @@
+---
+description: Engineering standards — layout, TFM, analyzers, local build gate
+alwaysApply: true
+---
+
+# Engineering
+
+Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CONTRIBUTING.md`.
+
+## Layout
+
+- Solution file: **`Txfio.slnx` only** (do not create or keep `.sln`)
+- Implementation under `src/Txfio/`
+- Tests under `tests/Txfio.Tests/` mirroring src folders (`Foo.cs` → `FooTests.cs`)
+- Lasting decisions: `docs/design.md`, `docs/roadmap.md`, `docs/conventions.md`
+- Do not put lasting decisions only in `.dev/`
+
+## Targets
+
+- TFM: `net8.0` (not `net8.0-windows`)
+- Runtime guarantee: Windows (NTFS/SMB)
+- Test framework: xUnit
+- Public surface: contracts only; implementations `internal`; `InternalsVisibleTo` for tests
+
+## Analyzers and format
+
+- Nullable enabled; treat warnings as errors
+- StyleCop.Analyzers + built-in code analysis via shared `Directory.Build.props`
+- Format with `dotnet format` / `.editorconfig` (LF)
+- Strict XML docs on public API; do not block tests/internal on doc requirements
+- Interface names must be prefixed with `I`. SA1302 stays enabled
+- Comments (XML docs / inline) in **Japanese**; do not end them with `。` or `.` (SA1629 disabled)
+- Test method names: natural Japanese, plus 前提 / 手順 / 期待 in remarks
+- Library `await` uses `ConfigureAwait(false)`. Do not Dispose caller-owned `Stream`s
+- Paths: normalized absolute, compare `OrdinalIgnoreCase`
+- No logging framework in the library
+- No `using X = System.IO.File` aliases; fully qualify when names collide
+
+## Verification gate
+
+- Windows: `./build.ps1` before merge (restore → format verify → build → test) on **`Txfio.slnx`**
+- Linux: do **not** run `./build.ps1`. restore / format / build only. Do not mark tests as Done
+- GitHub Actions workflow may exist but **must not be assumed runnable** while Actions are restricted
+- Crash injection / SMB tests are required only when the Issue acceptance says so

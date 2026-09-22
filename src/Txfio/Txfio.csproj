@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Txfio</RootNamespace>
+    <AssemblyName>Txfio</AssemblyName>
+    <IsPackable>true</IsPackable>
+    <VersionPrefix>0.0.1</VersionPrefix>
+    <PackageId>Txfio</PackageId>
+    <Authors>YUKIKEDA</Authors>
+    <Description>Transactional file IO for Windows (NTFS/SMB), inspired by git staging and commit.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/YUKIKEDA/Txfio</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/YUKIKEDA/Txfio.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>filesystem;transaction;windows;ntfs;smb</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Txfio.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

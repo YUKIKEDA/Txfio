@@ -1,0 +1,37 @@
+---
+description: Mandatory grill-if-needed → Issue → branch → work → PR → human merge workflow
+alwaysApply: true
+---
+
+# Workflow
+
+Human source of truth: `CONTRIBUTING.md`.
+
+## Required order
+
+1. **Grill if needed (before the first Issue):** when the work has branching design/API/semantics decisions. Skill: [`.cursor/skills/grilling/SKILL.md`](../skills/grilling/SKILL.md). Skip when the Issue already has acceptance criteria and matches `docs/design.md`
+2. Create a GitHub Issue from a template (blank issues are disabled)
+3. **Grill again if needed** and fold answers into the Issue body, or checklists
+4. Create branch `type/<issue-number>-<slug>`
+5. Implement; run `./build.ps1` on Windows
+6. Open PR using `.github/pull_request_template.md`
+   - **Must** include `Closes #N` on its **own line** in `## Related`
+   - Verify the Issue shows as linked
+7. Wait for human review and **squash** merge
+8. Repeat
+
+```text
+（設計判断が残っていれば Grill）→ Issue 作成 →（実装不能なら再 Grill）→ ブランチ作成 → 作業 → PR → 人間レビュー → squash マージ
+```
+
+## Forbidden
+
+- Starting implementation without an Issue number and branch
+- Treating `docs/roadmap.md` planned titles as permission to code
+- Opening a PR without a related Issue / without closing keywords
+- Merging design-affecting PRs without a human
+- Walk-in PRs with no Issue (external or agent)
+
+## Exceptions
+
+- Foundation batching is allowed **only** for the Issue that explicitly says the batch is intentional (Issue #1)
