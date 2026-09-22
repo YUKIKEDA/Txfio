@@ -12,15 +12,25 @@ internal sealed class JournalOperation
     /// </summary>
     /// <param name="kind">操作の種類</param>
     /// <param name="path">対象パス</param>
-    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Delete / Move は null）</param>
+    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Delete / Move / Attach は null）</param>
     /// <param name="newPath">Move の移動先（それ以外は null）</param>
+    /// <param name="expectedLength">Attach 時点のサイズ（それ以外は null）</param>
+    /// <param name="expectedLastWriteTimeUtc">Attach 時点の最終更新日時（UTC、それ以外は null）</param>
     [JsonConstructor]
-    public JournalOperation(PendingChangeKind kind, string path, string? stagingPath = null, string? newPath = null)
+    public JournalOperation(
+        PendingChangeKind kind,
+        string path,
+        string? stagingPath = null,
+        string? newPath = null,
+        long? expectedLength = null,
+        DateTime? expectedLastWriteTimeUtc = null)
     {
         Kind = kind;
         Path = path;
         StagingPath = stagingPath;
         NewPath = newPath;
+        ExpectedLength = expectedLength;
+        ExpectedLastWriteTimeUtc = expectedLastWriteTimeUtc;
     }
 
     /// <summary>
@@ -34,7 +44,7 @@ internal sealed class JournalOperation
     public string Path { get; }
 
     /// <summary>
-    /// ステージングファイル（`.txnew`）のパス（Delete / Move は null）
+    /// ステージングファイル（`.txnew`）のパス（Delete / Move / Attach は null）
     /// </summary>
     public string? StagingPath { get; }
 
@@ -42,4 +52,16 @@ internal sealed class JournalOperation
     /// Move の移動先パス
     /// </summary>
     public string? NewPath { get; }
+
+    /// <summary>
+    /// Attach 時点のサイズ（それ以外は null）
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? ExpectedLength { get; }
+
+    /// <summary>
+    /// Attach 時点の最終更新日時（UTC、それ以外は null）
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? ExpectedLastWriteTimeUtc { get; }
 }

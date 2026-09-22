@@ -63,6 +63,19 @@ internal sealed partial class Transaction
                 continue;
             }
 
+            if (operation.Kind == PendingChangeKind.Attach)
+            {
+                if (!StagingRules.MatchesExpectedState(
+                    operation.Path,
+                    operation.ExpectedLength,
+                    operation.ExpectedLastWriteTimeUtc))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
             if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
             {
                 return false;

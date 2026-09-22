@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// ステージング（Add / Update / Delete / Move）
+/// ステージング（Add / Update / Delete / Move / Attach）
 /// </content>
 internal sealed partial class Transaction
 {
@@ -130,6 +130,39 @@ internal sealed partial class Transaction
         }
     }
 
+    /// <inheritdoc />
+    public async Task AttachAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ThrowIfCannotMutate();
+        string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
+        StagingRules.EnsureParentDirectoryExists(targetPath);
+
+        if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
+        {
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        StagingRules.EnsureAttachTarget(targetPath);
+        FileInfo info = new FileInfo(targetPath);
+        JournalOperation operation = new JournalOperation(
+            PendingChangeKind.Attach,
+            targetPath,
+            stagingPath: null,
+            newPath: null,
+            info.Length,
+            info.LastWriteTimeUtc);
+        _operations.Add(operation);
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _operations.Remove(operation);
+            throw;
+        }
+    }
+
     private async Task PersistReplacingOperationAsync(
         int existingIndex,
         JournalOperation? replacement,
@@ -177,7 +210,7 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("削除予約されたパスは移動できません");
         }
 
-        if (existing.Kind == PendingChangeKind.Move)
+        if (existing.Kind == PendingChangeKind.Move || existing.Kind == PendingChangeKind.Attach)
         {
             await PersistReplacingOperationAsync(
                     sourceIndex,

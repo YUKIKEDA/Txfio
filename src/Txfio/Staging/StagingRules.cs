@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// Add / Update / Delete / Move の前提チェックと同一パスの正規化
+/// Add / Update / Delete / Move / Attach の前提チェックと同一パスの正規化
 /// </summary>
 internal static class StagingRules
 {
@@ -25,6 +25,11 @@ internal static class StagingRules
 
         if (existingKind == PendingChangeKind.Delete
             && (requestedKind == PendingChangeKind.Add || requestedKind == PendingChangeKind.Update))
+        {
+            return PendingChangeKind.Update;
+        }
+
+        if (existingKind == PendingChangeKind.Attach && requestedKind == PendingChangeKind.Update)
         {
             return PendingChangeKind.Update;
         }
@@ -115,6 +120,42 @@ internal static class StagingRules
         {
             throw new IOException("ボリュームをまたぐ移動はできません: " + sourcePath + " -> " + destPath);
         }
+    }
+
+    /// <summary>
+    /// 取り込み対象が既存ファイルであることを検証する
+    /// </summary>
+    /// <param name="targetPath">対象パス</param>
+    internal static void EnsureAttachTarget(string targetPath)
+    {
+        if (Directory.Exists(targetPath))
+        {
+            throw new IOException("ディレクトリの取り込みは未対応です: " + targetPath);
+        }
+
+        if (!File.Exists(targetPath))
+        {
+            throw new FileNotFoundException("取り込み対象のファイルが存在しません: " + targetPath, targetPath);
+        }
+    }
+
+    /// <summary>
+    /// 対象ファイルのサイズと最終更新日時が期待どおりかを判定する
+    /// </summary>
+    /// <param name="path">対象パス</param>
+    /// <param name="expectedLength">期待するサイズ</param>
+    /// <param name="expectedLastWriteTimeUtc">期待する最終更新日時（UTC）</param>
+    /// <returns>ファイルがあり、サイズと最終更新日時が一致すれば <see langword="true"/></returns>
+    internal static bool MatchesExpectedState(string path, long? expectedLength, DateTime? expectedLastWriteTimeUtc)
+    {
+        if (!expectedLength.HasValue || !expectedLastWriteTimeUtc.HasValue || !File.Exists(path))
+        {
+            return false;
+        }
+
+        FileInfo info = new FileInfo(path);
+        return info.Length == expectedLength.Value
+            && info.LastWriteTimeUtc == expectedLastWriteTimeUtc.Value;
     }
 
     /// <summary>
