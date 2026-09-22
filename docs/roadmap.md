@@ -11,11 +11,11 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | 区間 | 状態 |
 | --- | --- |
 | Phase 0 リポジトリ基盤 | 完了 |
-| Phase 1 MVP | 進行中（開始・Add/Update/Delete/Move 済み。Attach は Issue #11） |
+| Phase 1 MVP | 進行中（開始・Add/Update/Delete/Move/Attach 済み。ディレクトリ削除は Design Issue #13） |
 | Phase 2 並行性・ロック | 未着手 |
 | Phase 3 拡張と公開 | 未着手 |
 
-Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / Update / Delete / Move / Attach** のうち main にあるのは Add / Update / Delete / Move。Attach が次。そのあとディレクトリ削除・ジャーナルの Before/After・クラッシュインジェクションが残る。
+Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / Update / Delete / Move / Attach** は main にある。次はディレクトリ削除（意味論は Issue #13。実装は設計マージ後の Issue）。そのあとジャーナルの Before/After・クラッシュインジェクションが残る。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -31,13 +31,13 @@ Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / U
 - [x] Issue #5: `AddAsync` / `UpdateAsync`、`.txnew`、コミット時 `File.Move`、Recover の sidecar
 - [x] Issue #7: `DeleteAsync`（予約のみ、コミット時に実削除。ディレクトリ削除は含めない）
 - [x] Issue #9: ファイルの `MoveAsync`（同一ボリュームのみ。ディレクトリ Move は Phase 3）
-- Issue #11: `AttachAsync`（ファイルは触らずジャーナル登録。サイズ・更新日時を期待状態に記録）
-- [ ] ディレクトリ削除（未追跡の子があるとエラー）
+- [x] Issue #11: `AttachAsync`（ファイルは触らずジャーナル登録。サイズ・更新日時を期待状態に記録）
+- Issue #13: ディレクトリ削除の意味論（`DeleteAsync` を直下のみ・暗黙の巻き込みなしに固定。実装は後続 Issue）
 
 ### ジャーナル・コミット・Recover の完成
 
 - [ ] 同一パス／依存の正規化の残り（Move 先への直後の Update など。Attach のあと Update / Delete / Move は #11）
-- [ ] 適用順の固定（非破壊が先、Update / Delete が後。Attach は実操作なしで #11）
+- [ ] 適用順の固定（非破壊が先、Update / Delete が後。ディレクトリ Delete は深いパスからで #13）
 - [ ] Before / After（サイズ・最終更新日時）をジャーナルに書き、Recover はそれで適用済み判定する
 - [ ] カスタム例外（`ExternalConflictException` など。ロック競合は Phase 2）
 - [ ] クラッシュインジェクション（`Committing` 直後、Move / Delete 直後など）と実 FS 上の Recover 検証
