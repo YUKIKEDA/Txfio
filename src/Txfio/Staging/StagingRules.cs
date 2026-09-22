@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// Add / Update / Delete の前提チェックと同一パスの正規化
+/// Add / Update / Delete / Move の前提チェックと同一パスの正規化
 /// </summary>
 internal static class StagingRules
 {
@@ -63,6 +63,57 @@ internal static class StagingRules
         if (kind == PendingChangeKind.Update && !exists)
         {
             throw new FileNotFoundException("更新対象のファイルが存在しません: " + targetPath, targetPath);
+        }
+    }
+
+    /// <summary>
+    /// 移動元が既存ファイルであることを検証する
+    /// </summary>
+    /// <param name="sourcePath">移動元パス</param>
+    internal static void EnsureMoveSourceExists(string sourcePath)
+    {
+        if (Directory.Exists(sourcePath))
+        {
+            throw new IOException("ディレクトリの移動は未対応です: " + sourcePath);
+        }
+
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
+        }
+    }
+
+    /// <summary>
+    /// 移動先にファイルもディレクトリも無いことを検証する
+    /// </summary>
+    /// <param name="destPath">移動先パス</param>
+    internal static void EnsureMoveDestinationIsFree(string destPath)
+    {
+        if (Directory.Exists(destPath))
+        {
+            throw new IOException("移動先がディレクトリです: " + destPath);
+        }
+
+        if (File.Exists(destPath))
+        {
+            throw new IOException("移動先のファイルが既に存在します: " + destPath);
+        }
+    }
+
+    /// <summary>
+    /// 移動元と移動先が同一ボリュームかを検証する
+    /// </summary>
+    /// <param name="sourcePath">移動元パス</param>
+    /// <param name="destPath">移動先パス</param>
+    internal static void EnsureSameVolume(string sourcePath, string destPath)
+    {
+        string? sourceRoot = System.IO.Path.GetPathRoot(sourcePath);
+        string? destRoot = System.IO.Path.GetPathRoot(destPath);
+        if (string.IsNullOrEmpty(sourceRoot)
+            || string.IsNullOrEmpty(destRoot)
+            || !string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("ボリュームをまたぐ移動はできません: " + sourcePath + " -> " + destPath);
         }
     }
 

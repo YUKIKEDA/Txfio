@@ -6,7 +6,7 @@ namespace Txfio;
 internal static class StagingApplier
 {
     /// <summary>
-    /// Add / Update を先に、Delete を後に適用する
+    /// Add / Update / Move を先に、Delete を後に適用する
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
@@ -54,6 +54,16 @@ internal static class StagingApplier
             return TryDelete(operation.Path);
         }
 
+        if (operation.Kind == PendingChangeKind.Move)
+        {
+            if (string.IsNullOrEmpty(operation.NewPath))
+            {
+                return false;
+            }
+
+            return TryMove(operation.Path, operation.NewPath);
+        }
+
         if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
         {
             return File.Exists(operation.Path);
@@ -63,6 +73,29 @@ internal static class StagingApplier
         {
             bool overwrite = operation.Kind == PendingChangeKind.Update;
             File.Move(operation.StagingPath, operation.Path, overwrite);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryMove(string sourcePath, string destPath)
+    {
+        if (!File.Exists(sourcePath))
+        {
+            return File.Exists(destPath);
+        }
+
+        if (File.Exists(destPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            File.Move(sourcePath, destPath);
             return true;
         }
         catch (IOException)
