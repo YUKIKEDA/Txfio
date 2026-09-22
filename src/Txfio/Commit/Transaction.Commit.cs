@@ -34,7 +34,11 @@ internal sealed partial class Transaction
             }
         }
 
-        await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+        if (!conflict)
+        {
+            await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+        }
+
         _committed = true;
         _operations.Clear();
         return conflict ? CommitResult.PartialConflict : CommitResult.Succeeded;

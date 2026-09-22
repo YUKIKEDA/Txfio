@@ -102,4 +102,29 @@ public sealed class CommitApplyTests
         Assert.False(File.Exists(target));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
     }
+
+    /// <summary>
+    /// 適用中に競合したら PartialConflict とし、ジャーナルを残す
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add したあと、対象パスがディレクトリになっていて Move できない</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: PartialConflict で、committing の journal と .txnew が残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_適用に失敗するとPartialConflictでjournalが残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
+        await tx.AddAsync("a.txt", content);
+
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        Directory.CreateDirectory(target);
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.PartialConflict, result);
+        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+    }
 }
