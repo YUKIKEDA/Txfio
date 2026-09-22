@@ -53,4 +53,30 @@ public sealed class RecoverStagingTests
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.Equal("staged", await File.ReadAllTextAsync(leftover.TargetPath));
     }
+
+    /// <summary>
+    /// Committing の適用に失敗したらジャーナルを残し ConflictDetected にする
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Committing の Add 残骸があり、対象パスは外部が既に作っている</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: ConflictDetected で、journal と .txnew は残り、対象は外部の内容のまま</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_Committingの適用に失敗するとConflictDetectedになりjournalが残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
+            work.Path,
+            committing: true,
+            "a.txt",
+            "staged");
+        await File.WriteAllTextAsync(leftover.TargetPath, "external");
+
+        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.ConflictDetected, result);
+        Assert.True(File.Exists(leftover.JournalPath));
+        Assert.True(File.Exists(leftover.StagingPath));
+        Assert.Equal("external", await File.ReadAllTextAsync(leftover.TargetPath));
+    }
 }

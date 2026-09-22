@@ -30,6 +30,7 @@ internal static class RecoverService
 
         bool rolledBack = false;
         bool rolledForward = false;
+        bool conflictDetected = false;
         foreach (string journalPath in journals)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -38,9 +39,19 @@ internal static class RecoverService
 
             if (document is { Committing: true })
             {
+                bool appliedAll = true;
                 foreach (JournalOperation operation in document.Operations)
                 {
-                    StagingApplier.TryApply(operation);
+                    if (!StagingApplier.TryApply(operation))
+                    {
+                        appliedAll = false;
+                    }
+                }
+
+                if (!appliedAll)
+                {
+                    conflictDetected = true;
+                    continue;
                 }
 
                 await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
@@ -58,6 +69,11 @@ internal static class RecoverService
 
             await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
             rolledBack = true;
+        }
+
+        if (conflictDetected)
+        {
+            return RecoverResult.ConflictDetected;
         }
 
         if (rolledForward)
