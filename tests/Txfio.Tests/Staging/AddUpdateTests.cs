@@ -196,15 +196,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 同一パスの再ステージで journal 書き込みに失敗しても .txnew は 1 件のままである
+    /// 同一パスの再ステージで journal 書き込みに失敗しても .txnew は元の内容のまま
     /// </summary>
     /// <remarks>
     /// <para>前提: Add したあと、journal を排他ロックしている</para>
     /// <para>手順: 同じパスへ再度 AddAsync する</para>
-    /// <para>期待: 例外は IOException で、pending は Add 1 件、.txnew も 1 件である</para>
+    /// <para>期待: IOException になり、pending は Add 1 件で、.txnew の内容は前者</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_再ステージでjournal書き込みに失敗するとtxnewは1件のままであること()
+    public async Task AddAsync_再ステージでjournal書き込みに失敗するとtxnewは元の内容のままであること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string workPath = work.Path;
@@ -220,10 +220,14 @@ public sealed class AddUpdateTests
 
             PendingChange pending = Assert.Single(tx.GetPendingChanges());
             Assert.Equal(PendingChangeKind.Add, pending.Kind);
-            Assert.Single(Directory.GetFiles(workPath, "*.txnew"));
+            string[] sidecars = Directory.GetFiles(workPath, "*.txnew");
+            Assert.Single(sidecars);
+            Assert.Equal("first", await File.ReadAllTextAsync(sidecars[0]));
+            Assert.Empty(Directory.GetFiles(workPath, "*.prev"));
         }
 
         Assert.Empty(Directory.GetFiles(workPath, "*.txnew"));
+        Assert.Empty(Directory.GetFiles(workPath, "*.prev"));
     }
 
     private static FileStream LockJournal(string workFolder)

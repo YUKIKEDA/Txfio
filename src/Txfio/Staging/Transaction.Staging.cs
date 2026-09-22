@@ -391,41 +391,70 @@ internal sealed partial class Transaction
         JournalOperation? previous = existingIndex >= 0 ? _operations[existingIndex] : null;
         string stagingPath = previous?.StagingPath
             ?? WorkPath.StagingFilePath(targetPath, _transactionId);
-        await StagingFile.WriteAsync(stagingPath, content, cancellationToken).ConfigureAwait(false);
-
-        JournalOperation operation = new JournalOperation(recordedKind, targetPath, stagingPath);
-        if (existingIndex >= 0)
-        {
-            _operations[existingIndex] = operation;
-        }
-        else
-        {
-            _operations.Add(operation);
-        }
-
+        string? backupPath = null;
+        JournalOperation? staged = null;
         try
         {
+            if (previous?.StagingPath is not null
+                && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase)
+                && File.Exists(stagingPath))
+            {
+                backupPath = stagingPath + ".prev";
+                await StagingFile.CopyAsync(stagingPath, backupPath, cancellationToken).ConfigureAwait(false);
+            }
+
+            await StagingFile.WriteAsync(stagingPath, content, cancellationToken).ConfigureAwait(false);
+
+            staged = new JournalOperation(recordedKind, targetPath, stagingPath);
+            if (existingIndex >= 0)
+            {
+                _operations[existingIndex] = staged;
+            }
+            else
+            {
+                _operations.Add(staged);
+            }
+
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            if (existingIndex < 0)
+            if (staged is not null)
             {
-                _operations.Remove(operation);
-                StagingFile.TryDelete(stagingPath);
-            }
-            else
-            {
-                _operations[existingIndex] = previous!;
-                if (!string.Equals(previous!.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase))
+                if (existingIndex < 0)
                 {
-                    StagingFile.TryDelete(stagingPath);
+                    _operations.Remove(staged);
                 }
+                else
+                {
+                    _operations[existingIndex] = previous!;
+                }
+            }
+
+            if (backupPath is not null)
+            {
+                try
+                {
+                    await StagingFile.CopyAsync(backupPath, stagingPath, CancellationToken.None)
+                        .ConfigureAwait(false);
+                    StagingFile.TryDelete(backupPath);
+                }
+                catch (IOException)
+                {
+                    // 退避の復元に失敗しても、元の例外を投げる
+                }
+            }
+            else if (existingIndex < 0
+                || previous?.StagingPath is null
+                || !string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase))
+            {
+                StagingFile.TryDelete(stagingPath);
             }
 
             throw;
         }
 
+        StagingFile.TryDelete(backupPath);
         if (previous?.StagingPath is not null
             && !string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase))
         {
