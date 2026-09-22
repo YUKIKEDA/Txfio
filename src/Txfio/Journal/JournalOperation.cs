@@ -12,7 +12,7 @@ internal sealed class JournalOperation
     /// </summary>
     /// <param name="kind">操作の種類</param>
     /// <param name="path">対象パス</param>
-    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Delete は null）</param>
+    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Delete / Move は null）</param>
     /// <param name="newPath">Move の移動先（それ以外は null）</param>
     [JsonConstructor]
     public JournalOperation(PendingChangeKind kind, string path, string? stagingPath = null, string? newPath = null)
@@ -34,7 +34,7 @@ internal sealed class JournalOperation
     public string Path { get; }
 
     /// <summary>
-    /// ステージングファイル（`.txnew`）のパス（Delete は null）
+    /// ステージングファイル（`.txnew`）のパス（Delete / Move は null）
     /// </summary>
     public string? StagingPath { get; }
 

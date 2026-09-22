@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// ステージング（Add / Update / Delete）
+/// ステージング（Add / Update / Delete / Move）
 /// </content>
 internal sealed partial class Transaction
 {
@@ -62,6 +62,74 @@ internal sealed partial class Transaction
         }
     }
 
+    /// <inheritdoc />
+    public async Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default)
+    {
+        ThrowIfCannotMutate();
+        string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, oldPath);
+        string destPath = WorkPath.ResolveInWorkFolder(_workFolder, newPath);
+        if (string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        StagingRules.EnsureParentDirectoryExists(destPath);
+        StagingRules.EnsureSameVolume(sourcePath, destPath);
+        StagingRules.EnsureMoveDestinationIsFree(destPath);
+
+        if (FindOperationIndex(destPath) >= 0)
+        {
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        int moveToDest = FindMoveToIndex(destPath);
+        if (moveToDest >= 0)
+        {
+            if (string.Equals(_operations[moveToDest].Path, sourcePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        int sourceIndex = FindOperationIndex(sourcePath);
+        if (sourceIndex >= 0)
+        {
+            await MovePendingSourceAsync(sourceIndex, destPath, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        int moveToSource = FindMoveToIndex(sourcePath);
+        if (moveToSource >= 0)
+        {
+            JournalOperation existing = _operations[moveToSource];
+            await PersistReplacingOperationAsync(
+                    moveToSource,
+                    new JournalOperation(PendingChangeKind.Move, existing.Path, stagingPath: null, destPath),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        StagingRules.EnsureMoveSourceExists(sourcePath);
+        JournalOperation operation = new JournalOperation(
+            PendingChangeKind.Move,
+            sourcePath,
+            stagingPath: null,
+            destPath);
+        _operations.Add(operation);
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _operations.Remove(operation);
+            throw;
+        }
+    }
+
     private async Task PersistReplacingOperationAsync(
         int existingIndex,
         JournalOperation? replacement,
@@ -96,6 +164,83 @@ internal sealed partial class Transaction
         }
 
         StagingFile.TryDelete(existing.StagingPath);
+    }
+
+    private async Task MovePendingSourceAsync(
+        int sourceIndex,
+        string destPath,
+        CancellationToken cancellationToken)
+    {
+        JournalOperation existing = _operations[sourceIndex];
+        if (existing.Kind == PendingChangeKind.Delete)
+        {
+            throw new InvalidOperationException("削除予約されたパスは移動できません");
+        }
+
+        if (existing.Kind == PendingChangeKind.Move)
+        {
+            await PersistReplacingOperationAsync(
+                    sourceIndex,
+                    new JournalOperation(PendingChangeKind.Move, existing.Path, stagingPath: null, destPath),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        if (existing.Kind != PendingChangeKind.Add && existing.Kind != PendingChangeKind.Update)
+        {
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        await RetargetStagedContentAsync(
+                sourceIndex,
+                destPath,
+                deleteSource: existing.Kind == PendingChangeKind.Update,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task RetargetStagedContentAsync(
+        int sourceIndex,
+        string destPath,
+        bool deleteSource,
+        CancellationToken cancellationToken)
+    {
+        JournalOperation existing = _operations[sourceIndex];
+        string newStagingPath = WorkPath.StagingFilePath(destPath, _transactionId);
+        JournalOperation[] previous = _operations.ToArray();
+        bool relocated = false;
+        if (!string.IsNullOrEmpty(existing.StagingPath)
+            && File.Exists(existing.StagingPath)
+            && !string.Equals(existing.StagingPath, newStagingPath, StringComparison.OrdinalIgnoreCase))
+        {
+            File.Move(existing.StagingPath, newStagingPath);
+            relocated = true;
+        }
+
+        try
+        {
+            string sourcePath = existing.Path;
+            _operations.RemoveAt(sourceIndex);
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, newStagingPath));
+            if (deleteSource)
+            {
+                _operations.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
+            }
+
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _operations.Clear();
+            _operations.AddRange(previous);
+            if (relocated && File.Exists(newStagingPath))
+            {
+                File.Move(newStagingPath, existing.StagingPath!);
+            }
+
+            throw;
+        }
     }
 
     private async Task StageAsync(

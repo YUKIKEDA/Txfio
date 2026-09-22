@@ -51,6 +51,18 @@ internal sealed partial class Transaction
                 continue;
             }
 
+            if (operation.Kind == PendingChangeKind.Move)
+            {
+                if (string.IsNullOrEmpty(operation.NewPath)
+                    || !File.Exists(operation.Path)
+                    || File.Exists(operation.NewPath))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
             if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
             {
                 return false;

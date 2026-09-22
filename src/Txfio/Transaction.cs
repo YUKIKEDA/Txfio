@@ -83,6 +83,21 @@ internal sealed partial class Transaction : ITransaction
         return -1;
     }
 
+    private int FindMoveToIndex(string destPath)
+    {
+        for (int i = 0; i < _operations.Count; i++)
+        {
+            JournalOperation operation = _operations[i];
+            if (operation.Kind == PendingChangeKind.Move
+                && string.Equals(operation.NewPath, destPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     private Task PersistAsync(bool committing, CancellationToken cancellationToken)
     {
         JournalDocument document = new JournalDocument(

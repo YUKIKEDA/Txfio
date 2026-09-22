@@ -1,0 +1,32 @@
+namespace Txfio.Tests.Staging;
+
+public sealed class StagingRulesTests
+{
+    /// <summary>
+    /// 同一ルートならボリューム跨ぎとみなさない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 両パスのルートが同じである</para>
+    /// <para>手順: EnsureSameVolume する</para>
+    /// <para>期待: 例外にならない</para>
+    /// </remarks>
+    [Fact]
+    public void EnsureSameVolume_同じルートなら例外にならないこと()
+    {
+        StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"C:\work\sub\b.txt");
+    }
+
+    /// <summary>
+    /// ルートが違えばボリューム跨ぎとして失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 両パスのルートが異なる</para>
+    /// <para>手順: EnsureSameVolume する</para>
+    /// <para>期待: IOException になる</para>
+    /// </remarks>
+    [Fact]
+    public void EnsureSameVolume_ルートが違うとIOExceptionになること()
+    {
+        Assert.Throws<IOException>(() => StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"D:\work\b.txt"));
+    }
+}
