@@ -6,7 +6,7 @@ namespace Txfio;
 internal static class StagingApplier
 {
     /// <summary>
-    /// Add / Update / Move を先に、Delete を後に適用する
+    /// Add / Update / Move / Attach を先に、Delete を後に適用する
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
@@ -62,6 +62,14 @@ internal static class StagingApplier
             }
 
             return TryMove(operation.Path, operation.NewPath);
+        }
+
+        if (operation.Kind == PendingChangeKind.Attach)
+        {
+            return StagingRules.MatchesExpectedState(
+                operation.Path,
+                operation.ExpectedLength,
+                operation.ExpectedLastWriteTimeUtc);
         }
 
         if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))

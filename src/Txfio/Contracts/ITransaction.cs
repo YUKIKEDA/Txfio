@@ -41,6 +41,14 @@ public interface ITransaction : IAsyncDisposable
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 外部が作った既存ファイルをトランザクションに取り込む
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>取り込みの完了</returns>
+    Task AttachAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ステージングした変更をワークフォルダへ確定する
     /// </summary>
     /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
