@@ -104,6 +104,37 @@ public sealed class CommitApplyTests
     }
 
     /// <summary>
+    /// Add と Update と Delete を混ぜたコミットはすべて反映する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 既存ファイルの Update、新規 Add、別ファイルの Delete をしている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Succeeded で Update と Add の内容があり、Delete 対象は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_AddとUpdateとDeleteを混ぜても反映すること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string updated = System.IO.Path.Combine(work.Path, "a.txt");
+        string deleted = System.IO.Path.Combine(work.Path, "gone.txt");
+        await File.WriteAllTextAsync(updated, "old");
+        await File.WriteAllTextAsync(deleted, "drop");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream updateContent = LeftoverAddFiles.Utf8Stream("new");
+        await tx.UpdateAsync("a.txt", updateContent);
+        await using MemoryStream addContent = LeftoverAddFiles.Utf8Stream("added");
+        await tx.AddAsync("b.txt", addContent);
+        await tx.DeleteAsync("gone.txt");
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal("new", await File.ReadAllTextAsync(updated));
+        Assert.Equal("added", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
+        Assert.False(File.Exists(deleted));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
     /// 適用中に競合したら PartialConflict とし、ジャーナルを残す
     /// </summary>
     /// <remarks>
