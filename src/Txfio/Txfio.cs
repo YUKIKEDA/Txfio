@@ -59,17 +59,27 @@ public static class Txfio
         }
 
         bool rolledBack = false;
+        bool rolledForward = false;
         foreach (string journalPath in journals)
         {
             cancellationToken.ThrowIfCancellationRequested();
             JournalDocument? document = await JournalStore.TryReadAsync(journalPath, cancellationToken).ConfigureAwait(false);
+
+            // Committing 中は適用を完了してから消す（このスライスでは操作が空なので削除のみ）
+            await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
             if (document is { Committing: true })
             {
-                continue;
+                rolledForward = true;
             }
+            else
+            {
+                rolledBack = true;
+            }
+        }
 
-            await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
-            rolledBack = true;
+        if (rolledForward)
+        {
+            return RecoverResult.RolledForward;
         }
 
         return rolledBack ? RecoverResult.RolledBack : RecoverResult.NoPendingTransactions;

@@ -97,10 +97,10 @@ public sealed class TxfioTests
     }
 
     /// <summary>
-    /// Committing でない残骸ジャーナルは Recover が削除する
+    /// Committing 以外の残骸ジャーナルは Recover が削除する
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダに未コミットの journal が残っている</para>
+    /// <para>前提: 生きたトランザクションは無く、未コミットの journal だけが残っている</para>
     /// <para>手順: RecoverAsync する</para>
     /// <para>期待: RolledBack でファイルが消える</para>
     /// </remarks>
@@ -108,16 +108,41 @@ public sealed class TxfioTests
     public async Task RecoverAsync_未コミットジャーナルを削除してRolledBackになること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        string[] files = Directory.GetFiles(
-            System.IO.Path.Combine(work.Path, ".txfio"),
-            "tx-*.journal");
-        Assert.Single(files);
+        string journal = await WriteLeftoverJournalAsync(work.Path, committing: false);
 
         RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledBack, result);
-        Assert.False(File.Exists(files[0]));
+        Assert.False(File.Exists(journal));
+    }
 
-        await tx.DisposeAsync();
+    /// <summary>
+    /// Committing の残骸ジャーナルは Recover がロールフォワードする
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 生きたトランザクションは無く、Committing の journal だけが残っている</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: RolledForward でファイルが消える</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_CommittingジャーナルをロールフォワードしてRolledForwardになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string journal = await WriteLeftoverJournalAsync(work.Path, committing: true);
+
+        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result);
+        Assert.False(File.Exists(journal));
+    }
+
+    private static async Task<string> WriteLeftoverJournalAsync(string workFolder, bool committing)
+    {
+        string metadata = System.IO.Path.Combine(workFolder, ".txfio");
+        Directory.CreateDirectory(metadata);
+        Guid transactionId = Guid.NewGuid();
+        string journalPath = System.IO.Path.Combine(metadata, "tx-" + transactionId.ToString("D") + ".journal");
+        string committingLiteral = committing ? "true" : "false";
+        string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") + "\",\"committing\":" + committingLiteral + "}";
+        await File.WriteAllTextAsync(journalPath, json);
+        return journalPath;
     }
 }
