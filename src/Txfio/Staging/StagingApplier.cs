@@ -6,7 +6,7 @@ namespace Txfio;
 internal static class StagingApplier
 {
     /// <summary>
-    /// Add / Update / Move / Attach を先に、Delete を後に適用する
+    /// Add / Update / Move / Attach を先に、Delete をパスが深い順で後に適用する
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
@@ -26,6 +26,7 @@ internal static class StagingApplier
             }
         }
 
+        List<JournalOperation> deletes = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
             if (operation.Kind != PendingChangeKind.Delete)
@@ -33,6 +34,12 @@ internal static class StagingApplier
                 continue;
             }
 
+            deletes.Add(operation);
+        }
+
+        deletes.Sort(static (left, right) => PathDepth(right.Path).CompareTo(PathDepth(left.Path)));
+        foreach (JournalOperation operation in deletes)
+        {
             if (!TryApply(operation))
             {
                 appliedAll = false;
@@ -51,7 +58,9 @@ internal static class StagingApplier
     {
         if (operation.Kind == PendingChangeKind.Delete)
         {
-            return TryDelete(operation.Path);
+            return operation.IsDirectory
+                ? TryDeleteDirectory(operation.Path)
+                : TryDeleteFile(operation.Path);
         }
 
         if (operation.Kind == PendingChangeKind.Move)
@@ -112,7 +121,44 @@ internal static class StagingApplier
         }
     }
 
-    private static bool TryDelete(string path)
+    private static int PathDepth(string path)
+    {
+        int depth = 0;
+        foreach (char c in path)
+        {
+            if (c == System.IO.Path.DirectorySeparatorChar || c == System.IO.Path.AltDirectorySeparatorChar)
+            {
+                depth++;
+            }
+        }
+
+        return depth;
+    }
+
+    private static bool TryDeleteDirectory(string path)
+    {
+        if (File.Exists(path))
+        {
+            return false;
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return true;
+        }
+
+        try
+        {
+            Directory.Delete(path);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryDeleteFile(string path)
     {
         if (!File.Exists(path))
         {
