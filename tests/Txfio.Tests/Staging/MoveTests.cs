@@ -205,4 +205,66 @@ public sealed class MoveTests
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "b.txt")));
         Assert.False(File.Exists(dest));
     }
+
+    /// <summary>
+    /// Move 先への Add はその場で失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: A から B へ Move している</para>
+    /// <para>手順: B へ AddAsync する</para>
+    /// <para>期待: InvalidOperationException になり、pending は Move のままである</para>
+    /// </remarks>
+    [Fact]
+    public async Task AddAsync_Move先だとInvalidOperationExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AddAsync("b.txt", content));
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Move, pending.Kind);
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
+    /// Add のあと Move でジャーナル書き込みに失敗しても pending と .txnew は元のまま残る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add したあと、journal を排他ロックしている</para>
+    /// <para>手順: 別ディレクトリへ MoveAsync する</para>
+    /// <para>期待: 例外は IOException で、pending は Add のままで .txnew も元の場所にある</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_Addのあとでjournal書き込みに失敗するとAddのまま残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.AddAsync("a.txt", content);
+        await using FileStream journalLock = LockJournal(work.Path);
+
+        IOException ex = await Assert.ThrowsAsync<IOException>(() => tx.MoveAsync("a.txt", "sub/b.txt"));
+        Assert.Null(ex.InnerException);
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Add, pending.Kind);
+        Assert.Equal(
+            System.IO.Path.Combine(work.Path, "a.txt"),
+            pending.Path,
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+    }
+
+    private static FileStream LockJournal(string workFolder)
+    {
+        string journal = Assert.Single(
+            Directory.GetFiles(System.IO.Path.Combine(workFolder, ".txfio"), "tx-*.journal"));
+        return new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None);
+    }
 }

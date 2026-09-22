@@ -209,14 +209,10 @@ internal sealed partial class Transaction
         JournalOperation existing = _operations[sourceIndex];
         string newStagingPath = WorkPath.StagingFilePath(destPath, _transactionId);
         JournalOperation[] previous = _operations.ToArray();
-        bool relocated = false;
-        if (!string.IsNullOrEmpty(existing.StagingPath)
-            && File.Exists(existing.StagingPath)
-            && !string.Equals(existing.StagingPath, newStagingPath, StringComparison.OrdinalIgnoreCase))
-        {
-            File.Move(existing.StagingPath, newStagingPath);
-            relocated = true;
-        }
+        string? oldStagingPath = existing.StagingPath;
+        bool shouldRelocate = !string.IsNullOrEmpty(oldStagingPath)
+            && File.Exists(oldStagingPath)
+            && !string.Equals(oldStagingPath, newStagingPath, StringComparison.OrdinalIgnoreCase);
 
         try
         {
@@ -234,12 +230,12 @@ internal sealed partial class Transaction
         {
             _operations.Clear();
             _operations.AddRange(previous);
-            if (relocated && File.Exists(newStagingPath))
-            {
-                File.Move(newStagingPath, existing.StagingPath!);
-            }
-
             throw;
+        }
+
+        if (shouldRelocate)
+        {
+            File.Move(oldStagingPath!, newStagingPath);
         }
     }
 
@@ -262,6 +258,11 @@ internal sealed partial class Transaction
         }
         else
         {
+            if (FindMoveToIndex(targetPath) >= 0)
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+
             StagingRules.EnsureTargetMatchesKind(kind, targetPath);
         }
 
