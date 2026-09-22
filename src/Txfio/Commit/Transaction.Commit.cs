@@ -25,14 +25,7 @@ internal sealed partial class Transaction
 
         await PersistAsync(committing: true, CancellationToken.None).ConfigureAwait(false);
 
-        bool conflict = false;
-        foreach (JournalOperation operation in _operations)
-        {
-            if (!StagingApplier.TryApply(operation))
-            {
-                conflict = true;
-            }
-        }
+        bool conflict = !StagingApplier.TryApplyAll(_operations);
 
         if (!conflict)
         {
@@ -48,7 +41,17 @@ internal sealed partial class Transaction
     {
         foreach (JournalOperation operation in _operations)
         {
-            if (!File.Exists(operation.StagingPath))
+            if (operation.Kind == PendingChangeKind.Delete)
+            {
+                if (!File.Exists(operation.Path))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
             {
                 return false;
             }

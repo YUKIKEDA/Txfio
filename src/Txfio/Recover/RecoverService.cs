@@ -39,15 +39,7 @@ internal static class RecoverService
 
             if (document is { Committing: true })
             {
-                bool appliedAll = true;
-                foreach (JournalOperation operation in document.Operations)
-                {
-                    if (!StagingApplier.TryApply(operation))
-                    {
-                        appliedAll = false;
-                    }
-                }
-
+                bool appliedAll = StagingApplier.TryApplyAll(document.Operations);
                 if (!appliedAll)
                 {
                     conflictDetected = true;

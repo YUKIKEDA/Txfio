@@ -24,6 +24,14 @@ public interface ITransaction : IAsyncDisposable
     Task UpdateAsync(string path, Stream content, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 既存ファイルの削除を予約する
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>予約の完了</returns>
+    Task DeleteAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ステージングした変更をワークフォルダへ確定する
     /// </summary>
     /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
