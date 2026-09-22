@@ -60,11 +60,14 @@ tests/Txfio.Tests/
 ## 公開 API の XML コメント
 
 - `public` な型・メンバーには XML ドキュメントコメントを付ける（`<summary>` 必須。引数・戻り値・例外は読み手が迷うものに付ける）
+- **internal 型でも `public` メンバーには付ける**（例: 実装型の `ITransaction` メンバー、JSON 用の public コンストラクタ）
+- `internal` な型・メンバーも付ける（StyleCop `documentInternalElements`）。テストと `private` は必須にしない
 - 実装がインタフェースと同じ契約なら `/// <inheritdoc />` を使う。重複して書き直さない
 - ライブラリプロジェクトは `GenerateDocumentationFile=true`。欠落は CS1591 としてエラーにする
 - テストプロジェクトは XML ドキュメントを生成しない（CS1591 は出さない）
 - XML ドキュメントおよび通常コメントは **日本語** とする（識別子・型名・公開 API 名は英語のまま）
 - 文末に **「。」や英語のピリオド `.` を付けない**（例外メッセージなどユーザー向け文言は対象外）
+- `src/` の XML コメントを足す・変える PR では、マージ前に **Gemini へ日本語の自然さをレビューさせる**（手順は `.cursor/rules/japanese-docs.mdc`）
 
 ## テスト
 

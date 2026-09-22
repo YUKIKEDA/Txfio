@@ -4,7 +4,7 @@
     "documentationRules": {
       "companyName": "Txfio",
       "documentExposedElements": true,
-      "documentInternalElements": false,
+      "documentInternalElements": true,
       "documentPrivateElements": false,
       "documentInterfaces": true,
       "documentPrivateFields": false,

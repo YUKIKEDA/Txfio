@@ -37,3 +37,4 @@ PR 作成後、GitHub UI で Development / Linked issues に Issue が出てい�
 - [ ] 1 Issue ≈ 1 PR（基盤バッチ例外を除く）
 - [ ] 公開 API を足したら XML ドキュメントがある（または N/A）
 - [ ] 新しいテストに前提・手順・期待がある（または N/A）
+- [ ] `src/` の日本語 XML コメントを足す・変えた場合、Gemini レビューを反映した（または N/A）

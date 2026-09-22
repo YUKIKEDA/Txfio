@@ -1,0 +1,35 @@
+namespace Txfio;
+
+/// <summary>
+/// ジャーナル上の 1 操作
+/// </summary>
+public sealed class PendingChange
+{
+    /// <summary>
+    /// 操作の種類と対象パスを指定する
+    /// </summary>
+    /// <param name="kind">操作の種類</param>
+    /// <param name="path">対象パス</param>
+    /// <param name="newPath">Move の移動先（それ以外は null）</param>
+    public PendingChange(PendingChangeKind kind, string path, string? newPath = null)
+    {
+        this.Kind = kind;
+        this.Path = path;
+        this.NewPath = newPath;
+    }
+
+    /// <summary>
+    /// 操作の種類
+    /// </summary>
+    public PendingChangeKind Kind { get; }
+
+    /// <summary>
+    /// 対象パス
+    /// </summary>
+    public string Path { get; }
+
+    /// <summary>
+    /// Move の移動先パス
+    /// </summary>
+    public string? NewPath { get; }
+}

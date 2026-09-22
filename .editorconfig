@@ -31,3 +31,5 @@ dotnet_diagnostic.SA1636.severity = none
 dotnet_diagnostic.SA1629.severity = none
 # StyleCop: Japanese property summaries do not start with "Gets"
 dotnet_diagnostic.SA1623.severity = none
+# StyleCop: Japanese constructor summaries do not start with "Initializes a new instance"
+dotnet_diagnostic.SA1642.severity = none

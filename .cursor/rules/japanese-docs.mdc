@@ -1,0 +1,28 @@
+---
+description: Japanese XML docs must be natural; Gemini reviews wording
+alwaysApply: true
+---
+
+# Japanese documentation
+
+XML ドキュメントコメントとインラインコメントは **日本語** とする（識別子は英語）。文末に `。` や `.` を付けない。
+
+## 付ける対象
+
+- 公開 API（CS1591）
+- `public` メンバー（**internal 型の public メンバーも含む**）
+- `internal` な型・メンバー（StyleCop `documentInternalElements`）
+- テストと `private` は必須にしない
+- インタフェースと同じ契約の実装は `/// <inheritdoc />`
+
+## Gemini による自然さの確認
+
+`src/` の XML ドキュメントコメントを **追加または変更した PR** では、マージ前提の作業完了前に **Gemini**（Cursor の Gemini 系サブエージェント。指定が無ければ `gemini-3.8-flash-high`）へレビューさせる。
+
+頼むこと:
+
+- 翻訳調・不自然な敬体/常体の混在・用語の揺れが無いか
+- コメント規約（日本語、文末の句点なし）を守っているか
+- 直した方がよい文は、差し替え案を出す
+
+指摘を反映してから `./build.ps1` を通す。テストの前提・手順・期待も、新規追加分は同じレビューに含める。
