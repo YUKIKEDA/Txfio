@@ -4,28 +4,60 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 
 意味論・API・非機能の正本は [`design.md`](design.md) である。このファイルは実装順の地図にすぎない。
 
+チェックは **main にマージ済み** のときだけ付ける。PR 中は Issue 番号だけ書く。
+
+## いまどこか
+
+| 区間 | 状態 |
+| --- | --- |
+| Phase 0 リポジトリ基盤 | 完了 |
+| Phase 1 MVP | 進行中（開始・Add/Update 済み。Delete は Issue #7） |
+| Phase 2 並行性・ロック | 未着手 |
+| Phase 3 拡張と公開 | 未着手 |
+
+Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / Update / Delete / Move / Attach** のうち main にあるのは Add と Update。Delete が次。そのあと Move・ディレクトリ削除・ジャーナルの Before/After・クラッシュインジェクションが残る。
+
 ## Phase 0 — リポジトリ基盤
 
-規約・テンプレ・空ライブラリ・ローカルゲート。
-
-- Issue #1: リポジトリ基盤（規約・テンプレ・空ライブラリ）
+- [x] Issue #1: 規約・テンプレ・空ライブラリ・`./build.ps1`
 
 ## Phase 1 — MVP（仮）
 
-単一プロセス・単一トランザクション前提（協調ロック機構はスキップ）。`.txnew` ステージング、コミット、ロールバック、ジャーナル、クラッシュリカバリ（`RecoverAsync()`）を完成させ、クラッシュインジェクションテストで実ファイルシステム上で検証する。`tx.ReadAsync(path)` はこのフェーズのスコープ外とする。
+単一プロセス・単一トランザクション。協調ロックはスキップ。`tx.ReadAsync` はこのフェーズの外。
 
-- Issue #3: トランザクション開始と空のコミット/ロールバック、ジャーナル生存期間
-- Issue #5: Add/Update のステージングとコミット時反映
+### ライフサイクルと書き込み
+
+- [x] Issue #3: `BeginAsync` / 空の `CommitAsync` / 未コミット Dispose / `RecoverAsync`（操作なし）
+- [x] Issue #5: `AddAsync` / `UpdateAsync`、`.txnew`、コミット時 `File.Move`、Recover の sidecar
+- Issue #7: `DeleteAsync`（予約のみ、コミット時に実削除。ディレクトリ削除は含めない）
+- [ ] ファイルの `MoveAsync`（同一ボリュームのみ。ディレクトリ Move は Phase 3）
+- [ ] `AttachAsync`（ファイルは触らずジャーナル登録。サイズ・更新日時を期待状態に記録）
+- [ ] ディレクトリ削除（未追跡の子があるとエラー）
+
+### ジャーナル・コミット・Recover の完成
+
+- [ ] 同一パス／依存の正規化の残り（例: `Move(A→B)` のあと `Move(B→C)` を畳む。Add のあと Delete の打ち消しは #7）
+- [ ] 適用順の固定（非破壊が先、Update / Delete が後。Delete 適用は #7 で一部入る）
+- [ ] Before / After（サイズ・最終更新日時）をジャーナルに書き、Recover はそれで適用済み判定する
+- [ ] カスタム例外（`ExternalConflictException` など。ロック競合は Phase 2）
+- [ ] クラッシュインジェクション（`Committing` 直後、Move / Delete 直後など）と実 FS 上の Recover 検証
 
 ## Phase 2 — 並行性（仮）
 
-マルチプロセス対応。`.txfio/locks/` 下の `.lock` ファイル生成、`FileShare.None` による OS レベル排他ロック、Pessimistic な競合検知を実装する。
+- [ ] `.txfio/locks/` のハッシュ名 `.lock` を `FileShare.None` で保持
+- [ ] 操作時点でロック取得。取れなければ即例外（待機しない）
+- [ ] `Move` は旧パス・新パスを辞書順でロック
+- [ ] Recover はジャーナル記載パスから lock を特定してハンドルを閉じる（ワークフォルダ全スキャンはしない）
+- [ ] 同一プロセス複数 Tx、複数プロセスからの同時アクセスのテスト
 
 ## Phase 3 — 拡張（仮）
 
-ディレクトリ Move のサポート（ワークフォルダ全体排他ロックによる割り切り版）、`tx.ReadAsync`、進捗通知（`IProgress`）の結合テストなど。
+- [ ] `tx.ReadAsync`（ステージング済みなら `.txnew`、なければ本物）
+- [ ] `IProgress<TransferProgress>` を書き込み API に足し、結合テストする
+- [ ] `ImportAsync` / `ExportAsync`
+- [ ] ディレクトリ Move（実行中はワークフォルダ全体ロック）
 
 ## 公開（Phase 3 完了後）
 
-- GitHub リポジトリを public にする
-- nuget.org への publish（それまでは `dotnet pack` とメタデータのみ）
+- [ ] GitHub リポジトリを public にする
+- [ ] nuget.org へ publish（それまでは `dotnet pack` とメタデータのみ）

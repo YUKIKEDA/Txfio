@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// `.txnew` サイドカーの書き込みと削除
+/// ステージングファイル（`.txnew`）の書き込みと削除
 /// </summary>
 internal static class StagingFile
 {
@@ -51,11 +51,13 @@ internal static class StagingFile
     /// ステージングファイルがあれば削除する
     /// </summary>
     /// <param name="stagingPath">削除対象</param>
-    internal static void TryDelete(string stagingPath)
+    internal static void TryDelete(string? stagingPath)
     {
-        if (File.Exists(stagingPath))
+        if (string.IsNullOrEmpty(stagingPath) || !File.Exists(stagingPath))
         {
-            File.Delete(stagingPath);
+            return;
         }
+
+        File.Delete(stagingPath);
     }
 }

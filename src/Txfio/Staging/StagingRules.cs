@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// Add / Update の前提チェックと同一パスの正規化
+/// Add / Update / Delete の前提チェックと同一パスの正規化
 /// </summary>
 internal static class StagingRules
 {
@@ -23,16 +23,37 @@ internal static class StagingRules
             return PendingChangeKind.Add;
         }
 
+        if (existingKind == PendingChangeKind.Delete
+            && (requestedKind == PendingChangeKind.Add || requestedKind == PendingChangeKind.Update))
+        {
+            return PendingChangeKind.Update;
+        }
+
         throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
     }
 
     /// <summary>
-    /// Add と Update の対象ファイルの存在有無を検証する
+    /// Add / Update / Delete の対象ファイルの存在有無を検証する
     /// </summary>
     /// <param name="kind">操作の種類</param>
     /// <param name="targetPath">対象パス</param>
     internal static void EnsureTargetMatchesKind(PendingChangeKind kind, string targetPath)
     {
+        if (kind == PendingChangeKind.Delete)
+        {
+            if (Directory.Exists(targetPath))
+            {
+                throw new IOException("ディレクトリの削除は未対応です: " + targetPath);
+            }
+
+            if (!File.Exists(targetPath))
+            {
+                throw new FileNotFoundException("削除対象のファイルが存在しません: " + targetPath, targetPath);
+            }
+
+            return;
+        }
+
         bool exists = File.Exists(targetPath);
         if (kind == PendingChangeKind.Add && exists)
         {

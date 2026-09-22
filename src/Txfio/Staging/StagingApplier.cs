@@ -1,18 +1,60 @@
 namespace Txfio;
 
 /// <summary>
-/// ステージングファイルを対象パスへ昇格する
+/// ステージングした操作を対象パスへ適用する
 /// </summary>
 internal static class StagingApplier
 {
     /// <summary>
-    /// `.txnew` を対象パスへ Move する（既に適用済みなら <see langword="true"/>、失敗なら <see langword="false"/>）
+    /// Add / Update を先に、Delete を後に適用する
+    /// </summary>
+    /// <param name="operations">適用する操作一覧</param>
+    /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
+    internal static bool TryApplyAll(IReadOnlyList<JournalOperation> operations)
+    {
+        bool appliedAll = true;
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Delete)
+            {
+                continue;
+            }
+
+            if (!TryApply(operation))
+            {
+                appliedAll = false;
+            }
+        }
+
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind != PendingChangeKind.Delete)
+            {
+                continue;
+            }
+
+            if (!TryApply(operation))
+            {
+                appliedAll = false;
+            }
+        }
+
+        return appliedAll;
+    }
+
+    /// <summary>
+    /// 1 操作を適用する（既に適用済みなら成功、失敗なら <see langword="false"/>）
     /// </summary>
     /// <param name="operation">適用する操作</param>
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
     internal static bool TryApply(JournalOperation operation)
     {
-        if (!File.Exists(operation.StagingPath))
+        if (operation.Kind == PendingChangeKind.Delete)
+        {
+            return TryDelete(operation.Path);
+        }
+
+        if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
         {
             return File.Exists(operation.Path);
         }
@@ -21,6 +63,24 @@ internal static class StagingApplier
         {
             bool overwrite = operation.Kind == PendingChangeKind.Update;
             File.Move(operation.StagingPath, operation.Path, overwrite);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryDelete(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return true;
+        }
+
+        try
+        {
+            File.Delete(path);
             return true;
         }
         catch (IOException)
