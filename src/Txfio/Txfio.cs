@@ -27,7 +27,7 @@ public static class Txfio
         Guid transactionId = Guid.NewGuid();
         string journalPath = MetadataNames.JournalPath(workFolder, transactionId);
         await JournalStore.WriteNewAsync(journalPath, transactionId, cancellationToken).ConfigureAwait(false);
-        return new Transaction(journalPath);
+        return new Transaction(workFolder, transactionId, journalPath);
     }
 
     /// <summary>
@@ -46,43 +46,7 @@ public static class Txfio
             throw new DirectoryNotFoundException("ワークフォルダが存在しません: " + workFolder);
         }
 
-        string metadataFolder = MetadataNames.FolderPath(workFolder);
-        if (!Directory.Exists(metadataFolder))
-        {
-            return RecoverResult.NoPendingTransactions;
-        }
-
-        string[] journals = Directory.GetFiles(metadataFolder, MetadataNames.JournalSearchPattern, SearchOption.TopDirectoryOnly);
-        if (journals.Length == 0)
-        {
-            return RecoverResult.NoPendingTransactions;
-        }
-
-        bool rolledBack = false;
-        bool rolledForward = false;
-        foreach (string journalPath in journals)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            JournalDocument? document = await JournalStore.TryReadAsync(journalPath, cancellationToken).ConfigureAwait(false);
-
-            // Committing 中は適用を完了してから消す（このスライスでは操作が空なので削除のみ）
-            await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
-            if (document is { Committing: true })
-            {
-                rolledForward = true;
-            }
-            else
-            {
-                rolledBack = true;
-            }
-        }
-
-        if (rolledForward)
-        {
-            return RecoverResult.RolledForward;
-        }
-
-        return rolledBack ? RecoverResult.RolledBack : RecoverResult.NoPendingTransactions;
+        return await RecoverService.RecoverAsync(workFolder, cancellationToken).ConfigureAwait(false);
     }
 
     private static void EnsureMetadataFolder(string workFolder)

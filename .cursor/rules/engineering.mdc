@@ -27,6 +27,8 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 - Nullable enabled; treat warnings as errors
 - StyleCop.Analyzers + built-in code analysis via shared `Directory.Build.props`
 - Format with `dotnet format` / `.editorconfig` (LF)
+- Private fields: `_camelCase` (including static). Constants: PascalCase. Do not prefix members with `this.` unless required for disambiguation
+- StyleCop SA1101 / SA1306 / SA1309 / SA1310 / SA1311 are disabled so .NET field naming wins
 - Strict XML docs on public API **and** `public` members of internal types, plus internal types/members (`documentInternalElements`). Do not block tests/private on doc requirements
 - Interface names must be prefixed with `I`. SA1302 stays enabled
 - Comments (XML docs / inline) in **Japanese**; do not end them with `。` or `.` (SA1629 disabled)

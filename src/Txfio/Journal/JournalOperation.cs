@@ -1,20 +1,25 @@
+using System.Text.Json.Serialization;
+
 namespace Txfio;
 
 /// <summary>
-/// ジャーナル上の 1 操作
+/// ジャーナルに記録する 1 操作
 /// </summary>
-public sealed class PendingChange
+internal sealed class JournalOperation
 {
     /// <summary>
-    /// 操作の種類と対象パスを指定する
+    /// 操作の種類とパスを指定する
     /// </summary>
     /// <param name="kind">操作の種類</param>
     /// <param name="path">対象パス</param>
+    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス</param>
     /// <param name="newPath">Move の移動先（それ以外は null）</param>
-    public PendingChange(PendingChangeKind kind, string path, string? newPath = null)
+    [JsonConstructor]
+    public JournalOperation(PendingChangeKind kind, string path, string stagingPath, string? newPath = null)
     {
         Kind = kind;
         Path = path;
+        StagingPath = stagingPath;
         NewPath = newPath;
     }
 
@@ -27,6 +32,11 @@ public sealed class PendingChange
     /// 対象パス
     /// </summary>
     public string Path { get; }
+
+    /// <summary>
+    /// ステージングファイル（`.txnew`）のパス
+    /// </summary>
+    public string StagingPath { get; }
 
     /// <summary>
     /// Move の移動先パス

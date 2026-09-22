@@ -5,15 +5,17 @@ namespace Txfio.Tests.Support;
 /// </summary>
 internal sealed class TempDirectory : IAsyncDisposable
 {
+    private readonly string _path;
+
     private TempDirectory(string path)
     {
-        this.Path = path;
+        _path = path;
     }
 
     /// <summary>
     /// 作成したディレクトリの絶対パス
     /// </summary>
-    public string Path { get; }
+    public string Path => _path;
 
     /// <summary>
     /// 一時ディレクトリを新規作成する
@@ -34,9 +36,9 @@ internal sealed class TempDirectory : IAsyncDisposable
     {
         await Task.Run(() =>
         {
-            if (Directory.Exists(this.Path))
+            if (Directory.Exists(_path))
             {
-                Directory.Delete(this.Path, recursive: true);
+                Directory.Delete(_path, recursive: true);
             }
         }).ConfigureAwait(false);
     }
