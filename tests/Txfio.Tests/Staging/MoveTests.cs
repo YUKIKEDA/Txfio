@@ -315,6 +315,35 @@ public sealed class MoveTests
     }
 
     /// <summary>
+    /// Move 先を Update したあと Delete すると、Add は打ち消され元の Delete だけ残る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Move(A→B) のあと B を Update している</para>
+    /// <para>手順: B を DeleteAsync する</para>
+    /// <para>期待: pending は Delete(A) 1 件で、.txnew は無く、元は残り、先は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteAsync_Move先をUpdateしたあとだと元のDeleteだけ残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.UpdateAsync("b.txt", content);
+        await tx.DeleteAsync("b.txt");
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Delete, pending.Kind);
+        Assert.Equal(source, pending.Path, StringComparer.OrdinalIgnoreCase);
+        Assert.True(File.Exists(source));
+        Assert.False(File.Exists(dest));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
     /// Move 元への Delete は Move を Delete に置き換える
     /// </summary>
     /// <remarks>
