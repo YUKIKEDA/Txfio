@@ -233,9 +233,29 @@ internal sealed partial class Transaction
             throw;
         }
 
-        if (shouldRelocate)
+        if (!shouldRelocate)
+        {
+            return;
+        }
+
+        try
         {
             File.Move(oldStagingPath!, newStagingPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _operations.Clear();
+            _operations.AddRange(previous);
+            try
+            {
+                await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // 付け替え失敗を呼び出し側へ返すため、journal 巻き戻しの失敗は握りつぶす
+            }
+
+            throw;
         }
     }
 
