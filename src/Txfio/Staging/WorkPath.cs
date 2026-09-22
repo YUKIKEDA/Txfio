@@ -47,6 +47,19 @@ internal static class WorkPath
             fileName + "." + transactionId.ToString("D") + ".txnew");
     }
 
+    /// <summary>
+    /// このトランザクションの `.txnew` かどうかを判定する
+    /// </summary>
+    /// <param name="path">調べるパス</param>
+    /// <param name="transactionId">トランザクション ID</param>
+    /// <returns>このトランザクションの `.txnew` なら <see langword="true"/></returns>
+    internal static bool IsThisTransactionStagingFile(string path, Guid transactionId)
+    {
+        return path.EndsWith(
+            "." + transactionId.ToString("D") + ".txnew",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsInsideWorkFolder(string workFolder, string fullPath)
     {
         if (string.Equals(workFolder, fullPath, StringComparison.OrdinalIgnoreCase))

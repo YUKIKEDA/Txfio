@@ -43,6 +43,19 @@ internal sealed partial class Transaction
         {
             if (operation.Kind == PendingChangeKind.Delete)
             {
+                if (operation.IsDirectory)
+                {
+                    if (!StagingRules.MatchesDirectoryDeletePreconditions(
+                        operation.Path,
+                        _operations,
+                        _transactionId))
+                    {
+                        return false;
+                    }
+
+                    continue;
+                }
+
                 if (!File.Exists(operation.Path))
                 {
                     return false;

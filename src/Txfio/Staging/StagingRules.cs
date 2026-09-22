@@ -46,11 +46,6 @@ internal static class StagingRules
     {
         if (kind == PendingChangeKind.Delete)
         {
-            if (Directory.Exists(targetPath))
-            {
-                throw new IOException("ディレクトリの削除は未対応です: " + targetPath);
-            }
-
             if (!File.Exists(targetPath))
             {
                 throw new FileNotFoundException("削除対象のファイルが存在しません: " + targetPath, targetPath);
@@ -169,5 +164,185 @@ internal static class StagingRules
         {
             throw new DirectoryNotFoundException("親ディレクトリが存在しません: " + parent);
         }
+    }
+
+    /// <summary>
+    /// メタデータフォルダを削除対象から外す
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="targetPath">対象パス</param>
+    internal static void EnsureNotMetadataFolder(string workFolder, string targetPath)
+    {
+        if (string.Equals(targetPath, MetadataNames.FolderPath(workFolder), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("メタデータフォルダは削除できません: " + targetPath);
+        }
+    }
+
+    /// <summary>
+    /// 削除予約済みディレクトリへの後続操作を拒否する
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="path">操作しようとしているパス</param>
+    internal static void ThrowIfTouchesDeletedDirectory(IReadOnlyList<JournalOperation> operations, string path)
+    {
+        if (IsPendingDirectoryDelete(operations, path)
+            || IsPendingDirectoryDelete(operations, System.IO.Path.GetDirectoryName(path)))
+        {
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+    }
+
+    /// <summary>
+    /// ディレクトリ削除の直下条件を検証する（満たさなければ例外）
+    /// </summary>
+    /// <param name="directoryPath">対象ディレクトリ</param>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="transactionId">このトランザクションの ID</param>
+    internal static void EnsureDirectoryDeleteAllowed(
+        string directoryPath,
+        IReadOnlyList<JournalOperation> operations,
+        Guid transactionId)
+    {
+        if (!MatchesDirectoryDeletePreconditions(directoryPath, operations, transactionId))
+        {
+            throw new IOException("ディレクトリの直下に未予約の子があります: " + directoryPath);
+        }
+    }
+
+    /// <summary>
+    /// ディレクトリ削除の直下条件を満たすかを判定する
+    /// </summary>
+    /// <param name="directoryPath">対象ディレクトリ</param>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="transactionId">このトランザクションの ID</param>
+    /// <returns>直下が空、または予約済みの子だけなら <see langword="true"/></returns>
+    internal static bool MatchesDirectoryDeletePreconditions(
+        string directoryPath,
+        IReadOnlyList<JournalOperation> operations,
+        Guid transactionId)
+    {
+        if (!Directory.Exists(directoryPath) || File.Exists(directoryPath))
+        {
+            return false;
+        }
+
+        foreach (JournalOperation operation in operations)
+        {
+            if (IsImmediateChild(directoryPath, operation.Path))
+            {
+                if (operation.Kind == PendingChangeKind.Add
+                    || operation.Kind == PendingChangeKind.Update
+                    || operation.Kind == PendingChangeKind.Attach)
+                {
+                    return false;
+                }
+
+                if (operation.Kind == PendingChangeKind.Move
+                    && IsMoveIntoDirectory(directoryPath, operation.NewPath))
+                {
+                    return false;
+                }
+            }
+
+            if (operation.Kind == PendingChangeKind.Move
+                && IsMoveIntoDirectory(directoryPath, operation.NewPath)
+                && !string.Equals(operation.Path, directoryPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        string[] entries;
+        try
+        {
+            entries = Directory.GetFileSystemEntries(directoryPath);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+
+        foreach (string entry in entries)
+        {
+            if (WorkPath.IsThisTransactionStagingFile(entry, transactionId))
+            {
+                continue;
+            }
+
+            if (!IsChildAccountedForDelete(directoryPath, entry, operations))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsPendingDirectoryDelete(IReadOnlyList<JournalOperation> operations, string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return false;
+        }
+
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Delete
+                && operation.IsDirectory
+                && string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsImmediateChild(string parentDirectory, string path)
+    {
+        string? parent = System.IO.Path.GetDirectoryName(path);
+        return !string.IsNullOrEmpty(parent)
+            && string.Equals(parent, parentDirectory, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMoveIntoDirectory(string directoryPath, string? destPath)
+    {
+        if (string.IsNullOrEmpty(destPath))
+        {
+            return false;
+        }
+
+        return string.Equals(destPath, directoryPath, StringComparison.OrdinalIgnoreCase)
+            || IsImmediateChild(directoryPath, destPath);
+    }
+
+    private static bool IsChildAccountedForDelete(
+        string directoryPath,
+        string childPath,
+        IReadOnlyList<JournalOperation> operations)
+    {
+        foreach (JournalOperation operation in operations)
+        {
+            if (!string.Equals(operation.Path, childPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (operation.Kind == PendingChangeKind.Delete)
+            {
+                return true;
+            }
+
+            if (operation.Kind == PendingChangeKind.Move
+                && !IsMoveIntoDirectory(directoryPath, operation.NewPath))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        return false;
     }
 }

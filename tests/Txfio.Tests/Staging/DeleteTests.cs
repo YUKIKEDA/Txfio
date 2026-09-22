@@ -67,21 +67,26 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// ディレクトリへの Delete は未対応として失敗する
+    /// 空ディレクトリへの Delete はコミット前に対象を消さない
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスがディレクトリである</para>
+    /// <para>前提: 空のディレクトリがある</para>
     /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: pending は Delete 1 件で、ディレクトリは残る</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_ディレクトリだとIOExceptionになること()
+    public async Task DeleteAsync_空ディレクトリはコミット前に消えないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync("sub"));
+        await tx.DeleteAsync("sub");
+
+        Assert.True(Directory.Exists(dir));
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Delete, pending.Kind);
+        Assert.Equal(dir, pending.Path, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

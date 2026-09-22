@@ -16,6 +16,7 @@ internal sealed class JournalOperation
     /// <param name="newPath">Move の移動先（それ以外は null）</param>
     /// <param name="expectedLength">Attach 時点のサイズ（それ以外は null）</param>
     /// <param name="expectedLastWriteTimeUtc">Attach 時点の最終更新日時（UTC、それ以外は null）</param>
+    /// <param name="isDirectory">Delete の対象がディレクトリなら <see langword="true"/></param>
     [JsonConstructor]
     public JournalOperation(
         PendingChangeKind kind,
@@ -23,7 +24,8 @@ internal sealed class JournalOperation
         string? stagingPath = null,
         string? newPath = null,
         long? expectedLength = null,
-        DateTime? expectedLastWriteTimeUtc = null)
+        DateTime? expectedLastWriteTimeUtc = null,
+        bool isDirectory = false)
     {
         Kind = kind;
         Path = path;
@@ -31,6 +33,7 @@ internal sealed class JournalOperation
         NewPath = newPath;
         ExpectedLength = expectedLength;
         ExpectedLastWriteTimeUtc = expectedLastWriteTimeUtc;
+        IsDirectory = isDirectory;
     }
 
     /// <summary>
@@ -64,4 +67,10 @@ internal sealed class JournalOperation
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTime? ExpectedLastWriteTimeUtc { get; }
+
+    /// <summary>
+    /// Delete の対象がディレクトリかどうか
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsDirectory { get; }
 }

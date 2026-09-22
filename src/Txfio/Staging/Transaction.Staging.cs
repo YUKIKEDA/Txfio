@@ -22,6 +22,7 @@ internal sealed partial class Transaction
     {
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
@@ -31,6 +32,11 @@ internal sealed partial class Transaction
             if (existing.Kind == PendingChangeKind.Delete)
             {
                 return;
+            }
+
+            if (Directory.Exists(targetPath) || existing.IsDirectory)
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
             }
 
             if (existing.Kind == PendingChangeKind.Add)
@@ -45,6 +51,31 @@ internal sealed partial class Transaction
                     new JournalOperation(PendingChangeKind.Delete, targetPath),
                     cancellationToken)
                 .ConfigureAwait(false);
+            return;
+        }
+
+        if (Directory.Exists(targetPath))
+        {
+            StagingRules.EnsureDirectoryDeleteAllowed(targetPath, _operations, _transactionId);
+            JournalOperation directoryDelete = new JournalOperation(
+                PendingChangeKind.Delete,
+                targetPath,
+                stagingPath: null,
+                newPath: null,
+                expectedLength: null,
+                expectedLastWriteTimeUtc: null,
+                isDirectory: true);
+            _operations.Add(directoryDelete);
+            try
+            {
+                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                _operations.Remove(directoryDelete);
+                throw;
+            }
+
             return;
         }
 
@@ -76,6 +107,8 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(destPath);
         StagingRules.EnsureSameVolume(sourcePath, destPath);
         StagingRules.EnsureMoveDestinationIsFree(destPath);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, sourcePath);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, destPath);
 
         if (FindOperationIndex(destPath) >= 0)
         {
@@ -136,6 +169,7 @@ internal sealed partial class Transaction
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureParentDirectoryExists(targetPath);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
 
         if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
         {
@@ -271,11 +305,17 @@ internal sealed partial class Transaction
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureParentDirectoryExists(targetPath);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
         PendingChangeKind recordedKind = kind;
         if (existingIndex >= 0)
         {
+            if (_operations[existingIndex].IsDirectory)
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+
             recordedKind = StagingRules.NormalizeRestageKind(_operations[existingIndex].Kind, kind);
         }
         else
