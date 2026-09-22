@@ -35,15 +35,16 @@ internal sealed partial class Transaction
 
             if (existing.Kind == PendingChangeKind.Add)
             {
-                _operations.RemoveAt(existingIndex);
-                StagingFile.TryDelete(existing.StagingPath);
-                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+                await PersistReplacingOperationAsync(existingIndex, replacement: null, cancellationToken)
+                    .ConfigureAwait(false);
                 return;
             }
 
-            StagingFile.TryDelete(existing.StagingPath);
-            _operations[existingIndex] = new JournalOperation(PendingChangeKind.Delete, targetPath);
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            await PersistReplacingOperationAsync(
+                    existingIndex,
+                    new JournalOperation(PendingChangeKind.Delete, targetPath),
+                    cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
 
@@ -59,6 +60,42 @@ internal sealed partial class Transaction
             _operations.Remove(operation);
             throw;
         }
+    }
+
+    private async Task PersistReplacingOperationAsync(
+        int existingIndex,
+        JournalOperation? replacement,
+        CancellationToken cancellationToken)
+    {
+        JournalOperation existing = _operations[existingIndex];
+        if (replacement is null)
+        {
+            _operations.RemoveAt(existingIndex);
+        }
+        else
+        {
+            _operations[existingIndex] = replacement;
+        }
+
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (replacement is null)
+            {
+                _operations.Insert(existingIndex, existing);
+            }
+            else
+            {
+                _operations[existingIndex] = existing;
+            }
+
+            throw;
+        }
+
+        StagingFile.TryDelete(existing.StagingPath);
     }
 
     private async Task StageAsync(

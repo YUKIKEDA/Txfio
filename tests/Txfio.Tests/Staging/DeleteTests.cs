@@ -155,4 +155,64 @@ public sealed class DeleteTests
         Assert.Equal("old", await File.ReadAllTextAsync(target));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
     }
+
+    /// <summary>
+    /// Add のあと Delete でジャーナル書き込みに失敗しても pending と .txnew は残る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 同じパスを Add したあと、journal を排他ロックしている</para>
+    /// <para>手順: DeleteAsync する</para>
+    /// <para>期待: 例外になり、pending は Add のままで .txnew も残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteAsync_Addのあとでjournal書き込みに失敗するとAddのまま残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.AddAsync("a.txt", content);
+        await using FileStream journalLock = LockJournal(work.Path);
+
+        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync("a.txt"));
+
+        IReadOnlyList<PendingChange> pending = tx.GetPendingChanges();
+        Assert.Single(pending);
+        Assert.Equal(PendingChangeKind.Add, pending[0].Kind);
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
+    /// Update のあと Delete でジャーナル書き込みに失敗しても pending と .txnew は残る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 既存ファイルを Update したあと、journal を排他ロックしている</para>
+    /// <para>手順: DeleteAsync する</para>
+    /// <para>期待: 例外になり、pending は Update のままで .txnew も残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteAsync_Updateのあとでjournal書き込みに失敗するとUpdateのまま残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.UpdateAsync("a.txt", content);
+        await using FileStream journalLock = LockJournal(work.Path);
+
+        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync("a.txt"));
+
+        IReadOnlyList<PendingChange> pending = tx.GetPendingChanges();
+        Assert.Single(pending);
+        Assert.Equal(PendingChangeKind.Update, pending[0].Kind);
+        Assert.Equal("old", await File.ReadAllTextAsync(target));
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    private static FileStream LockJournal(string workFolder)
+    {
+        string journal = Assert.Single(
+            Directory.GetFiles(System.IO.Path.Combine(workFolder, ".txfio"), "tx-*.journal"));
+        return new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None);
+    }
 }
