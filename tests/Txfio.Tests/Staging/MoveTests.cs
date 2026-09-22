@@ -232,6 +232,115 @@ public sealed class MoveTests
     }
 
     /// <summary>
+    /// Move 先への Update は移動先の Add と元の Delete になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: A から B へ Move している</para>
+    /// <para>手順: B へ UpdateAsync する</para>
+    /// <para>期待: pending は Add(B) と Delete(A) で、.txnew は B 側、元ファイルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_Move先だとAddとDeleteになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.UpdateAsync("b.txt", content);
+
+        IReadOnlyList<PendingChange> pending = tx.GetPendingChanges();
+        Assert.Equal(2, pending.Count);
+        Assert.Equal(PendingChangeKind.Add, pending[0].Kind);
+        Assert.Equal(dest, pending[0].Path, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(PendingChangeKind.Delete, pending[1].Kind);
+        Assert.Equal(source, pending[1].Path, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("old", await File.ReadAllTextAsync(source));
+        Assert.False(File.Exists(dest));
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
+    /// Move 先への Update の未コミット Dispose では元が残り、.txnew は消える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Move のあと移動先を Update している</para>
+    /// <para>手順: Commit せず Dispose する</para>
+    /// <para>期待: 元が残り、先も .txnew も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_Move先の未コミットDisposeでは元が残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(source, "old");
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        {
+            await tx.MoveAsync("a.txt", "b.txt");
+            await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+            await tx.UpdateAsync("b.txt", content);
+        }
+
+        Assert.Equal("old", await File.ReadAllTextAsync(source));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "b.txt")));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
+    /// Move 先への Delete は移動元の Delete になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: A から B へ Move している</para>
+    /// <para>手順: B を DeleteAsync する</para>
+    /// <para>期待: pending は Delete(A) 1 件で、元は残り、先は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteAsync_Move先だと元のDeleteになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await tx.DeleteAsync("b.txt");
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Delete, pending.Kind);
+        Assert.Equal(source, pending.Path, StringComparer.OrdinalIgnoreCase);
+        Assert.True(File.Exists(source));
+        Assert.False(File.Exists(dest));
+    }
+
+    /// <summary>
+    /// Move 元への Delete は Move を Delete に置き換える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: A から B へ Move している</para>
+    /// <para>手順: A を DeleteAsync する</para>
+    /// <para>期待: pending は Delete(A) 1 件で、元は残り、先は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteAsync_Move元だとDeleteになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await tx.DeleteAsync("a.txt");
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Delete, pending.Kind);
+        Assert.Equal(source, pending.Path, StringComparer.OrdinalIgnoreCase);
+        Assert.True(File.Exists(source));
+        Assert.False(File.Exists(dest));
+    }
+
+    /// <summary>
     /// Add のあと Move でジャーナル書き込みに失敗しても pending と .txnew は元のまま残る
     /// </summary>
     /// <remarks>
@@ -260,6 +369,36 @@ public sealed class MoveTests
             StringComparer.OrdinalIgnoreCase);
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+    }
+
+    /// <summary>
+    /// Move 先への Update でジャーナル書き込みに失敗しても pending は Move のままである
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Move したあと、journal を排他ロックしている</para>
+    /// <para>手順: 移動先へ UpdateAsync する</para>
+    /// <para>期待: 例外は IOException で、pending は Move のままで .txnew は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_Move先でjournal書き込みに失敗するとMoveのまま残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await using FileStream journalLock = LockJournal(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+
+        IOException ex = await Assert.ThrowsAsync<IOException>(() => tx.UpdateAsync("b.txt", content));
+        Assert.Null(ex.InnerException);
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Move, pending.Kind);
+        Assert.Equal(
+            System.IO.Path.Combine(work.Path, "a.txt"),
+            pending.Path,
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
 
     private static FileStream LockJournal(string workFolder)

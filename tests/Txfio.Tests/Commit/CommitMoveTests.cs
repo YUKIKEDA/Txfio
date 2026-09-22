@@ -104,6 +104,83 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
+    /// Move のあと移動先を Update したコミットは先の内容を置き換え、元を消す
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Move(A→B) のあと B を Update している</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: 先が新しい内容で、元は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_MoveのあとUpdateすると先が新しい内容になること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.UpdateAsync("b.txt", content);
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.False(File.Exists(source));
+        Assert.Equal("new", await File.ReadAllTextAsync(dest));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
+    /// Move のあと移動先を Delete したコミットは元を消し、先は作らない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Move(A→B) のあと B を Delete している</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: 元も先も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_Moveのあと先をDeleteすると元が消えること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "gone");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await tx.DeleteAsync("b.txt");
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.False(File.Exists(source));
+        Assert.False(File.Exists(dest));
+    }
+
+    /// <summary>
+    /// Move のあと移動元を Delete したコミットは元を消し、先は作らない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Move(A→B) のあと A を Delete している</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: 元も先も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_Moveのあと元をDeleteすると元が消えること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "gone");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await tx.DeleteAsync("a.txt");
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.False(File.Exists(source));
+        Assert.False(File.Exists(dest));
+    }
+
+    /// <summary>
     /// コミット前に移動元が消えていれば Failed で、ジャーナルは残る
     /// </summary>
     /// <remarks>

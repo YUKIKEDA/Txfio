@@ -54,6 +54,18 @@ internal sealed partial class Transaction
             return;
         }
 
+        int moveToIndex = FindMoveToIndex(targetPath);
+        if (moveToIndex >= 0)
+        {
+            JournalOperation move = _operations[moveToIndex];
+            await PersistReplacingOperationAsync(
+                    moveToIndex,
+                    new JournalOperation(PendingChangeKind.Delete, move.Path),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
         if (Directory.Exists(targetPath))
         {
             StagingRules.EnsureDirectoryDeleteAllowed(targetPath, _operations, _transactionId);
@@ -298,6 +310,42 @@ internal sealed partial class Transaction
         }
     }
 
+    /// <summary>
+    /// Move 先への Update を、移動先の Add と元の Delete に畳む
+    /// </summary>
+    /// <param name="moveIndex">Move 操作のインデックス</param>
+    /// <param name="destPath">Update 対象（Move の移動先）</param>
+    /// <param name="content">新しい内容</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>畳み込みとジャーナル書き込みの完了</returns>
+    private async Task FoldMoveDestinationUpdateAsync(
+        int moveIndex,
+        string destPath,
+        Stream content,
+        CancellationToken cancellationToken)
+    {
+        string stagingPath = WorkPath.StagingFilePath(destPath, _transactionId);
+        await StagingFile.WriteAsync(stagingPath, content, cancellationToken).ConfigureAwait(false);
+
+        JournalOperation[] previous = _operations.ToArray();
+        try
+        {
+            JournalOperation move = _operations[moveIndex];
+            _operations.RemoveAt(moveIndex);
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
+            _operations.Add(new JournalOperation(PendingChangeKind.Delete, move.Path));
+
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _operations.Clear();
+            _operations.AddRange(previous);
+            StagingFile.TryDelete(stagingPath);
+            throw;
+        }
+    }
+
     private async Task StageAsync(
         PendingChangeKind kind,
         string path,
@@ -324,9 +372,17 @@ internal sealed partial class Transaction
         }
         else
         {
-            if (FindMoveToIndex(targetPath) >= 0)
+            int moveToIndex = FindMoveToIndex(targetPath);
+            if (moveToIndex >= 0)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                if (kind != PendingChangeKind.Update)
+                {
+                    throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                }
+
+                await FoldMoveDestinationUpdateAsync(moveToIndex, targetPath, content, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
             }
 
             StagingRules.EnsureTargetMatchesKind(kind, targetPath);
