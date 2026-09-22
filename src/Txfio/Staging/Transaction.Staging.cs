@@ -207,18 +207,12 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken)
     {
         JournalOperation existing = _operations[sourceIndex];
-        string newStagingPath = WorkPath.StagingFilePath(destPath, _transactionId);
         JournalOperation[] previous = _operations.ToArray();
-        string? oldStagingPath = existing.StagingPath;
-        bool shouldRelocate = !string.IsNullOrEmpty(oldStagingPath)
-            && File.Exists(oldStagingPath)
-            && !string.Equals(oldStagingPath, newStagingPath, StringComparison.OrdinalIgnoreCase);
-
         try
         {
             string sourcePath = existing.Path;
             _operations.RemoveAt(sourceIndex);
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, newStagingPath));
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, existing.StagingPath));
             if (deleteSource)
             {
                 _operations.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
@@ -230,31 +224,6 @@ internal sealed partial class Transaction
         {
             _operations.Clear();
             _operations.AddRange(previous);
-            throw;
-        }
-
-        if (!shouldRelocate)
-        {
-            return;
-        }
-
-        try
-        {
-            File.Move(oldStagingPath!, newStagingPath);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            _operations.Clear();
-            _operations.AddRange(previous);
-            try
-            {
-                await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch
-            {
-                // 付け替え失敗を呼び出し側へ返すため、journal 巻き戻しの失敗は握りつぶす
-            }
-
             throw;
         }
     }

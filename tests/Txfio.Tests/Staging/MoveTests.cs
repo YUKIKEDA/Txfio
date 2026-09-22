@@ -128,7 +128,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 同じパスを Add している</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: pending は Add（移動先）1 件で、.txnew は移動先側にある</para>
+    /// <para>期待: pending は Add（移動先）1 件で、.txnew は元の場所に残る</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_Addのあとだと移動先のAddになること()
@@ -146,8 +146,8 @@ public sealed class MoveTests
             System.IO.Path.Combine(work.Path, "sub", "b.txt"),
             pending.Path,
             StringComparer.OrdinalIgnoreCase);
-        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
-        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
     }
 
     /// <summary>
@@ -156,7 +156,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 既存ファイルを Update している</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: pending は Add と Delete で、.txnew は移動先側にあり、元ファイルは残る</para>
+    /// <para>期待: pending は Add と Delete で、.txnew は元の場所に残り、元ファイルは残る</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_UpdateのあとだとAddとDeleteになること()
@@ -175,7 +175,8 @@ public sealed class MoveTests
         Assert.Equal(PendingChangeKind.Add, pending[0].Kind);
         Assert.Equal(PendingChangeKind.Delete, pending[1].Kind);
         Assert.Equal("old", await File.ReadAllTextAsync(source));
-        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
     }
 
     /// <summary>
@@ -258,41 +259,6 @@ public sealed class MoveTests
             pending.Path,
             StringComparer.OrdinalIgnoreCase);
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
-        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
-    }
-
-    /// <summary>
-    /// Add のあと Move で .txnew の付け替えに失敗しても pending と .txnew は元のまま残る
-    /// </summary>
-    /// <remarks>
-    /// <para>前提: Add したあと、.txnew を排他ロックしている</para>
-    /// <para>手順: 別ディレクトリへ MoveAsync する</para>
-    /// <para>期待: 例外は IOException で、pending は Add のままで .txnew も元の場所にある</para>
-    /// </remarks>
-    [Fact]
-    public async Task MoveAsync_Addのあとでtxnewの付け替えに失敗するとAddのまま残ること()
-    {
-        await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
-        await tx.AddAsync("a.txt", content);
-        string staging = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
-        await using FileStream stagingLock = new FileStream(
-            staging,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.None);
-
-        await Assert.ThrowsAsync<IOException>(() => tx.MoveAsync("a.txt", "sub/b.txt"));
-
-        PendingChange pending = Assert.Single(tx.GetPendingChanges());
-        Assert.Equal(PendingChangeKind.Add, pending.Kind);
-        Assert.Equal(
-            System.IO.Path.Combine(work.Path, "a.txt"),
-            pending.Path,
-            StringComparer.OrdinalIgnoreCase);
-        Assert.True(File.Exists(staging));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
     }
 
