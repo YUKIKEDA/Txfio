@@ -6,11 +6,11 @@ namespace Txfio;
 public sealed class PendingChange
 {
     /// <summary>
-    /// <see cref="PendingChange"/> を初期化する
+    /// 操作の種類と対象パスを指定する
     /// </summary>
     /// <param name="kind">操作の種類</param>
     /// <param name="path">対象パス</param>
-    /// <param name="newPath">Move の移動先。それ以外は null</param>
+    /// <param name="newPath">Move の移動先（それ以外は null）</param>
     public PendingChange(PendingChangeKind kind, string path, string? newPath = null)
     {
         this.Kind = kind;

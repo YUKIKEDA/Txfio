@@ -74,6 +74,7 @@ docs/conventions.md
 - ターゲット: **`net8.0`**（ランタイム保証は Windows）
 - テスト: **xUnit**
 - コーディング規約の詳細: [`docs/conventions.md`](docs/conventions.md)
+- XML ドキュメントの日本語は、変更 PR で Gemini レビューする（[`.cursor/rules/japanese-docs.mdc`](.cursor/rules/japanese-docs.mdc)）
 
 ## バージョン
 

@@ -27,9 +27,10 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 - Nullable enabled; treat warnings as errors
 - StyleCop.Analyzers + built-in code analysis via shared `Directory.Build.props`
 - Format with `dotnet format` / `.editorconfig` (LF)
-- Strict XML docs on public API; do not block tests/internal on doc requirements
+- Strict XML docs on public API **and** `public` members of internal types, plus internal types/members (`documentInternalElements`). Do not block tests/private on doc requirements
 - Interface names must be prefixed with `I`. SA1302 stays enabled
 - Comments (XML docs / inline) in **Japanese**; do not end them with `。` or `.` (SA1629 disabled)
+- New or changed Japanese XML docs in `src/` must be reviewed by Gemini for natural wording before the PR is ready (`.cursor/rules/japanese-docs.mdc`)
 - Test method names: natural Japanese, plus 前提 / 手順 / 期待 in remarks
 - Library `await` uses `ConfigureAwait(false)`. Do not Dispose caller-owned `Stream`s
 - Paths: normalized absolute, compare `OrdinalIgnoreCase`

@@ -8,7 +8,7 @@ public interface ITransaction : IAsyncDisposable
     /// <summary>
     /// ステージングした変更をワークフォルダへ確定する
     /// </summary>
-    /// <param name="cancellationToken">コミット開始前まで有効なキャンセル</param>
+    /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
     /// <returns>確定結果</returns>
     Task<CommitResult> CommitAsync(CancellationToken cancellationToken = default);
 

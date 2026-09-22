@@ -2,6 +2,9 @@ using System.Text.Json;
 
 namespace Txfio;
 
+/// <summary>
+/// ジャーナルファイルの読み書き
+/// </summary>
 internal static class JournalStore
 {
     private const int CurrentVersion = 1;
@@ -13,6 +16,13 @@ internal static class JournalStore
         WriteIndented = false,
     };
 
+    /// <summary>
+    /// 未コミットの新規ジャーナルを作成する
+    /// </summary>
+    /// <param name="journalPath">書き込み先</param>
+    /// <param name="transactionId">トランザクション ID</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>書き込みの完了</returns>
     internal static async Task WriteNewAsync(string journalPath, Guid transactionId, CancellationToken cancellationToken)
     {
         JournalDocument document = new JournalDocument(CurrentVersion, transactionId, committing: false);
@@ -36,6 +46,12 @@ internal static class JournalStore
         }
     }
 
+    /// <summary>
+    /// ジャーナルを読む（壊れているか読めないときは <see langword="null"/>）
+    /// </summary>
+    /// <param name="journalPath">読み取り元</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>読めた文書（失敗時は <see langword="null"/>）</returns>
     internal static async Task<JournalDocument?> TryReadAsync(string journalPath, CancellationToken cancellationToken)
     {
         try
@@ -53,6 +69,11 @@ internal static class JournalStore
         }
     }
 
+    /// <summary>
+    /// ジャーナルファイルがあれば削除する
+    /// </summary>
+    /// <param name="journalPath">削除対象</param>
+    /// <returns>削除の完了</returns>
     internal static Task DeleteAsync(string journalPath)
     {
         if (File.Exists(journalPath))
