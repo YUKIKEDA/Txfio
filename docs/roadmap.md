@@ -13,9 +13,9 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 0 リポジトリ基盤 | 完了 |
 | Phase 1 MVP | 完了 |
 | Phase 2 並行性・ロック | 完了 |
-| Phase 3 拡張と公開 | 進行中（次は文字列と JSON の設計 Issue #53） |
+| Phase 3 拡張と公開 | 進行中（次は文字列と JSON の拡張 Issue #57） |
 
-Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51）と利用者向け README（Issue #41）、設計（Issue #43）は main にある。次は文字列と JSON の設計（Issue #53）。README の Skill と書き直し（Issue #54）はそれと並行してよい。実装はその設計のマージ後。公開（リポジトリ public と nuget.org）はその後。
+Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51）と利用者向け README（Issue #41、#54）、設計（Issue #43、#53）は main にある。次は文字列と JSON の拡張（Issue #57）。公開（リポジトリ public と nuget.org）はその後。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -61,8 +61,9 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51）と利
 - [x] Issue #47: ディレクトリの Attach（存在だけ。子の変化は見ない。ロールバックでも消さない）
 - [x] Issue #49: `CopyAsync`（ワークフォルダ内のファイルまたはディレクトリ。コピー元は残す。ディレクトリはファイルごとの Add）
 - [x] Issue #51: ディレクトリの Import / Export（外のディレクトリを Add し、中のディレクトリをロックせず外へ出す）
-- Issue #53: 設計: 文字列と JSON の拡張メソッド（実装は含めない）
-- Issue #54: README の書き方を Skill にし、README を書き直す
+- [x] Issue #53: 設計: 文字列と JSON の拡張メソッド（実装は含めない）
+- [x] Issue #54: README の書き方を Skill にし、README を書き直す
+- Issue #57: 文字列と JSON の拡張メソッド
 
 ## 公開（Phase 3 完了後）
 
