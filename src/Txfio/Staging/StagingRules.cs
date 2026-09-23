@@ -48,7 +48,7 @@ internal static class StagingRules
         {
             if (!File.Exists(targetPath))
             {
-                throw new FileNotFoundException("削除対象のファイルが存在しません: " + targetPath, targetPath);
+                throw new ExternalConflictException("削除対象のファイルが存在しません: " + targetPath, targetPath);
             }
 
             return;
@@ -57,12 +57,12 @@ internal static class StagingRules
         bool exists = File.Exists(targetPath);
         if (kind == PendingChangeKind.Add && exists)
         {
-            throw new IOException("追加対象のファイルが既に存在します: " + targetPath);
+            throw new ExternalConflictException("追加対象のファイルが既に存在します: " + targetPath, targetPath);
         }
 
         if (kind == PendingChangeKind.Update && !exists)
         {
-            throw new FileNotFoundException("更新対象のファイルが存在しません: " + targetPath, targetPath);
+            throw new ExternalConflictException("更新対象のファイルが存在しません: " + targetPath, targetPath);
         }
     }
 
@@ -74,12 +74,12 @@ internal static class StagingRules
     {
         if (Directory.Exists(sourcePath))
         {
-            throw new IOException("ディレクトリの移動は未対応です: " + sourcePath);
+            throw new UnsupportedOperationException("ディレクトリの移動は未対応です: " + sourcePath);
         }
 
         if (!File.Exists(sourcePath))
         {
-            throw new FileNotFoundException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
         }
     }
 
@@ -91,12 +91,12 @@ internal static class StagingRules
     {
         if (Directory.Exists(destPath))
         {
-            throw new IOException("移動先がディレクトリです: " + destPath);
+            throw new ExternalConflictException("移動先がディレクトリです: " + destPath, destPath);
         }
 
         if (File.Exists(destPath))
         {
-            throw new IOException("移動先のファイルが既に存在します: " + destPath);
+            throw new ExternalConflictException("移動先のファイルが既に存在します: " + destPath, destPath);
         }
     }
 
@@ -113,7 +113,7 @@ internal static class StagingRules
             || string.IsNullOrEmpty(destRoot)
             || !string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase))
         {
-            throw new IOException("ボリュームをまたぐ移動はできません: " + sourcePath + " -> " + destPath);
+            throw new UnsupportedOperationException("ボリュームをまたぐ移動はできません: " + sourcePath + " -> " + destPath);
         }
     }
 
@@ -125,12 +125,12 @@ internal static class StagingRules
     {
         if (Directory.Exists(targetPath))
         {
-            throw new IOException("ディレクトリの取り込みは未対応です: " + targetPath);
+            throw new UnsupportedOperationException("ディレクトリの取り込みは未対応です: " + targetPath);
         }
 
         if (!File.Exists(targetPath))
         {
-            throw new FileNotFoundException("取り込み対象のファイルが存在しません: " + targetPath, targetPath);
+            throw new ExternalConflictException("取り込み対象のファイルが存在しません: " + targetPath, targetPath);
         }
     }
 
@@ -143,7 +143,8 @@ internal static class StagingRules
         string? parent = System.IO.Path.GetDirectoryName(targetPath);
         if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent))
         {
-            throw new DirectoryNotFoundException("親ディレクトリが存在しません: " + parent);
+            string reported = string.IsNullOrEmpty(parent) ? targetPath : parent;
+            throw new ExternalConflictException("親ディレクトリが存在しません: " + reported, reported);
         }
     }
 
@@ -156,7 +157,7 @@ internal static class StagingRules
     {
         if (WorkPath.IsInMetadataFolder(workFolder, targetPath))
         {
-            throw new IOException("メタデータフォルダとその配下のパスは操作できません: " + targetPath);
+            throw new InvalidOperationException("メタデータフォルダとその配下のパスは操作できません: " + targetPath);
         }
     }
 
@@ -187,7 +188,7 @@ internal static class StagingRules
     {
         if (!MatchesDirectoryDeletePreconditions(directoryPath, operations, transactionId))
         {
-            throw new IOException("ディレクトリの直下に未予約の子があります: " + directoryPath);
+            throw new ExternalConflictException("ディレクトリの直下に未予約の子があります: " + directoryPath, directoryPath);
         }
     }
 

@@ -22,15 +22,32 @@ public sealed class TxfioTests
     /// 存在しないワークフォルダではトランザクションを開始できない
     /// </summary>
     /// <remarks>
-    /// <para>前提: パスにディレクトリが無い</para>
+    /// <para>前提: 指定パスにディレクトリが無い</para>
     /// <para>手順: BeginAsync を呼ぶ</para>
-    /// <para>期待: DirectoryNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path はそのフォルダである</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_存在しないフォルダだとDirectoryNotFoundExceptionになること()
+    public async Task BeginAsync_存在しないフォルダだとExternalConflictExceptionになること()
     {
         string missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-" + Guid.NewGuid().ToString("N"));
-        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => global::Txfio.Txfio.BeginAsync(missing));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => global::Txfio.Txfio.BeginAsync(missing));
+        Assert.Equal(System.IO.Path.GetFullPath(missing), ex.Path);
+    }
+
+    /// <summary>
+    /// 存在しないワークフォルダでは復旧できない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 指定パスにディレクトリが無い</para>
+    /// <para>手順: RecoverAsync を呼ぶ</para>
+    /// <para>期待: ExternalConflictException になり、Path はそのフォルダである</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_存在しないフォルダだとExternalConflictExceptionになること()
+    {
+        string missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-" + Guid.NewGuid().ToString("N"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => global::Txfio.Txfio.RecoverAsync(missing));
+        Assert.Equal(System.IO.Path.GetFullPath(missing), ex.Path);
     }
 
     /// <summary>

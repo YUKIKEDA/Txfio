@@ -57,14 +57,15 @@ public sealed class AttachTests
     /// <remarks>
     /// <para>前提: 対象パスにファイルが無い</para>
     /// <para>手順: AttachAsync する</para>
-    /// <para>期待: FileNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は対象である</para>
     /// </remarks>
     [Fact]
-    public async Task AttachAsync_無いファイルだとFileNotFoundExceptionになること()
+    public async Task AttachAsync_無いファイルだとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<FileNotFoundException>(() => tx.AttachAsync("missing.txt"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AttachAsync("missing.txt"));
+        Assert.Equal(System.IO.Path.Combine(work.Path, "missing.txt"), ex.Path);
     }
 
     /// <summary>
@@ -73,16 +74,16 @@ public sealed class AttachTests
     /// <remarks>
     /// <para>前提: 対象パスがディレクトリである</para>
     /// <para>手順: AttachAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: UnsupportedOperationException になる</para>
     /// </remarks>
     [Fact]
-    public async Task AttachAsync_ディレクトリだとIOExceptionになること()
+    public async Task AttachAsync_ディレクトリだとUnsupportedOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.AttachAsync("sub"));
+        await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.AttachAsync("sub"));
     }
 
     /// <summary>
@@ -91,14 +92,15 @@ public sealed class AttachTests
     /// <remarks>
     /// <para>前提: サブフォルダが無い</para>
     /// <para>手順: その配下へ AttachAsync する</para>
-    /// <para>期待: DirectoryNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task AttachAsync_親が無いとDirectoryNotFoundExceptionになること()
+    public async Task AttachAsync_親が無いとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => tx.AttachAsync("missing/a.txt"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AttachAsync("missing/a.txt"));
+        Assert.Equal(System.IO.Path.Combine(work.Path, "missing"), ex.Path);
     }
 
     /// <summary>

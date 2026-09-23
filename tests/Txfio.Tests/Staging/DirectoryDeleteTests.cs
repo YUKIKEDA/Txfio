@@ -32,17 +32,18 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: ディレクトリ直下にファイルがある</para>
     /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_未追跡の子ファイルがあるとIOExceptionになること()
+    public async Task DeleteAsync_未追跡の子ファイルがあるとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "a.txt"), "keep");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync("sub"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
+        Assert.Equal(dir, ex.Path);
     }
 
     /// <summary>
@@ -51,16 +52,17 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: ディレクトリ直下に空の子ディレクトリがある</para>
     /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_未追跡の子ディレクトリがあるとIOExceptionになること()
+    public async Task DeleteAsync_未追跡の子ディレクトリがあるとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(System.IO.Path.Combine(dir, "nested"));
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync("sub"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
+        Assert.Equal(dir, ex.Path);
     }
 
     /// <summary>
@@ -155,14 +157,14 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: トランザクションを開始している</para>
     /// <para>手順: .txfio を DeleteAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: InvalidOperationException になる</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_メタデータフォルダだとIOExceptionになること()
+    public async Task DeleteAsync_メタデータフォルダだとInvalidOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync(".txfio"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteAsync(".txfio"));
     }
 
     /// <summary>
@@ -171,15 +173,15 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: トランザクションを開始している</para>
     /// <para>手順: .txfio 配下へ AddAsync する</para>
-    /// <para>期待: IOException になり .txnew は無い</para>
+    /// <para>期待: InvalidOperationException になり .txnew は無い</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_メタデータフォルダ配下だとIOExceptionになること()
+    public async Task AddAsync_メタデータフォルダ配下だとInvalidOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
-        await Assert.ThrowsAsync<IOException>(() => tx.AddAsync(".txfio/foo", content));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AddAsync(".txfio/foo", content));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "*.txnew"));
         Assert.Empty(tx.GetPendingChanges());
     }
@@ -190,10 +192,10 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: .txfio 配下にファイルがある</para>
     /// <para>手順: UpdateAsync と AttachAsync する</para>
-    /// <para>期待: どちらも IOException になる</para>
+    /// <para>期待: どちらも InvalidOperationException になる</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateとAttach_メタデータフォルダ配下だとIOExceptionになること()
+    public async Task UpdateとAttach_メタデータフォルダ配下だとInvalidOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
@@ -201,8 +203,8 @@ public sealed class DirectoryDeleteTests
         await File.WriteAllTextAsync(inside, "keep");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
-        await Assert.ThrowsAsync<IOException>(() => tx.UpdateAsync(".txfio/foo", content));
-        await Assert.ThrowsAsync<IOException>(() => tx.AttachAsync(".txfio/foo"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.UpdateAsync(".txfio/foo", content));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AttachAsync(".txfio/foo"));
         Assert.Equal("keep", await File.ReadAllTextAsync(inside));
         Assert.Empty(tx.GetPendingChanges());
     }
@@ -213,15 +215,15 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: ワークフォルダにファイルがある</para>
     /// <para>手順: .txfio 配下へ MoveAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: InvalidOperationException になる</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_メタデータフォルダ配下だとIOExceptionになること()
+    public async Task MoveAsync_メタデータフォルダ配下だとInvalidOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.MoveAsync("a.txt", ".txfio/a.txt"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", ".txfio/a.txt"));
         Assert.True(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
         Assert.Empty(tx.GetPendingChanges());
     }
@@ -232,16 +234,16 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: .txfio 配下にファイルがある</para>
     /// <para>手順: そのパスを DeleteAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: InvalidOperationException になる</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_メタデータフォルダ配下だとIOExceptionになること()
+    public async Task DeleteAsync_メタデータフォルダ配下だとInvalidOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, ".txfio", "foo"), "keep");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync(".txfio/foo"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteAsync(".txfio/foo"));
     }
 
     /// <summary>
@@ -250,16 +252,18 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>前提: 直下へ Add している</para>
     /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_残るAddがある親はIOExceptionになること()
+    public async Task DeleteAsync_残るAddがある親はExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        string dir = System.IO.Path.Combine(work.Path, "sub");
+        Directory.CreateDirectory(dir);
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("sub/a.txt", content);
-        await Assert.ThrowsAsync<IOException>(() => tx.DeleteAsync("sub"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
+        Assert.Equal(dir, ex.Path);
     }
 }

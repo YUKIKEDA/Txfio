@@ -67,7 +67,7 @@ C#で、ファイルサーバーなどIOが遅い環境でも動作する、git�
 - 全ての書き込み系APIは非同期（`Task`ベース）で統一する。同期版は提供しない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
 - `CancellationToken` を受け付けるが、有効なのはコミット開始前（検証フェーズまで）に限る。物理的な適用（rename/削除の実行）が始まったら`CancellationToken`は無視し、最後まで完了させる。これにより「意図的な中断」と「クラッシュによる中断」を明確に区別できる（前者はコミット中には起こり得ず、後者だけが`RecoverAsync()`の対象になる）。コミット開始前にキャンセルされた場合は`DisposeAsync()`内で通常の非同期ロールバック（`.txnew`削除・ロック解放・ジャーナル削除）を行いクリーンに終了する
 - 書き込み系APIは `IProgress<TransferProgress>?` をオプション引数として受け取れるようにする。ファイルサーバー越しの大容量ファイル（数百MB〜GB単位）を想定し、UI側で進捗バー表示できるようにするため
-- エラーハンドリングは例外ベース（`LockContentionException`, `ExternalConflictException` 等のカスタム例外階層）。`async/await` との相性が良く、ロック競合など「呼び出し側が対処すべき状況」を専用例外型で明確にハンドリングできる
+- エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある）。未対応（ディレクトリの Move / Attach、ボリュームをまたぐ Move）は `UnsupportedOperationException`。使い方の誤りは `InvalidOperationException` と `ArgumentException` のまま。ロック競合の `LockContentionException` は Phase 2。コミットの成否は例外にせず `CommitResult` で返す
 
 **トランザクションのライフサイクル**
 

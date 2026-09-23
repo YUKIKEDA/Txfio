@@ -22,11 +22,11 @@ public sealed class StagingRulesTests
     /// <remarks>
     /// <para>前提: 両パスのルートが異なる</para>
     /// <para>手順: EnsureSameVolume する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: UnsupportedOperationException になる</para>
     /// </remarks>
     [Fact]
-    public void EnsureSameVolume_ルートが違うとIOExceptionになること()
+    public void EnsureSameVolume_ルートが違うとUnsupportedOperationExceptionになること()
     {
-        Assert.Throws<IOException>(() => StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"D:\work\b.txt"));
+        Assert.Throws<UnsupportedOperationException>(() => StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"D:\work\b.txt"));
     }
 }

@@ -59,14 +59,15 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 移動元にファイルが無い</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: FileNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は移動元である</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_無いファイルだとFileNotFoundExceptionになること()
+    public async Task MoveAsync_無いファイルだとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<FileNotFoundException>(() => tx.MoveAsync("missing.txt", "b.txt"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("missing.txt", "b.txt"));
+        Assert.Equal(System.IO.Path.Combine(work.Path, "missing.txt"), ex.Path);
     }
 
     /// <summary>
@@ -75,16 +76,16 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 移動元がディレクトリである</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: UnsupportedOperationException になる</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ディレクトリだとIOExceptionになること()
+    public async Task MoveAsync_ディレクトリだとUnsupportedOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.MoveAsync("sub", "other"));
+        await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.MoveAsync("sub", "other"));
     }
 
     /// <summary>
@@ -93,16 +94,38 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 移動先にファイルがある</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: IOException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は移動先である</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先があるとIOExceptionになること()
+    public async Task MoveAsync_移動先があるとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
-        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "dst");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(dest, "dst");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<IOException>(() => tx.MoveAsync("a.txt", "b.txt"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("a.txt", "b.txt"));
+        Assert.Equal(dest, ex.Path);
+    }
+
+    /// <summary>
+    /// 移動先がディレクトリだと失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 移動元はファイルで、移動先はディレクトリである</para>
+    /// <para>手順: MoveAsync する</para>
+    /// <para>期待: ExternalConflictException になり、Path は移動先である</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_移動先がディレクトリだとExternalConflictExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
+        string dest = System.IO.Path.Combine(work.Path, "sub");
+        Directory.CreateDirectory(dest);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("a.txt", "sub"));
+        Assert.Equal(dest, ex.Path);
     }
 
     /// <summary>
@@ -111,15 +134,16 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 移動先の親ディレクトリが無い</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: DirectoryNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は移動先の親である</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_親が無いとDirectoryNotFoundExceptionになること()
+    public async Task MoveAsync_親が無いとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => tx.MoveAsync("a.txt", "missing/b.txt"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("a.txt", "missing/b.txt"));
+        Assert.Equal(System.IO.Path.Combine(work.Path, "missing"), ex.Path);
     }
 
     /// <summary>
