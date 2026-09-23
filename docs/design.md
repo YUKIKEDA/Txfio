@@ -59,7 +59,7 @@ C#で、ファイルサーバーなどIOが遅い環境でも動作する、git�
 - `AttachAsync(path, CancellationToken)`: 外部プロセスが生成した既存ファイルをトランザクションに取り込む。ファイル自体には一切触れず（コピーもrenameもせず）、ジャーナルには`Add`とは別の`Attach`種別として登録する（ロールバック時に「TxfioがAddした新規ファイル」と誤認して削除してしまわないようにするため）。Attach時点の対象ファイルのサイズ・最終更新日時を期待状態として記録し、コミット時に現在の状態と照合する（不一致なら外部変更ありとみなしコミット失敗とする）
 - `ImportAsync(externalPath, targetPath, CancellationToken)`: ワークフォルダ外部のファイルを取り込む専用API。実質「コピー＋Add」。ボリューム跨ぎのMoveと同様にコピーが本質的に必要な操作なので、専用APIとして意図を明示させる
 - `ExportAsync(path, externalPath, CancellationToken)`: ワークフォルダ外部への単純な読み取りコピー。ワークフォルダの状態を変更しないため、トランザクションには一切記録しない
-- `tx.ReadAsync(path)`: トランザクション内でステージング済みの自分の変更を読み返す（書き込みモデルの節を参照）
+- `ReadAsync(path, CancellationToken)`: そのパスの未確定操作に `.txnew` があればそれを、無ければ本物のファイルを、位置 0 の読み取りストリームで返す。破棄は呼び出し側。全体はメモリにコピーしない。ロックは取らず、ジャーナルにも書かない。Delete、Attach、Move の移動元は本物を読む。`.txnew` も本物も無いときは `ExternalConflictException`。ディレクトリは未対応。開き方は `FileShare.Read | FileShare.Delete` なので、ストリームを閉じる前でもコミットの rename は進む。同じパスの再ステージは、ストリームを閉じるまで失敗しうる。取り消しは呼び出し開始時だけ有効
 - `tx.GetPendingChanges()`: 現在のジャーナル内容（Add/Update/Delete/Move/Attach一覧）を返す。実装コストはほぼゼロ（ジャーナルをそのまま返すだけ）で、"git status"的なデバッグ・UI表示用途に使う
 
 **共通方針**

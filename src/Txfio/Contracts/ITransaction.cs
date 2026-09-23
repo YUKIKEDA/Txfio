@@ -71,6 +71,18 @@ public interface ITransaction : IAsyncDisposable
     Task AttachAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// ステージング済みならその内容を、無ければ本物のファイルを開く
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
+    /// <returns>位置 0 の読み取りストリーム（呼び出し側が破棄する）</returns>
+    /// <exception cref="ExternalConflictException">対象が無い</exception>
+    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
+    /// <exception cref="InvalidOperationException">メタデータ配下である、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ステージングした変更をワークフォルダへ確定する
     /// </summary>
     /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
