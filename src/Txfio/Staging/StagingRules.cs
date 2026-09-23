@@ -223,6 +223,39 @@ internal static class StagingRules
     }
 
     /// <summary>
+    /// 全削除を予約したディレクトリの配下への操作を拒否する
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="path">操作しようとしているパス</param>
+    internal static void ThrowIfInsideDeleteTree(IReadOnlyList<JournalOperation> operations, string path)
+    {
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.DeleteTree && IsInsideDirectory(operation.Path, path))
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 全削除するディレクトリの配下に、このトランザクションの操作があるときは拒否する
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="directoryPath">全削除するディレクトリ</param>
+    internal static void ThrowIfOperationUnderDirectory(IReadOnlyList<JournalOperation> operations, string directoryPath)
+    {
+        foreach (JournalOperation operation in operations)
+        {
+            if (IsInsideDirectory(directoryPath, operation.Path)
+                || (operation.NewPath is not null && IsInsideDirectory(directoryPath, operation.NewPath)))
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+        }
+    }
+
+    /// <summary>
     /// ディレクトリ削除の直下条件を検証する（満たさなければ例外）
     /// </summary>
     /// <param name="directoryPath">対象ディレクトリ</param>

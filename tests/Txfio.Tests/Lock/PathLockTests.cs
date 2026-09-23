@@ -284,6 +284,30 @@ public sealed class PathLockTests
     }
 
     /// <summary>
+    /// 全削除は他のトランザクションの変更を止める
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ディレクトリがある</para>
+    /// <para>手順: DeleteTree してから、別トランザクションが別ファイルを Delete する</para>
+    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteTreeAsync_ワークフォルダで他の変更を止めること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.DeleteTreeAsync("tree");
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => second.DeleteAsync("a.txt"));
+
+        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(PendingChangeKind.DeleteTree, Assert.Single(first.GetPendingChanges()).Kind);
+    }
+
+    /// <summary>
     /// 反対方向の Move を同時に呼んでも止まらない
     /// </summary>
     /// <remarks>

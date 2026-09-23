@@ -54,6 +54,19 @@ public interface ITransaction : IAsyncDisposable
     Task DeleteAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// ディレクトリとその配下すべての削除を予約する
+    /// </summary>
+    /// <param name="path">対象ディレクトリ（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>予約の完了</returns>
+    /// <exception cref="ExternalConflictException">対象ディレクトリが無い</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
+    /// <exception cref="UnsupportedOperationException">対象がファイルである</exception>
+    /// <exception cref="InvalidOperationException">配下にこのトランザクションの操作がある、ディレクトリ Move の配下である、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task DeleteTreeAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 同一ボリューム内のファイルまたはディレクトリの移動を予約する
     /// </summary>
     /// <param name="oldPath">移動元パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>

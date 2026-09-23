@@ -29,4 +29,9 @@ public enum PendingChangeKind
     /// 外部が作った既存ファイルの取り込み
     /// </summary>
     Attach = 4,
+
+    /// <summary>
+    /// ディレクトリとその配下すべての削除予約
+    /// </summary>
+    DeleteTree = 5,
 }

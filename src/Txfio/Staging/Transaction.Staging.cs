@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// ステージング（Add / Update / Delete / Move / Attach）
+/// ステージング（Add / Update / Delete / DeleteTree / Move / Attach）
 /// </content>
 internal sealed partial class Transaction
 {
@@ -32,6 +32,7 @@ internal sealed partial class Transaction
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
+        StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
         _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
@@ -127,6 +128,62 @@ internal sealed partial class Transaction
     }
 
     /// <inheritdoc />
+    public async Task DeleteTreeAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ThrowIfCannotMutate();
+        string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
+        StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
+
+        int existingIndex = FindOperationIndex(targetPath);
+        if (existingIndex >= 0
+            && _operations[existingIndex].Kind == PendingChangeKind.Move
+            && _operations[existingIndex].IsDirectory)
+        {
+            await FoldDirectoryMoveToDeleteTreeAsync(existingIndex, _operations[existingIndex].Path, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        int moveToIndex = FindMoveToIndex(targetPath);
+        if (moveToIndex >= 0 && _operations[moveToIndex].IsDirectory)
+        {
+            await FoldDirectoryMoveToDeleteTreeAsync(moveToIndex, _operations[moveToIndex].Path, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        StagingRules.ThrowIfOperationUnderDirectory(_operations, targetPath);
+        if (existingIndex >= 0)
+        {
+            if (_operations[existingIndex].Kind == PendingChangeKind.DeleteTree)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        if (moveToIndex >= 0)
+        {
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        if (File.Exists(targetPath))
+        {
+            throw new UnsupportedOperationException("ファイルの全削除は未対応です: " + targetPath);
+        }
+
+        if (!Directory.Exists(targetPath))
+        {
+            throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + targetPath, targetPath);
+        }
+
+        await StageDeleteTreeAsync(targetPath, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default)
     {
         ThrowIfCannotMutate();
@@ -144,6 +201,8 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, destPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, sourcePath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, destPath);
+        StagingRules.ThrowIfInsideDeleteTree(_operations, sourcePath);
+        StagingRules.ThrowIfInsideDeleteTree(_operations, destPath);
 
         if (FindOperationIndex(destPath) >= 0)
         {
@@ -173,7 +232,7 @@ internal sealed partial class Transaction
         if (sourceIndex >= 0)
         {
             PendingChangeKind sourceKind = _operations[sourceIndex].Kind;
-            if (sourceKind == PendingChangeKind.Delete)
+            if (sourceKind == PendingChangeKind.Delete || sourceKind == PendingChangeKind.DeleteTree)
             {
                 throw new InvalidOperationException("削除予約されたパスは移動できません");
             }
@@ -235,6 +294,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
+        StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
 
         if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
         {
@@ -325,7 +385,8 @@ internal sealed partial class Transaction
         }
         else if (sourceIndex >= 0)
         {
-            if (_operations[sourceIndex].Kind == PendingChangeKind.Delete)
+            if (_operations[sourceIndex].Kind == PendingChangeKind.Delete
+                || _operations[sourceIndex].Kind == PendingChangeKind.DeleteTree)
             {
                 throw new InvalidOperationException("削除予約されたパスは移動できません");
             }
@@ -405,13 +466,57 @@ internal sealed partial class Transaction
             .ConfigureAwait(false);
     }
 
+    private async Task FoldDirectoryMoveToDeleteTreeAsync(
+        int moveIndex,
+        string directoryPath,
+        CancellationToken cancellationToken)
+    {
+        StagingRules.ThrowIfOperationUnderDirectory(_operations, directoryPath);
+        await StageDeleteTreeAsync(directoryPath, cancellationToken, moveIndex).ConfigureAwait(false);
+    }
+
+    private async Task StageDeleteTreeAsync(
+        string directoryPath,
+        CancellationToken cancellationToken,
+        int replaceIndex = -1)
+    {
+        _locks.AcquireExclusive(_workFolder);
+        _locks.RejectForeignLocks(_workFolder);
+        _locks.Acquire(_workFolder, directoryPath);
+        if (!Directory.Exists(directoryPath))
+        {
+            throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + directoryPath, directoryPath);
+        }
+
+        JournalOperation operation = new JournalOperation(
+            PendingChangeKind.DeleteTree,
+            directoryPath,
+            isDirectory: true);
+        if (replaceIndex >= 0)
+        {
+            await PersistReplacingOperationAsync(replaceIndex, operation, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        _operations.Add(operation);
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _operations.Remove(operation);
+            throw;
+        }
+    }
+
     private async Task MovePendingSourceAsync(
         int sourceIndex,
         string destPath,
         CancellationToken cancellationToken)
     {
         JournalOperation existing = _operations[sourceIndex];
-        if (existing.Kind == PendingChangeKind.Delete)
+        if (existing.Kind == PendingChangeKind.Delete || existing.Kind == PendingChangeKind.DeleteTree)
         {
             throw new InvalidOperationException("削除予約されたパスは移動できません");
         }
@@ -518,6 +623,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
+        StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
         PendingChangeKind recordedKind = kind;
