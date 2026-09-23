@@ -8,7 +8,7 @@ nuget.org にはまだありません。このリポジトリを参照してビ�
 
 ## はじめ方
 
-ワークフォルダは既存のディレクトリです。フォルダを開くときに、先に復旧を呼びます。
+ワークフォルダは既存のディレクトリです。アプリはフォルダを開くときに、先に `RecoverAsync` を呼びます。
 
 ```csharp
 using Txfio;
@@ -20,7 +20,7 @@ await tx.WriteAllTextAsync("a.txt", "hello");
 CommitResult result = await tx.CommitAsync();
 ```
 
-`CommitAsync` の前は、内容を同じディレクトリの `.txnew` に置きます。本物のパスは変えません。確定は rename です。`CommitAsync` を呼ばずに破棄すると、その `.txnew` とジャーナルは消えます。
+`CommitAsync` を呼ぶまでは、新しい内容を同じディレクトリの `.txnew` に置きます。本物のパスは変えません。確定は rename です。`CommitAsync` を呼ばずに破棄すると、その `.txnew` とジャーナルは消えます。
 
 `CommitResult` は例外ではありません。
 
@@ -52,14 +52,14 @@ CommitResult result = await tx.CommitAsync();
 | `DeleteAsync`                              | ファイル、または直下だけのディレクトリの削除予約。実削除はコミット時                                                             |
 | `DeleteTreeAsync`                          | ディレクトリとその配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除する                                       |
 | `MoveAsync`                                | 同一ボリューム内のファイルまたはディレクトリの移動予約。ディレクトリはコミット時に 1 回 rename し、中身は付いていく              |
-| `AttachAsync`                              | 外部が作ったファイルまたはディレクトリを、コピーも rename もせず取り込む。ファイルはサイズと最終更新日時。ディレクトリは存在だけ |
+| `AttachAsync`                              | 外部が作ったファイルまたはディレクトリを、コピーも rename もせず取り込む。ファイルはサイズと最終更新日時を記録し、ディレクトリは存在だけを記録する |
 | `CopyAsync`                                | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ      |
 | `ImportAsync`                              | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない                         |
 | `ExportAsync`                              | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない     |
 | `ReadAsync`                                | `.txnew` があればそれ、無ければ本物のファイル。ロックは取らない                                                                  |
 | `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                               |
-| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。省略した書きは BOM なし UTF-8                                                           |
-| `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書きは上と同じ Add / Update。オプション省略時は既定                                                          |
+| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                       |
+| `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                 |
 | `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                 |
 | `CommitAsync`                              | 検証してから rename と削除を適用する                                                                                             |
 | `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める                                                                                 |
@@ -111,7 +111,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 `CommitAsync` は、先に全部の前提を調べます。ここで失敗すると `Failed` で、本物のファイルはまだ変わっていません。
 
-調べたあとに「適用を始めた」印をジャーナルへ書き、そのあと本物を変えます。適用が始まったら、`CancellationToken` は無視して最後まで進めます。ここから先の中断は、落ちたあとの `RecoverAsync` の仕事です。
+調べたあとに「適用開始」の印をジャーナルへ書き、そのあと本物を変えます。適用が始まったら、`CancellationToken` は無視して最後まで進めます。ここから先の中断は、落ちたあとの `RecoverAsync` の仕事です。
 
 適用の順は、呼んだ順ではありません。
 
@@ -174,7 +174,7 @@ Note? note = await tx.ReadFromJsonAsync<Note>("note.json");
 
 壊れた JSON は `JsonException` のままです。
 
-大きいバイト列は文字列 API に載せず、ストリームを渡します。ストリームの破棄は呼び出し側です。ライブラリは中身をコピーするだけで、渡されたストリームは閉じません。
+大きいバイト列は文字列 API を使わず、ストリームを渡します。ストリームの破棄は呼び出し側です。ライブラリは中身をコピーするだけで、渡されたストリームは閉じません。
 
 ```csharp
 await using FileStream content = File.OpenRead(@"D:\incoming\big.bin");
@@ -197,7 +197,7 @@ Delete の予約、Attach、Move の移動元は、ステージされた新し�
 
 削除と移動は予約だけです。ディスクが変わるのはコミットのときです。
 
-ファイルを消すのは `DeleteAsync` です。ディレクトリの `DeleteAsync` は直下だけを見ます。空なら 1 回で予約できます。直下に、このトランザクションの削除予約、Add の取り消し、ディレクトリの外への Move のどれでもない子があると、`ExternalConflictException` になり、メッセージは「ディレクトリの直下に未予約の子があります」です。次の木を直下だけで消すときは、深い方から予約します。
+ファイルを消すのは `DeleteAsync` です。ディレクトリの `DeleteAsync` は直下だけを見ます。空なら 1 回で予約できます。直下に、このトランザクションの削除予約、Add の取り消し、ディレクトリの外への Move のどれでもない子があると、`ExternalConflictException` になり、メッセージは「ディレクトリの直下に未予約の子があります」です。次のような木を直下だけで消すときは、深い方から予約します。
 
 ```text
 tree/
@@ -246,7 +246,7 @@ await tx.ExportAsync("src", @"D:\outgoing\copy");
 
 ## 同時に使う
 
-このロックは、Txfio を使う者同士の協調です。素の `File` API やエクスプローラーは止めません。
+このロックは、Txfio の利用者同士の協調です。素の `File` API やエクスプローラーは止めません。
 
 変更系（Add、Update、Delete、DeleteTree、Move、Attach、Copy、Import）は、パスを押さえる前にワークフォルダの哨兵を取り、トランザクションが終わるまで持ちます。ふだんの哨兵は共有なので、別のパスを触るトランザクションは並行できます。
 
@@ -283,7 +283,7 @@ await tx.ExportAsync("src", @"D:\outgoing\copy");
 
 ### 不利なとき
 
-SQL の INSERT とファイル作成を、落ちても両方戻る 1 つのトランザクションにしたいときです。それは TxFileManager と `TransactionScope` の領域で、このライブラリは参加しません。ただしあちらは落ちたあとのファイル復旧がありません。
+SQL の INSERT とファイル作成を、落ちても両方戻る 1 つのトランザクションにしたいときです。それは TxFileManager と `TransactionScope` の領域で、このライブラリは参加しません。ただし TxFileManager 側には、落ちたあとのファイル復旧がありません。
 
 確定後も普通のファイルである必要がなく、検索や同時読み取りの一貫性が欲しいときは、SQLite の方が単純です。共有フォルダ上の既存ツールがファイルを直接開く必要があるなら、SQLite へ入れると利用者がファイルを扱えなくなります。
 
