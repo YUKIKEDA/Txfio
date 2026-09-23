@@ -159,6 +159,24 @@ internal static class OperationOutcomes
         out JournalOperation stamped)
     {
         stamped = operation;
+        if (operation.IsDirectory)
+        {
+            if (operation.Before is null || !operation.Before.IsDirectory)
+            {
+                return false;
+            }
+
+            PathState directory = Current(projected, operation.Path);
+            if (!directory.IsDirectory)
+            {
+                return false;
+            }
+
+            projected[operation.Path] = operation.Before;
+            stamped = operation.WithOutcome(operation.Before, operation.Before);
+            return true;
+        }
+
         if (operation.Before is null || !operation.Before.IsFile)
         {
             return false;

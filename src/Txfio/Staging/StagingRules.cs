@@ -118,11 +118,6 @@ internal static class StagingRules
     /// <param name="targetPath">対象パス</param>
     internal static void EnsureAttachTarget(string targetPath)
     {
-        if (Directory.Exists(targetPath))
-        {
-            throw new UnsupportedOperationException("ディレクトリの取り込みは未対応です: " + targetPath);
-        }
-
         if (!File.Exists(targetPath))
         {
             throw new ExternalConflictException("取り込み対象のファイルが存在しません: " + targetPath, targetPath);
