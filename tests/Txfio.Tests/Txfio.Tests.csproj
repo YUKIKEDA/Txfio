@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseAppHost>false</UseAppHost>
+    <GenerateProgramFile>false</GenerateProgramFile>
     <RootNamespace>Txfio.Tests</RootNamespace>
     <AssemblyName>Txfio.Tests</AssemblyName>
     <IsPackable>false</IsPackable>
