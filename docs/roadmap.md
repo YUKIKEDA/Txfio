@@ -12,10 +12,10 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | --- | --- |
 | Phase 0 リポジトリ基盤 | 完了 |
 | Phase 1 MVP | 完了 |
-| Phase 2 並行性・ロック | 進行中（次は複数プロセス Issue #31） |
-| Phase 3 拡張と公開 | 未着手 |
+| Phase 2 並行性・ロック | 完了 |
+| Phase 3 拡張と公開 | 進行中（次は ReadAsync Issue #33） |
 
-Phase 1 の「使えるライブラリ」は main にある。パスロック（Issue #27）と、Recover がロックファイルを触らないこと（Issue #29）も main にある。次は別プロセスからの同時アクセス（Issue #31）。
+Phase 2 の並行性は main にある。次は `ReadAsync`（Issue #33）。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -47,11 +47,11 @@ Phase 1 の「使えるライブラリ」は main にある。パスロック（
 
 - [x] Issue #27: 操作時点のパスロック（`.txfio/locks/`、Move は辞書順、同一プロセスの2トランザクション。ファイルは消さない）
 - [x] Issue #29: Recover は `.lock` を開かず消さない（クラッシュ後もファイルは残り、別トランザクションが取り直せる）
-- Issue #31: 別プロセスからの同時アクセス（保持中の競合、別パス、Dispose せず終了したあとの取り直し。SMB は含まない）
+- [x] Issue #31: 別プロセスからの同時アクセス（保持中の競合、別パス、Dispose せず終了したあとの取り直し。SMB は含まない）
 
 ## Phase 3 — 拡張（仮）
 
-- [ ] `tx.ReadAsync`（ステージング済みなら `.txnew`、なければ本物）
+- Issue #33: `ReadAsync`（`.txnew` があればそれ、無ければ本物。ロックは取らない）
 - [ ] `IProgress<TransferProgress>` を書き込み API に足し、結合テストする
 - [ ] `ImportAsync` / `ExportAsync`
 - [ ] ディレクトリ Move（実行中はワークフォルダ全体ロック）
