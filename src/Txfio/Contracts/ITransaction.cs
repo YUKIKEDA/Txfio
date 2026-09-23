@@ -81,6 +81,43 @@ public interface ITransaction : IAsyncDisposable
     Task AttachAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// ワークフォルダの外にあるファイルをコピーして Add する
+    /// </summary>
+    /// <param name="externalPath">ワークフォルダの外にあるコピー元</param>
+    /// <param name="targetPath">コピー先（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が既にある、または親ディレクトリが無い</exception>
+    /// <exception cref="LockContentionException">他のトランザクションがコピー先を押さえている</exception>
+    /// <exception cref="UnsupportedOperationException">コピー元がディレクトリである</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">コピー元がワークフォルダの中、またはコピー先がワークフォルダの外である</exception>
+    Task ImportAsync(
+        string externalPath,
+        string targetPath,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// ワークフォルダのファイルを、ワークフォルダの外の新しいファイルへコピーする
+    /// </summary>
+    /// <param name="path">コピー元（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="externalPath">ワークフォルダの外にあるコピー先</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>コピーの完了</returns>
+    /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="UnsupportedOperationException">コピー元がディレクトリである</exception>
+    /// <exception cref="InvalidOperationException">メタデータ配下である、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">コピー元がワークフォルダの外、またはコピー先がワークフォルダの中である</exception>
+    Task ExportAsync(
+        string path,
+        string externalPath,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ステージング済みならその内容を、無ければ本物のファイルを開く
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>

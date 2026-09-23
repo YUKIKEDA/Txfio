@@ -28,6 +28,25 @@ internal static class WorkPath
     }
 
     /// <summary>
+    /// パスをワークフォルダの外の絶対パスに正規化する
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="path">絶対パス、または現在ディレクトリ基準の相対パス</param>
+    /// <returns>正規化した絶対パス</returns>
+    /// <exception cref="ArgumentException">ワークフォルダの内側を指している</exception>
+    internal static string ResolveOutsideWorkFolder(string workFolder, string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string fullPath = System.IO.Path.GetFullPath(path);
+        if (IsInsideWorkFolder(workFolder, fullPath))
+        {
+            throw new ArgumentException("パスはワークフォルダの外側である必要があります", nameof(path));
+        }
+
+        return fullPath;
+    }
+
+    /// <summary>
     /// メタデータフォルダそのもの、またはその配下かどうかを判定する
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
