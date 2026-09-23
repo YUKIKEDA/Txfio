@@ -48,7 +48,7 @@ internal sealed partial class Transaction : ITransaction
         }
 
         _disposed = true;
-        if (_committed)
+        if (_committed || CrashInjector.ShouldSkipRollback)
         {
             return;
         }

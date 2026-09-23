@@ -26,6 +26,7 @@ internal sealed partial class Transaction
         _operations.Clear();
         _operations.AddRange(stamped);
         await PersistAsync(committing: true, CancellationToken.None).ConfigureAwait(false);
+        CrashInjector.CheckPoint(CrashInjector.AfterCommitting);
 
         bool conflict = !StagingApplier.TryApplyAll(_operations);
 

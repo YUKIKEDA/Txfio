@@ -18,7 +18,10 @@ internal static class StagingApplier
             if (!TryApply(operation))
             {
                 appliedAll = false;
+                continue;
             }
+
+            CrashInjector.CheckPoint(CrashInjector.AfterApply);
         }
 
         return appliedAll;

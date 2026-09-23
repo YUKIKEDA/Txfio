@@ -11,11 +11,11 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | 区間 | 状態 |
 | --- | --- |
 | Phase 0 リポジトリ基盤 | 完了 |
-| Phase 1 MVP | 進行中（開始・Add/Update/Delete/Move/Attach・ディレクトリ削除・同一パス正規化・適用順・Before/After 済み。次はカスタム例外 Issue #23） |
+| Phase 1 MVP | 進行中（開始・Add/Update/Delete/Move/Attach・ディレクトリ削除・同一パス正規化・適用順・Before/After・カスタム例外済み。次はクラッシュインジェクション Issue #25） |
 | Phase 2 並行性・ロック | 未着手 |
 | Phase 3 拡張と公開 | 未着手 |
 
-Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / Update / Delete / Move / Attach**、ディレクトリ削除、同一パス正規化、適用順、Before / After は main にある。次はカスタム例外（Issue #23）。そのあとクラッシュインジェクションが残る。
+Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / Update / Delete / Move / Attach**、ディレクトリ削除、同一パス正規化、適用順、Before / After、カスタム例外は main にある。次はクラッシュインジェクション（Issue #25）。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -40,8 +40,8 @@ Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / U
 - [x] Issue #17: 同一パス／依存の正規化の残り（Move 先への Update / Delete、Move 元への Delete。Attach のあと Update / Delete / Move は #11）
 - [x] Issue #19: 適用順の固定（Add / Move / Attach → Update → Delete。ディレクトリ Delete は深いパスから）
 - [x] Issue #21: Before / After（ファイルはサイズと最終更新日時、ディレクトリは存在だけ。Recover はそれで適用済み判定）
-- Issue #23: カスタム例外（`ExternalConflictException` と `UnsupportedOperationException`。ロック競合は Phase 2）
-- [ ] クラッシュインジェクション（`Committing` 直後、Move / Delete 直後など）と実 FS 上の Recover 検証
+- [x] Issue #23: カスタム例外（`ExternalConflictException` と `UnsupportedOperationException`。ロック競合は Phase 2）
+- Issue #25: クラッシュインジェクション（`AfterCommitting` と `AfterApply`。Dispose はロールバックせず Recover で実ファイルを検証）
 
 ## Phase 2 — 並行性（仮）
 
