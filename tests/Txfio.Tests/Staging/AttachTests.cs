@@ -69,21 +69,28 @@ public sealed class AttachTests
     }
 
     /// <summary>
-    /// ディレクトリへの Attach は未対応として失敗する
+    /// ディレクトリの Attach は存在だけを記録し、中身は残す
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスがディレクトリである</para>
+    /// <para>前提: 子ファイルがあるディレクトリがある</para>
     /// <para>手順: AttachAsync する</para>
-    /// <para>期待: UnsupportedOperationException になる</para>
+    /// <para>期待: pending は Attach 1 件で、ディレクトリと子ファイルは残る</para>
     /// </remarks>
     [Fact]
-    public async Task AttachAsync_ディレクトリだとUnsupportedOperationExceptionになること()
+    public async Task AttachAsync_ディレクトリは存在だけを記録すること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
+        string child = System.IO.Path.Combine(dir, "a.txt");
+        await File.WriteAllTextAsync(child, "keep");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.AttachAsync("sub"));
+        await tx.AttachAsync("sub");
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Attach, pending.Kind);
+        Assert.Equal(dir, pending.Path);
+        Assert.Equal("keep", await File.ReadAllTextAsync(child));
     }
 
     /// <summary>

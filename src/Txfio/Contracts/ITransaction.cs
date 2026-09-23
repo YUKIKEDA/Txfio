@@ -81,14 +81,13 @@ public interface ITransaction : IAsyncDisposable
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 外部が作った既存ファイルをトランザクションに取り込む
+    /// 外部が作った既存のファイルまたはディレクトリをトランザクションに取り込む
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>取り込みの完了</returns>
     /// <exception cref="ExternalConflictException">対象が無い、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
     /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task AttachAsync(string path, CancellationToken cancellationToken = default);

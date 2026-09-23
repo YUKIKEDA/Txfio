@@ -13,9 +13,9 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 0 リポジトリ基盤 | 完了 |
 | Phase 1 MVP | 完了 |
 | Phase 2 並行性・ロック | 完了 |
-| Phase 3 拡張と公開 | 進行中（次は DeleteTree Issue #45） |
+| Phase 3 拡張と公開 | 進行中（次はディレクトリ Attach Issue #47） |
 
-Phase 3 の実装（Issue #33、#35、#37、#39）と利用者向け README（Issue #41）、設計（Issue #43）は main にある。次は `DeleteTreeAsync`（Issue #45）。そのあと公開（リポジトリ public と nuget.org）。
+Phase 3 の実装（Issue #33、#35、#37、#39、#45）と利用者向け README（Issue #41）、設計（Issue #43）は main にある。次はディレクトリの Attach（Issue #47）。そのあと公開（リポジトリ public と nuget.org）。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -57,7 +57,8 @@ Phase 3 の実装（Issue #33、#35、#37、#39）と利用者向け README（Is
 - [x] Issue #39: ディレクトリ Move（1 回の rename。実行中はワークフォルダの哨兵を排他）
 - [x] Issue #41: 利用者向け README（できること、できないこと、TxFileManager と SQLite との比較）
 - [x] Issue #43: 設計: 全削除、ディレクトリ Attach、Copy、ディレクトリの Import / Export（実装は含めない）
-- Issue #45: `DeleteTreeAsync`（配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除。実行中は哨兵を排他）
+- [x] Issue #45: `DeleteTreeAsync`（配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除。実行中は哨兵を排他）
+- Issue #47: ディレクトリの Attach（存在だけ。子の変化は見ない。ロールバックでも消さない）
 
 ## 公開（Phase 3 完了後）
 

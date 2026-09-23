@@ -53,6 +53,13 @@ internal sealed partial class Transaction
                 return;
             }
 
+            if (existing.Kind == PendingChangeKind.Attach && existing.IsDirectory)
+            {
+                await FoldDirectoryAttachToDeleteAsync(existingIndex, existing.Path, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             if (Directory.Exists(targetPath) || existing.IsDirectory)
             {
                 throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
@@ -159,6 +166,13 @@ internal sealed partial class Transaction
         {
             if (_operations[existingIndex].Kind == PendingChangeKind.DeleteTree)
             {
+                return;
+            }
+
+            if (_operations[existingIndex].Kind == PendingChangeKind.Attach
+                && _operations[existingIndex].IsDirectory)
+            {
+                await StageDeleteTreeAsync(targetPath, cancellationToken, existingIndex).ConfigureAwait(false);
                 return;
             }
 
@@ -301,14 +315,30 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
         }
 
-        if (Directory.Exists(targetPath))
-        {
-            throw new UnsupportedOperationException("ディレクトリの取り込みは未対応です: " + targetPath);
-        }
-
         _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
+        if (Directory.Exists(targetPath))
+        {
+            JournalOperation directoryAttach = new JournalOperation(
+                PendingChangeKind.Attach,
+                targetPath,
+                before: PathState.Capture(targetPath),
+                isDirectory: true);
+            _operations.Add(directoryAttach);
+            try
+            {
+                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                _operations.Remove(directoryAttach);
+                throw;
+            }
+
+            return;
+        }
+
         StagingRules.EnsureAttachTarget(targetPath);
         JournalOperation operation = new JournalOperation(
             PendingChangeKind.Attach,
@@ -382,6 +412,13 @@ internal sealed partial class Transaction
         {
             root = _operations[moveToSource].Path;
             replaceIndex = moveToSource;
+        }
+        else if (sourceIndex >= 0
+            && _operations[sourceIndex].Kind == PendingChangeKind.Attach
+            && _operations[sourceIndex].IsDirectory)
+        {
+            root = _operations[sourceIndex].Path;
+            replaceIndex = sourceIndex;
         }
         else if (sourceIndex >= 0)
         {
@@ -461,6 +498,19 @@ internal sealed partial class Transaction
         StagingRules.EnsureDirectoryDeleteAllowed(directoryPath, _operations, _transactionId);
         await PersistReplacingOperationAsync(
                 moveIndex,
+                new JournalOperation(PendingChangeKind.Delete, directoryPath, isDirectory: true),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task FoldDirectoryAttachToDeleteAsync(
+        int attachIndex,
+        string directoryPath,
+        CancellationToken cancellationToken)
+    {
+        StagingRules.EnsureDirectoryDeleteAllowed(directoryPath, _operations, _transactionId);
+        await PersistReplacingOperationAsync(
+                attachIndex,
                 new JournalOperation(PendingChangeKind.Delete, directoryPath, isDirectory: true),
                 cancellationToken)
             .ConfigureAwait(false);
