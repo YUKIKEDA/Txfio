@@ -10,26 +10,36 @@ public interface ITransaction : IAsyncDisposable
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">対象が既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象を押さえている</exception>
     /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
-    Task AddAsync(string path, Stream content, CancellationToken cancellationToken = default);
+    Task AddAsync(
+        string path,
+        Stream content,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 既存ファイルを新しい内容でステージングする
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">対象が無い、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象を押さえている</exception>
     /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
-    Task UpdateAsync(string path, Stream content, CancellationToken cancellationToken = default);
+    Task UpdateAsync(
+        string path,
+        Stream content,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 既存のファイルまたはディレクトリの削除を予約する

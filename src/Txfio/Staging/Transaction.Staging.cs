@@ -6,15 +6,23 @@ namespace Txfio;
 internal sealed partial class Transaction
 {
     /// <inheritdoc />
-    public Task AddAsync(string path, Stream content, CancellationToken cancellationToken = default)
+    public Task AddAsync(
+        string path,
+        Stream content,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
-        return StageAsync(PendingChangeKind.Add, path, content, cancellationToken);
+        return StageAsync(PendingChangeKind.Add, path, content, progress, cancellationToken);
     }
 
     /// <inheritdoc />
-    public Task UpdateAsync(string path, Stream content, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(
+        string path,
+        Stream content,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
-        return StageAsync(PendingChangeKind.Update, path, content, cancellationToken);
+        return StageAsync(PendingChangeKind.Update, path, content, progress, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -339,16 +347,18 @@ internal sealed partial class Transaction
     /// <param name="moveIndex">Move 操作のインデックス</param>
     /// <param name="destPath">Update 対象（Move の移動先）</param>
     /// <param name="content">新しい内容</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>畳み込みとジャーナル書き込みの完了</returns>
     private async Task FoldMoveDestinationUpdateAsync(
         int moveIndex,
         string destPath,
         Stream content,
+        IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
         string stagingPath = WorkPath.StagingFilePath(destPath, _transactionId);
-        await StagingFile.WriteAsync(stagingPath, content, cancellationToken).ConfigureAwait(false);
+        await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
 
         JournalOperation[] previous = _operations.ToArray();
         try
@@ -373,6 +383,7 @@ internal sealed partial class Transaction
         PendingChangeKind kind,
         string path,
         Stream content,
+        IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);
@@ -406,7 +417,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (moveToIndex >= 0)
         {
-            await FoldMoveDestinationUpdateAsync(moveToIndex, targetPath, content, cancellationToken)
+            await FoldMoveDestinationUpdateAsync(moveToIndex, targetPath, content, progress, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
@@ -431,7 +442,7 @@ internal sealed partial class Transaction
                 await StagingFile.CopyAsync(stagingPath, backupPath, cancellationToken).ConfigureAwait(false);
             }
 
-            await StagingFile.WriteAsync(stagingPath, content, cancellationToken).ConfigureAwait(false);
+            await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
 
             staged = new JournalOperation(recordedKind, targetPath, stagingPath);
             if (existingIndex >= 0)
