@@ -137,6 +137,32 @@ public sealed class PathLockTests
     }
 
     /// <summary>
+    /// ロールバック中にジャーナル削除が失敗してもロックは閉じる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add したあと、ジャーナルを共有なしで開いている</para>
+    /// <para>手順: DisposeAsync する</para>
+    /// <para>期待: IOException になり、別トランザクションが同じパスを Add できる</para>
+    /// </remarks>
+    [Fact]
+    public async Task DisposeAsync_ジャーナル削除に失敗してもロックを閉じること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await first.AddAsync("a.txt", content);
+        string journal = Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        using FileStream hold = new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        await Assert.ThrowsAsync<IOException>(async () => await first.DisposeAsync());
+
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream again = LeftoverAddFiles.Utf8Stream("other");
+        await second.AddAsync("a.txt", again);
+        Assert.Single(second.GetPendingChanges());
+    }
+
+    /// <summary>
     /// 親が無い Add のあとも、そのパスは押さえられたままである
     /// </summary>
     /// <remarks>

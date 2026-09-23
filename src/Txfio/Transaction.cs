@@ -60,13 +60,19 @@ internal sealed partial class Transaction : ITransaction
             return;
         }
 
-        foreach (JournalOperation operation in _operations)
+        try
         {
-            StagingFile.TryDelete(operation.StagingPath);
-        }
+            foreach (JournalOperation operation in _operations)
+            {
+                StagingFile.TryDelete(operation.StagingPath);
+            }
 
-        await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
-        _locks.Release();
+            await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+        }
+        finally
+        {
+            _locks.Release();
+        }
     }
 
     private void ThrowIfCannotMutate()
