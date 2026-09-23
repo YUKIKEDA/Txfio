@@ -1,0 +1,38 @@
+using Txfio.Tests.Support;
+
+namespace Txfio.Tests.Staging;
+
+public sealed class StagingApplierTests
+{
+    /// <summary>
+    /// ジャーナルでは Update が先でも、適用は Move してから Update する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 移動元ファイルと、移動先への Update 用 .txnew がある</para>
+    /// <para>手順: Update を先に並べた操作一覧を TryApplyAll する</para>
+    /// <para>期待: 先は Update の内容で、元も .txnew も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryApplyAll_ジャーナルではUpdateが先でもMoveしてからUpdateすること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "moved");
+        string staging = System.IO.Path.Combine(
+            work.Path,
+            "b.txt." + Guid.NewGuid().ToString("D") + ".txnew");
+        await File.WriteAllTextAsync(staging, "updated");
+
+        JournalOperation[] operations =
+        {
+            new JournalOperation(PendingChangeKind.Update, dest, staging),
+            new JournalOperation(PendingChangeKind.Move, source, stagingPath: null, dest),
+        };
+
+        Assert.True(StagingApplier.TryApplyAll(operations));
+        Assert.False(File.Exists(source));
+        Assert.Equal("updated", await File.ReadAllTextAsync(dest));
+        Assert.False(File.Exists(staging));
+    }
+}

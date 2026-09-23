@@ -6,25 +6,20 @@ namespace Txfio;
 internal static class StagingApplier
 {
     /// <summary>
-    /// Add / Update / Move / Attach を先に、Delete をパスが深い順で後に適用する
+    /// Add / Move / Attach を先に、Update を次に、Delete をパスが深い順で後に適用する
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
     internal static bool TryApplyAll(IReadOnlyList<JournalOperation> operations)
     {
-        bool appliedAll = true;
-        foreach (JournalOperation operation in operations)
-        {
-            if (operation.Kind == PendingChangeKind.Delete)
-            {
-                continue;
-            }
-
-            if (!TryApply(operation))
-            {
-                appliedAll = false;
-            }
-        }
+        bool appliedAll = TryApplyMatching(
+            operations,
+            static operation => operation.Kind == PendingChangeKind.Add
+                || operation.Kind == PendingChangeKind.Move
+                || operation.Kind == PendingChangeKind.Attach);
+        appliedAll &= TryApplyMatching(
+            operations,
+            static operation => operation.Kind == PendingChangeKind.Update);
 
         List<JournalOperation> deletes = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
@@ -96,6 +91,33 @@ internal static class StagingApplier
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// 条件に合う操作だけをジャーナル順で適用する
+    /// </summary>
+    /// <param name="operations">適用する操作一覧</param>
+    /// <param name="match">適用する操作かどうかを判定する</param>
+    /// <returns>該当する操作を全て適用できた、または既に適用済みなら <see langword="true"/></returns>
+    private static bool TryApplyMatching(
+        IReadOnlyList<JournalOperation> operations,
+        Func<JournalOperation, bool> match)
+    {
+        bool appliedAll = true;
+        foreach (JournalOperation operation in operations)
+        {
+            if (!match(operation))
+            {
+                continue;
+            }
+
+            if (!TryApply(operation))
+            {
+                appliedAll = false;
+            }
+        }
+
+        return appliedAll;
     }
 
     private static bool TryMove(string sourcePath, string destPath)
