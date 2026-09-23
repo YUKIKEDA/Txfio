@@ -93,6 +93,24 @@ public interface ITransaction : IAsyncDisposable
     Task AttachAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// ワークフォルダ内のファイルまたはディレクトリをコピーする
+    /// </summary>
+    /// <param name="source">コピー元（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="destination">コピー先（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が既にある、または親ディレクトリが無い</exception>
+    /// <exception cref="LockContentionException">他のトランザクションがコピー元、コピー先、またはワークフォルダを押さえている</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、同じパスへのコピー、自分自身の配下へのコピー、シンボリックリンク、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task CopyAsync(
+        string source,
+        string destination,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ワークフォルダの外にあるファイルをコピーして Add する
     /// </summary>
     /// <param name="externalPath">ワークフォルダの外にあるコピー元</param>

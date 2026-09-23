@@ -204,6 +204,24 @@ internal static class StagingRules
     }
 
     /// <summary>
+    /// 同じパス、またはディレクトリを自分自身の配下へコピーする操作を拒否する
+    /// </summary>
+    /// <param name="sourcePath">コピー元</param>
+    /// <param name="destPath">コピー先</param>
+    internal static void ThrowIfCopyDestinationInsideSource(string sourcePath, string destPath)
+    {
+        if (string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("同じパスへはコピーできません: " + sourcePath);
+        }
+
+        if (IsInsideDirectory(sourcePath, destPath))
+        {
+            throw new InvalidOperationException("ディレクトリを自分自身の配下へはコピーできません: " + sourcePath);
+        }
+    }
+
+    /// <summary>
     /// 削除予約済みディレクトリへの後続操作を拒否する
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>

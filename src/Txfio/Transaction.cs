@@ -9,6 +9,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly Guid _transactionId;
     private readonly string _journalPath;
     private readonly List<JournalOperation> _operations = new List<JournalOperation>();
+    private readonly List<string> _createdDirectories = new List<string>();
     private readonly PathLockSet _locks = new PathLockSet();
     private bool _committed;
     private bool _disposed;
@@ -67,6 +68,7 @@ internal sealed partial class Transaction : ITransaction
                 StagingFile.TryDelete(operation.StagingPath);
             }
 
+            DeleteCreatedDirectoriesFrom(0, ignoreIoFailures: false);
             await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
         }
         finally
