@@ -12,28 +12,8 @@ internal static class StagingApplier
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
     internal static bool TryApplyAll(IReadOnlyList<JournalOperation> operations)
     {
-        bool appliedAll = TryApplyMatching(
-            operations,
-            static operation => operation.Kind == PendingChangeKind.Add
-                || operation.Kind == PendingChangeKind.Move
-                || operation.Kind == PendingChangeKind.Attach);
-        appliedAll &= TryApplyMatching(
-            operations,
-            static operation => operation.Kind == PendingChangeKind.Update);
-
-        List<JournalOperation> deletes = new List<JournalOperation>();
-        foreach (JournalOperation operation in operations)
-        {
-            if (operation.Kind != PendingChangeKind.Delete)
-            {
-                continue;
-            }
-
-            deletes.Add(operation);
-        }
-
-        deletes.Sort(static (left, right) => PathDepth(right.Path).CompareTo(PathDepth(left.Path)));
-        foreach (JournalOperation operation in deletes)
+        bool appliedAll = true;
+        foreach (JournalOperation operation in InApplyOrder(operations))
         {
             if (!TryApply(operation))
             {
@@ -45,12 +25,75 @@ internal static class StagingApplier
     }
 
     /// <summary>
+    /// Add / Move / Attach、Update、Delete（深い順）の順に並べる
+    /// </summary>
+    /// <param name="operations">操作一覧</param>
+    /// <returns>適用順の操作</returns>
+    internal static JournalOperation[] InApplyOrder(IReadOnlyList<JournalOperation> operations)
+    {
+        List<JournalOperation> ordered = new List<JournalOperation>(operations.Count);
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Add
+                || operation.Kind == PendingChangeKind.Move
+                || operation.Kind == PendingChangeKind.Attach)
+            {
+                ordered.Add(operation);
+            }
+        }
+
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Update)
+            {
+                ordered.Add(operation);
+            }
+        }
+
+        List<JournalOperation> deletes = new List<JournalOperation>();
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Delete)
+            {
+                deletes.Add(operation);
+            }
+        }
+
+        deletes.Sort(static (left, right) => PathDepth(right.Path).CompareTo(PathDepth(left.Path)));
+        ordered.AddRange(deletes);
+        return ordered.ToArray();
+    }
+
+    /// <summary>
     /// 1 操作を適用する（既に適用済みなら成功、失敗なら <see langword="false"/>）
     /// </summary>
     /// <param name="operation">適用する操作</param>
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
     internal static bool TryApply(JournalOperation operation)
     {
+        if (operation.Before is null || operation.After is null)
+        {
+            return false;
+        }
+
+        if (operation.Kind == PendingChangeKind.Move
+            && (string.IsNullOrEmpty(operation.NewPath)
+                || operation.DestBefore is null
+                || operation.DestAfter is null))
+        {
+            return false;
+        }
+
+        if (Matches(operation, after: true))
+        {
+            return TryDeleteStaging(operation.StagingPath);
+        }
+
+        if (!Matches(operation, after: false))
+        {
+            return false;
+        }
+
         if (operation.Kind == PendingChangeKind.Delete)
         {
             return operation.IsDirectory
@@ -60,25 +103,17 @@ internal static class StagingApplier
 
         if (operation.Kind == PendingChangeKind.Move)
         {
-            if (string.IsNullOrEmpty(operation.NewPath))
-            {
-                return false;
-            }
-
-            return TryMove(operation.Path, operation.NewPath);
+            return TryMove(operation.Path, operation.NewPath!);
         }
 
         if (operation.Kind == PendingChangeKind.Attach)
         {
-            return StagingRules.MatchesExpectedState(
-                operation.Path,
-                operation.ExpectedLength,
-                operation.ExpectedLastWriteTimeUtc);
+            return true;
         }
 
         if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
         {
-            return File.Exists(operation.Path);
+            return false;
         }
 
         try
@@ -91,33 +126,46 @@ internal static class StagingApplier
         {
             return false;
         }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
-    /// <summary>
-    /// 条件に合う操作だけをジャーナル順で適用する
-    /// </summary>
-    /// <param name="operations">適用する操作一覧</param>
-    /// <param name="match">適用する操作かどうかを判定する</param>
-    /// <returns>該当する操作を全て適用できた、または既に適用済みなら <see langword="true"/></returns>
-    private static bool TryApplyMatching(
-        IReadOnlyList<JournalOperation> operations,
-        Func<JournalOperation, bool> match)
+    private static bool Matches(JournalOperation operation, bool after)
     {
-        bool appliedAll = true;
-        foreach (JournalOperation operation in operations)
+        PathState? primary = after ? operation.After : operation.Before;
+        if (primary is null || !primary.Matches(operation.Path))
         {
-            if (!match(operation))
-            {
-                continue;
-            }
-
-            if (!TryApply(operation))
-            {
-                appliedAll = false;
-            }
+            return false;
         }
 
-        return appliedAll;
+        if (operation.Kind != PendingChangeKind.Move)
+        {
+            return true;
+        }
+
+        PathState? dest = after ? operation.DestAfter : operation.DestBefore;
+        return dest is not null
+            && operation.NewPath is not null
+            && dest.Matches(operation.NewPath);
+    }
+
+    private static bool TryDeleteStaging(string? stagingPath)
+    {
+        try
+        {
+            StagingFile.TryDelete(stagingPath);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static bool TryMove(string sourcePath, string destPath)
@@ -138,6 +186,10 @@ internal static class StagingApplier
             return true;
         }
         catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
         {
             return false;
         }
@@ -178,6 +230,10 @@ internal static class StagingApplier
         {
             return false;
         }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static bool TryDeleteFile(string path)
@@ -193,6 +249,10 @@ internal static class StagingApplier
             return true;
         }
         catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
         {
             return false;
         }

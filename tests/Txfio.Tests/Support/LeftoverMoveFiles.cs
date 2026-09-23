@@ -40,11 +40,21 @@ internal sealed class LeftoverMoveFiles
             await File.WriteAllTextAsync(sourcePath, content);
         }
 
+        string fileState = alreadyMoved ? SnapshotJson.File(destPath) : SnapshotJson.File(sourcePath);
+        string states = string.Empty;
+        if (committing)
+        {
+            states = ",\"before\":" + fileState +
+                ",\"after\":" + SnapshotJson.Absent +
+                ",\"destBefore\":" + SnapshotJson.Absent +
+                ",\"destAfter\":" + fileState;
+        }
+
         string committingLiteral = committing ? "true" : "false";
         string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") +
             "\",\"committing\":" + committingLiteral +
             ",\"operations\":[{\"kind\":\"Move\",\"path\":" + JsonSerializer.Serialize(sourcePath) +
-            ",\"newPath\":" + JsonSerializer.Serialize(destPath) + "}]}";
+            ",\"newPath\":" + JsonSerializer.Serialize(destPath) + states + "}]}";
         await File.WriteAllTextAsync(journalPath, json);
         return new LeftoverMoveFiles(journalPath, sourcePath, destPath);
     }

@@ -27,10 +27,16 @@ internal sealed class LeftoverDeleteFiles
         string targetPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, fileName));
         await File.WriteAllTextAsync(targetPath, content);
 
+        string states = string.Empty;
+        if (committing)
+        {
+            states = ",\"before\":" + SnapshotJson.File(targetPath) + ",\"after\":" + SnapshotJson.Absent;
+        }
+
         string committingLiteral = committing ? "true" : "false";
         string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") +
             "\",\"committing\":" + committingLiteral +
-            ",\"operations\":[{\"kind\":\"Delete\",\"path\":" + JsonSerializer.Serialize(targetPath) + "}]}";
+            ",\"operations\":[{\"kind\":\"Delete\",\"path\":" + JsonSerializer.Serialize(targetPath) + states + "}]}";
         await File.WriteAllTextAsync(journalPath, json);
         return new LeftoverDeleteFiles(journalPath, targetPath);
     }

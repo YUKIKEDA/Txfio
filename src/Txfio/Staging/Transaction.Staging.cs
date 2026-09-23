@@ -72,10 +72,6 @@ internal sealed partial class Transaction
             JournalOperation directoryDelete = new JournalOperation(
                 PendingChangeKind.Delete,
                 targetPath,
-                stagingPath: null,
-                newPath: null,
-                expectedLength: null,
-                expectedLastWriteTimeUtc: null,
                 isDirectory: true);
             _operations.Add(directoryDelete);
             try
@@ -192,14 +188,10 @@ internal sealed partial class Transaction
         }
 
         StagingRules.EnsureAttachTarget(targetPath);
-        FileInfo info = new FileInfo(targetPath);
         JournalOperation operation = new JournalOperation(
             PendingChangeKind.Attach,
             targetPath,
-            stagingPath: null,
-            newPath: null,
-            info.Length,
-            info.LastWriteTimeUtc);
+            before: PathState.Capture(targetPath));
         _operations.Add(operation);
         try
         {
