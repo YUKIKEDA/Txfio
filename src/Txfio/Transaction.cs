@@ -9,6 +9,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly Guid _transactionId;
     private readonly string _journalPath;
     private readonly List<JournalOperation> _operations = new List<JournalOperation>();
+    private readonly PathLockSet _locks = new PathLockSet();
     private bool _committed;
     private bool _disposed;
 
@@ -48,17 +49,30 @@ internal sealed partial class Transaction : ITransaction
         }
 
         _disposed = true;
-        if (_committed || CrashInjector.ShouldSkipRollback)
+        if (CrashInjector.ShouldSkipRollback)
+        {
+            _locks.Release();
+            return;
+        }
+
+        if (_committed)
         {
             return;
         }
 
-        foreach (JournalOperation operation in _operations)
+        try
         {
-            StagingFile.TryDelete(operation.StagingPath);
-        }
+            foreach (JournalOperation operation in _operations)
+            {
+                StagingFile.TryDelete(operation.StagingPath);
+            }
 
-        await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+            await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+        }
+        finally
+        {
+            _locks.Release();
+        }
     }
 
     private void ThrowIfCannotMutate()

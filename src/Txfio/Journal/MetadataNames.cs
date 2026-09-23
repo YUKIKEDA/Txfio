@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// メタデータフォルダとジャーナルの名前
+/// メタデータフォルダ、ジャーナル、ロックの名前
 /// </summary>
 internal static class MetadataNames
 {
@@ -16,6 +16,11 @@ internal static class MetadataNames
     internal const string JournalSearchPattern = "tx-*.journal";
 
     /// <summary>
+    /// ロックファイルを置くフォルダ名
+    /// </summary>
+    internal const string LockFolderName = "locks";
+
+    /// <summary>
     /// メタデータフォルダの絶対パスを返す
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
@@ -23,6 +28,16 @@ internal static class MetadataNames
     internal static string FolderPath(string workFolder)
     {
         return System.IO.Path.Combine(workFolder, FolderName);
+    }
+
+    /// <summary>
+    /// ロックファイルを置くフォルダの絶対パスを返す
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <returns>`.txfio/locks` フォルダのパス</returns>
+    internal static string LockFolderPath(string workFolder)
+    {
+        return System.IO.Path.Combine(FolderPath(workFolder), LockFolderName);
     }
 
     /// <summary>

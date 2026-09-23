@@ -11,11 +11,11 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | 区間 | 状態 |
 | --- | --- |
 | Phase 0 リポジトリ基盤 | 完了 |
-| Phase 1 MVP | 進行中（開始・Add/Update/Delete/Move/Attach・ディレクトリ削除・同一パス正規化・適用順・Before/After・カスタム例外済み。次はクラッシュインジェクション Issue #25） |
-| Phase 2 並行性・ロック | 未着手 |
+| Phase 1 MVP | 完了 |
+| Phase 2 並行性・ロック | 進行中（次はパスロック Issue #27） |
 | Phase 3 拡張と公開 | 未着手 |
 
-Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / Update / Delete / Move / Attach**、ディレクトリ削除、同一パス正規化、適用順、Before / After、カスタム例外は main にある。次はクラッシュインジェクション（Issue #25）。
+Phase 1 の「使えるライブラリ」は main にある。次はパスロック（Issue #27）。そのあと Recover がロックのハンドルを閉じることと、別プロセスの同時アクセスが残る。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -41,15 +41,13 @@ Phase 1 の「使えるライブラリ」までを操作で見ると、**Add / U
 - [x] Issue #19: 適用順の固定（Add / Move / Attach → Update → Delete。ディレクトリ Delete は深いパスから）
 - [x] Issue #21: Before / After（ファイルはサイズと最終更新日時、ディレクトリは存在だけ。Recover はそれで適用済み判定）
 - [x] Issue #23: カスタム例外（`ExternalConflictException` と `UnsupportedOperationException`。ロック競合は Phase 2）
-- Issue #25: クラッシュインジェクション（`AfterCommitting` と `AfterApply`。Dispose はロールバックせず Recover で実ファイルを検証）
+- [x] Issue #25: クラッシュインジェクション（`AfterCommitting` と `AfterApply`。Dispose はロールバックせず Recover で実ファイルを検証）
 
 ## Phase 2 — 並行性（仮）
 
-- [ ] `.txfio/locks/` のハッシュ名 `.lock` を `FileShare.None` で保持
-- [ ] 操作時点でロック取得。取れなければ即例外（待機しない）
-- [ ] `Move` は旧パス・新パスを辞書順でロック
+- Issue #27: 操作時点のパスロック（`.txfio/locks/`、Move は辞書順、同一プロセスの2トランザクション。ファイルは消さない）
 - [ ] Recover はジャーナル記載パスから lock を特定してハンドルを閉じる（ワークフォルダ全スキャンはしない）
-- [ ] 同一プロセス複数 Tx、複数プロセスからの同時アクセスのテスト
+- [ ] 複数プロセスからの同時アクセスのテスト
 
 ## Phase 3 — 拡張（仮）
 
