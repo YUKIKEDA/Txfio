@@ -13,9 +13,9 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 0 リポジトリ基盤 | 完了 |
 | Phase 1 MVP | 完了 |
 | Phase 2 並行性・ロック | 完了 |
-| Phase 3 拡張と公開 | 進行中（次は文字列と JSON の拡張 Issue #57） |
+| Phase 3 拡張と公開 | 進行中（次は nuget.org への publish） |
 
-Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51）と利用者向け README（Issue #41、#54）、設計（Issue #43、#53）は main にある。次は文字列と JSON の拡張（Issue #57）。公開（リポジトリ public と nuget.org）はその後。
+Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57）と利用者向け README（Issue #41、#54）、設計（Issue #43、#53）は main にある。GitHub は public。次は nuget.org への publish。版は `0.1.0`。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -63,9 +63,10 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51）と利
 - [x] Issue #51: ディレクトリの Import / Export（外のディレクトリを Add し、中のディレクトリをロックせず外へ出す）
 - [x] Issue #53: 設計: 文字列と JSON の拡張メソッド（実装は含めない）
 - [x] Issue #54: README の書き方を Skill にし、README を書き直す
-- Issue #57: 文字列と JSON の拡張メソッド
+- [x] Issue #57: 文字列と JSON の拡張メソッド
+- Issue #59: GitHub を public にし、最初の版を 0.1.0 にする
 
 ## 公開（Phase 3 完了後）
 
-- [ ] GitHub リポジトリを public にする
+- [x] GitHub リポジトリを public にする
 - [ ] nuget.org へ publish（それまでは `dotnet pack` とメタデータのみ）
