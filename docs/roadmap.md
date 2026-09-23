@@ -13,9 +13,9 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 0 リポジトリ基盤 | 完了 |
 | Phase 1 MVP | 完了 |
 | Phase 2 並行性・ロック | 完了 |
-| Phase 3 拡張と公開 | 進行中（次は ReadAsync Issue #33） |
+| Phase 3 拡張と公開 | 進行中（次はコピー進捗 Issue #35） |
 
-Phase 2 の並行性は main にある。次は `ReadAsync`（Issue #33）。
+Phase 2 の並行性と `ReadAsync`（Issue #33）は main にある。次は Add / Update のコピー進捗（Issue #35）。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -51,8 +51,8 @@ Phase 2 の並行性は main にある。次は `ReadAsync`（Issue #33）。
 
 ## Phase 3 — 拡張（仮）
 
-- Issue #33: `ReadAsync`（`.txnew` があればそれ、無ければ本物。ロックは取らない）
-- [ ] `IProgress<TransferProgress>` を書き込み API に足し、結合テストする
+- [x] Issue #33: `ReadAsync`（`.txnew` があればそれ、無ければ本物。ロックは取らない）
+- Issue #35: Add / Update のコピー進捗（`TransferProgress`。退避とジャーナルは通知しない。コミット件数は含めない）
 - [ ] `ImportAsync` / `ExportAsync`
 - [ ] ディレクトリ Move（実行中はワークフォルダ全体ロック）
 

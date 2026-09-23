@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace Txfio;
 
 /// <summary>
@@ -5,15 +7,23 @@ namespace Txfio;
 /// </summary>
 internal static class StagingFile
 {
+    private const int CopyBufferSize = 81920;
+
     /// <summary>
     /// 呼び出し側のストリームを `.txnew` へコピーしてフラッシュする
     /// </summary>
     /// <param name="stagingPath">書き込み先</param>
     /// <param name="content">内容（Dispose しない）</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>書き込みの完了</returns>
-    internal static async Task WriteAsync(string stagingPath, Stream content, CancellationToken cancellationToken)
+    internal static async Task WriteAsync(
+        string stagingPath,
+        Stream content,
+        IProgress<TransferProgress>? progress,
+        CancellationToken cancellationToken)
     {
+        long? totalBytes = TryGetRemaining(content);
         FileStream? stream = null;
         try
         {
@@ -24,7 +34,7 @@ internal static class StagingFile
                 FileShare.None,
                 bufferSize: 4096,
                 FileOptions.Asynchronous | FileOptions.WriteThrough);
-            await content.CopyToAsync(stream, cancellationToken).ConfigureAwait(false);
+            await CopyAsync(content, stream, totalBytes, progress, cancellationToken).ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -117,5 +127,59 @@ internal static class StagingFile
         }
 
         File.Delete(stagingPath);
+    }
+
+    private static async Task CopyAsync(
+        Stream source,
+        Stream destination,
+        long? totalBytes,
+        IProgress<TransferProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
+        try
+        {
+            long copied = 0;
+            while (true)
+            {
+                int read = await source.ReadAsync(buffer.AsMemory(0, CopyBufferSize), cancellationToken)
+                    .ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                copied += read;
+                progress?.Report(new TransferProgress(copied, totalBytes));
+            }
+
+            if (copied == 0)
+            {
+                progress?.Report(new TransferProgress(0, totalBytes));
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static long? TryGetRemaining(Stream content)
+    {
+        if (!content.CanSeek)
+        {
+            return null;
+        }
+
+        try
+        {
+            long remaining = content.Length - content.Position;
+            return remaining >= 0 ? remaining : null;
+        }
+        catch (Exception exception) when (exception is NotSupportedException or IOException)
+        {
+            return null;
+        }
     }
 }

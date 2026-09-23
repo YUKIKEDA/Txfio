@@ -38,7 +38,7 @@ C#で、ファイルサーバーなどIOが遅い環境でも動作する、git�
 
 **トレードオフ**
 
-- コミット処理が「変更ファイル数分のrename/削除をまとめて実行する」処理になり、コミット自体の所要時間は変更ファイル数に比例して伸びる（→進捗report機能で対応）
+- コミット処理が「変更ファイル数分のrename/削除をまとめて実行する」処理になり、コミット自体の所要時間は変更ファイル数に比例して伸びる。件数の進捗は未着手で、コピーの進捗は Add / Update の `TransferProgress` である
 - アプリ自身が素のファイルIO（`File.ReadAllText`等）で自分がまだコミットしていない変更を読み返すことはできない。読み返す必要がある場合は専用API `tx.ReadAsync(path)` を使う（ステージング済みならそちらを、なければ本物のパスを読む）
 
 **Updateの原子性**: `.txnew`への書き込みが完了する前にクラッシュしても、元のパスには常に「変更前の完全な状態」しか存在しない（コミット時反映により、コミット前は本物のパスに一切触れないため、この問題は書き込みモデルの選択によって自動的に解消される）。
@@ -53,7 +53,7 @@ C#で、ファイルサーバーなどIOが遅い環境でも動作する、git�
 
 **主なAPI**
 
-- `AddAsync(path, Stream content, CancellationToken)` / `UpdateAsync(path, Stream content, CancellationToken)`: 別APIとして明示的に分ける。存在有無の事前確認IOを省け、呼び出し側の意図とファイルシステムの実態が食い違っている場合を早期に検出できる
+- `AddAsync(path, Stream content, IProgress<TransferProgress>? progress, CancellationToken)` / `UpdateAsync(path, Stream content, IProgress<TransferProgress>? progress, CancellationToken)`: 別APIとして明示的に分ける。存在有無の事前確認IOを省け、呼び出し側の意図とファイルシステムの実態が食い違っている場合を早期に検出できる。`progress` は省略でき、null のときは通知しない
 - `DeleteAsync(path, CancellationToken)`: ファイルとディレクトリの両方。公開する操作種別はどちらも `Delete`（ディレクトリ用の別 Kind は足さない）。ディレクトリだったことはジャーナル内部に残し、コミット検証ですり替わっていれば失敗とする
 - `MoveAsync(oldPath, newPath, CancellationToken)`: 同一ボリューム内の移動のみサポート。ボリューム跨ぎはエラーにする（コピー+削除への暗黙のフォールバックはしない。非機能要件に反する重い処理を暗黙に行わないため）
 - `AttachAsync(path, CancellationToken)`: 外部プロセスが生成した既存ファイルをトランザクションに取り込む。ファイル自体には一切触れず（コピーもrenameもせず）、ジャーナルには`Add`とは別の`Attach`種別として登録する（ロールバック時に「TxfioがAddした新規ファイル」と誤認して削除してしまわないようにするため）。Attach時点の対象ファイルのサイズ・最終更新日時を期待状態として記録し、コミット時に現在の状態と照合する（不一致なら外部変更ありとみなしコミット失敗とする）
@@ -66,7 +66,7 @@ C#で、ファイルサーバーなどIOが遅い環境でも動作する、git�
 
 - 全ての書き込み系APIは非同期（`Task`ベース）で統一する。同期版は提供しない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
 - `CancellationToken` を受け付けるが、有効なのはコミット開始前（検証フェーズまで）に限る。物理的な適用（rename/削除の実行）が始まったら`CancellationToken`は無視し、最後まで完了させる。これにより「意図的な中断」と「クラッシュによる中断」を明確に区別できる（前者はコミット中には起こり得ず、後者だけが`RecoverAsync()`の対象になる）。コミット開始前にキャンセルされた場合は`DisposeAsync()`内で通常の非同期ロールバック（`.txnew`削除・ロック解放・ジャーナル削除）を行いクリーンに終了する
-- 書き込み系APIは `IProgress<TransferProgress>?` をオプション引数として受け取れるようにする。ファイルサーバー越しの大容量ファイル（数百MB〜GB単位）を想定し、UI側で進捗バー表示できるようにするため
+- `AddAsync` と `UpdateAsync` は `IProgress<TransferProgress>?` を `CancellationToken` の直前に受け取る。null のときは通知しない。`TransferProgress` は `.txnew` に書き終えたバイト数と、開始時点の残りバイト数（シークでき長さを読めるとき。残りが 0 未満なら null）である。81920 バイトを書き終えるたびに通知し、空の内容は最後に 1 回だけ通知する。ストリームは巻き戻さない。通知するのは呼び出し側の内容を `.txnew` へ書くコピーだけで、再ステージの退避とジャーナル書き込みは含めない。`Delete` / `Move` / `Attach` / `Commit` と、コミット件数の進捗は対象外である
 - エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある）。未対応（ディレクトリの Move / Attach、ボリュームをまたぐ Move）は `UnsupportedOperationException`。使い方の誤りは `InvalidOperationException` と `ArgumentException` のまま。他のトランザクションがパスを押さえているときは `LockContentionException`（失敗したパスを 1 つ持つ。内部例外は持たない）。コミットの成否は例外にせず `CommitResult` で返す
 
 **トランザクションのライフサイクル**
