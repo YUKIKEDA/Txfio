@@ -11,14 +11,14 @@ public static class Txfio
     /// <param name="path">既存のワークフォルダ</param>
     /// <param name="cancellationToken">開始処理を取り消すトークン</param>
     /// <returns>開始したトランザクション</returns>
-    /// <exception cref="DirectoryNotFoundException">ワークフォルダが存在しない</exception>
+    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
     public static async Task<ITransaction> BeginAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string workFolder = System.IO.Path.GetFullPath(path);
         if (!Directory.Exists(workFolder))
         {
-            throw new DirectoryNotFoundException("ワークフォルダが存在しません: " + workFolder);
+            throw new ExternalConflictException("ワークフォルダが存在しません: " + workFolder, workFolder);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -36,14 +36,14 @@ public static class Txfio
     /// <param name="path">既存のワークフォルダ</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
     /// <returns>復旧結果</returns>
-    /// <exception cref="DirectoryNotFoundException">ワークフォルダが存在しない</exception>
+    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
     public static async Task<RecoverResult> RecoverAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string workFolder = System.IO.Path.GetFullPath(path);
         if (!Directory.Exists(workFolder))
         {
-            throw new DirectoryNotFoundException("ワークフォルダが存在しません: " + workFolder);
+            throw new ExternalConflictException("ワークフォルダが存在しません: " + workFolder, workFolder);
         }
 
         return await RecoverService.RecoverAsync(workFolder, cancellationToken).ConfigureAwait(false);

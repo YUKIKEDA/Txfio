@@ -59,17 +59,18 @@ public sealed class AddUpdateTests
     /// <remarks>
     /// <para>前提: 対象パスにファイルがある</para>
     /// <para>手順: AddAsync する</para>
-    /// <para>期待: IOException になり .txnew は無い</para>
+    /// <para>期待: ExternalConflictException になり、Path は対象で、.txnew は無い</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_既存ファイルだとIOExceptionになること()
+    public async Task AddAsync_既存ファイルだとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "existing");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
-        await Assert.ThrowsAsync<IOException>(() => tx.AddAsync("a.txt", content));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("a.txt", content));
+        Assert.Equal(target, ex.Path);
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Equal("existing", await File.ReadAllTextAsync(target));
     }
@@ -80,15 +81,16 @@ public sealed class AddUpdateTests
     /// <remarks>
     /// <para>前提: 対象パスにファイルが無い</para>
     /// <para>手順: UpdateAsync する</para>
-    /// <para>期待: FileNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は対象である</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_無いファイルだとFileNotFoundExceptionになること()
+    public async Task UpdateAsync_無いファイルだとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
-        await Assert.ThrowsAsync<FileNotFoundException>(() => tx.UpdateAsync("missing.txt", content));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.UpdateAsync("missing.txt", content));
+        Assert.Equal(System.IO.Path.Combine(work.Path, "missing.txt"), ex.Path);
     }
 
     /// <summary>
@@ -97,15 +99,16 @@ public sealed class AddUpdateTests
     /// <remarks>
     /// <para>前提: サブフォルダが無い</para>
     /// <para>手順: その配下へ AddAsync する</para>
-    /// <para>期待: DirectoryNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_親ディレクトリが無いとDirectoryNotFoundExceptionになること()
+    public async Task AddAsync_親ディレクトリが無いとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
-        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => tx.AddAsync("sub\\a.txt", content));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("sub\\a.txt", content));
+        Assert.Equal(System.IO.Path.Combine(work.Path, "sub"), ex.Path);
     }
 
     /// <summary>

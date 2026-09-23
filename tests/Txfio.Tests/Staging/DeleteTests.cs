@@ -56,14 +56,15 @@ public sealed class DeleteTests
     /// <remarks>
     /// <para>前提: 対象パスにファイルが無い</para>
     /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: FileNotFoundException になる</para>
+    /// <para>期待: ExternalConflictException になり、Path は対象である</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_無いファイルだとFileNotFoundExceptionになること()
+    public async Task DeleteAsync_無いファイルだとExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<FileNotFoundException>(() => tx.DeleteAsync("missing.txt"));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("missing.txt"));
+        Assert.Equal(System.IO.Path.Combine(work.Path, "missing.txt"), ex.Path);
     }
 
     /// <summary>

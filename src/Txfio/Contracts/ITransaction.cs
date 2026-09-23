@@ -12,6 +12,9 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
+    /// <exception cref="ExternalConflictException">対象が既にある、または親ディレクトリが無い</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task AddAsync(string path, Stream content, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -21,6 +24,9 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
+    /// <exception cref="ExternalConflictException">対象が無い、または親ディレクトリが無い</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task UpdateAsync(string path, Stream content, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -29,6 +35,9 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>予約の完了</returns>
+    /// <exception cref="ExternalConflictException">対象が無い、またはディレクトリ直下に予定外の子がある</exception>
+    /// <exception cref="InvalidOperationException">メタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task DeleteAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -38,6 +47,10 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>予約の完了</returns>
+    /// <exception cref="ExternalConflictException">移動元が無い、移動先が塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="UnsupportedOperationException">ディレクトリの移動、またはボリュームをまたぐ移動である</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、削除予約済みディレクトリへの移動、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -46,6 +59,10 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>取り込みの完了</returns>
+    /// <exception cref="ExternalConflictException">対象が無い、または親ディレクトリが無い</exception>
+    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task AttachAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
