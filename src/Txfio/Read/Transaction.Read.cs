@@ -15,12 +15,7 @@ internal sealed partial class Transaction
         string? stagingPath = FindStagingPath(targetPath);
         if (!string.IsNullOrEmpty(stagingPath))
         {
-            if (!File.Exists(stagingPath))
-            {
-                throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + targetPath, targetPath);
-            }
-
-            return Task.FromResult<Stream>(OpenRead(stagingPath));
+            return Task.FromResult<Stream>(OpenRead(stagingPath, targetPath));
         }
 
         if (Directory.Exists(targetPath))
@@ -28,23 +23,26 @@ internal sealed partial class Transaction
             throw new UnsupportedOperationException("ディレクトリの読み取りは未対応です: " + targetPath);
         }
 
-        if (!File.Exists(targetPath))
-        {
-            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + targetPath, targetPath);
-        }
-
-        return Task.FromResult<Stream>(OpenRead(targetPath));
+        return Task.FromResult<Stream>(OpenRead(targetPath, targetPath));
     }
 
-    private static FileStream OpenRead(string path)
+    private static FileStream OpenRead(string path, string reportedPath)
     {
-        return new FileStream(
-            path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read | FileShare.Delete,
-            bufferSize: 4096,
-            FileOptions.Asynchronous);
+        try
+        {
+            return new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read | FileShare.Delete,
+                bufferSize: 4096,
+                FileOptions.Asynchronous);
+        }
+        catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // 開く時点で無ければ、対象が無い契約として返す
+            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + reportedPath, reportedPath);
+        }
     }
 
     private string? FindStagingPath(string targetPath)
