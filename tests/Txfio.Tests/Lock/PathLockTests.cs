@@ -341,4 +341,54 @@ public sealed class PathLockTests
 
         Assert.Equal(1, contentions);
     }
+
+    /// <summary>
+    /// ファイルコピーは別パスの変更を止めない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt がある</para>
+    /// <para>手順: a.txt を b.txt へコピーしてから、別トランザクションが c.txt を Add する</para>
+    /// <para>期待: Add は成功する</para>
+    /// </remarks>
+    [Fact]
+    public async Task CopyAsync_ファイルは別パスを止めないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.CopyAsync("a.txt", "b.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("other");
+
+        await second.AddAsync("c.txt", content);
+
+        Assert.Equal(PendingChangeKind.Add, Assert.Single(second.GetPendingChanges()).Kind);
+    }
+
+    /// <summary>
+    /// ディレクトリコピーは他のトランザクションの変更を止める
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 子ファイルがあるディレクトリと、別のファイルがある</para>
+    /// <para>手順: ディレクトリをコピーしてから、別トランザクションがそのファイルを Delete する</para>
+    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// </remarks>
+    [Fact]
+    public async Task CopyAsync_ディレクトリはワークフォルダで他の変更を止めること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "src");
+        Directory.CreateDirectory(source);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.CopyAsync("src", "dest");
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.DeleteAsync("a.txt"));
+
+        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
+    }
 }
