@@ -6,7 +6,7 @@ namespace Txfio;
 internal static class StagingApplier
 {
     /// <summary>
-    /// Add / Move / Attach を先に、Update を次に、Delete をパスが深い順で後に適用する
+    /// Add / Move / Attach を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
@@ -28,7 +28,7 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// Add / Move / Attach、Update、Delete（深い順）の順に並べる
+    /// Add / Move / Attach、Update、Delete と DeleteTree（深い順）の順に並べる
     /// </summary>
     /// <param name="operations">操作一覧</param>
     /// <returns>適用順の操作</returns>
@@ -56,7 +56,8 @@ internal static class StagingApplier
         List<JournalOperation> deletes = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
-            if (operation.Kind == PendingChangeKind.Delete)
+            if (operation.Kind == PendingChangeKind.Delete
+                || operation.Kind == PendingChangeKind.DeleteTree)
             {
                 deletes.Add(operation);
             }
@@ -95,6 +96,11 @@ internal static class StagingApplier
         if (!Matches(operation, after: false))
         {
             return false;
+        }
+
+        if (operation.Kind == PendingChangeKind.DeleteTree)
+        {
+            return TryDeleteTree(operation.Path);
         }
 
         if (operation.Kind == PendingChangeKind.Delete)
@@ -239,6 +245,33 @@ internal static class StagingApplier
         }
 
         return depth;
+    }
+
+    private static bool TryDeleteTree(string path)
+    {
+        if (File.Exists(path))
+        {
+            return false;
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return true;
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static bool TryDeleteDirectory(string path)
