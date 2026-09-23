@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// テストがコミット中の地点を武装し、プロセスを落とす代わりに例外で止める
+/// テストが指定したコミット中の地点で、プロセス強制終了の代わりに例外を投げる
 /// </summary>
 internal static class CrashInjector
 {
@@ -18,12 +18,12 @@ internal static class CrashInjector
     private static readonly AsyncLocal<State?> _state = new AsyncLocal<State?>();
 
     /// <summary>
-    /// 注入で止めたあとなら <see langword="true"/>（その場合 Dispose はロールバックしない）
+    /// チェックポイントで止めたあとは <see langword="true"/>（そのとき Dispose はロールバックしない）
     /// </summary>
     internal static bool ShouldSkipRollback => _state.Value is { Injected: true };
 
     /// <summary>
-    /// 次にこの地点へ来たら止める
+    /// 次に通過したら止める地点を指定する
     /// </summary>
     /// <param name="name">止める地点</param>
     internal static void Arm(string name)
@@ -32,7 +32,7 @@ internal static class CrashInjector
     }
 
     /// <summary>
-    /// 武装と注入済みの印を消す
+    /// 止める地点の指定を消す
     /// </summary>
     internal static void Reset()
     {
@@ -40,9 +40,9 @@ internal static class CrashInjector
     }
 
     /// <summary>
-    /// 武装した地点なら注入済みにして例外を投げる
+    /// 指定した地点に達していれば、止め済みにして例外を投げる
     /// </summary>
-    /// <param name="name">今の地点</param>
+    /// <param name="name">現在の地点</param>
     internal static void CheckPoint(string name)
     {
         State? state = _state.Value;
@@ -51,7 +51,7 @@ internal static class CrashInjector
             return;
         }
 
-        // AsyncLocal の差し替えは呼び出し元へ戻らないため、同じオブジェクトを更新する
+        // AsyncLocal の参照を差し替えると、呼び出し元の文脈には反映されないので、同じオブジェクトを書き換える
         state.Injected = true;
         throw new CrashInjectionException(name);
     }

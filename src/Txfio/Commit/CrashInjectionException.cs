@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// クラッシュ注入でコミットを止めたときに投げる例外
+/// テスト用にコミットを途中で止めたことを表す例外
 /// </summary>
 internal sealed class CrashInjectionException : Exception
 {
@@ -10,7 +10,7 @@ internal sealed class CrashInjectionException : Exception
     /// </summary>
     /// <param name="name">止めた地点</param>
     internal CrashInjectionException(string name)
-        : base("クラッシュを注入しました: " + name)
+        : base("コミット途中の停止: " + name)
     {
         Name = name;
     }
