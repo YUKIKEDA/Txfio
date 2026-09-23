@@ -14,6 +14,7 @@ internal sealed partial class Transaction
         if (_operations.Count == 0)
         {
             await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+            _locks.Release();
             _committed = true;
             return CommitResult.Succeeded;
         }
@@ -35,6 +36,7 @@ internal sealed partial class Transaction
             await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
         }
 
+        _locks.Release();
         _committed = true;
         _operations.Clear();
         return conflict ? CommitResult.PartialConflict : CommitResult.Succeeded;
