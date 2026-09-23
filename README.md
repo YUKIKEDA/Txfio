@@ -24,11 +24,11 @@ CommitResult result = await tx.CommitAsync();
 
 `CommitResult` は例外ではありません。
 
-| 値 | 意味 |
-| --- | --- |
-| `Succeeded` | 予定どおり適用した |
-| `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる |
-| `Failed` | 適用前の検証で失敗した。本物のパスはまだ変えていない |
+| 値                | 意味                                                 |
+| ----------------- | ---------------------------------------------------- |
+| `Succeeded`       | 予定どおり適用した                                   |
+| `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
+| `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
 
 落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。結果は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` です。
 
@@ -46,23 +46,23 @@ CommitResult result = await tx.CommitAsync();
 
 呼んだ操作だけを追跡します。フォルダ全体の差分スキャンはしません。同期版はありません。
 
-| API | できること |
-| --- | --- |
-| `AddAsync` / `UpdateAsync` | ファイルの新規作成と置き換え。内容は `.txnew` へ書く。進捗は `TransferProgress` |
-| `DeleteAsync` | ファイル、または直下だけのディレクトリの削除予約。実削除はコミット時 |
-| `DeleteTreeAsync` | ディレクトリとその配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除する |
-| `MoveAsync` | 同一ボリューム内のファイルまたはディレクトリの移動予約。ディレクトリはコミット時に 1 回 rename し、中身は付いていく |
-| `AttachAsync` | 外部が作ったファイルまたはディレクトリを、コピーも rename もせず取り込む。ファイルはサイズと最終更新日時。ディレクトリは存在だけ |
-| `CopyAsync` | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ |
-| `ImportAsync` | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない |
-| `ExportAsync` | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない |
-| `ReadAsync` | `.txnew` があればそれ、無ければ本物のファイル。ロックは取らない |
-| `ReadAllTextAsync` / `ReadAllLinesAsync` | 読み取りと同じバイトを文字列、または行の配列にする |
-| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。省略した書きは BOM なし UTF-8 |
-| `ReadFromJsonAsync` / `WriteAsJsonAsync` | `System.Text.Json`。書きは上と同じ Add / Update。オプション省略時は既定 |
-| `GetPendingChanges` | 未確定の操作一覧 |
-| `CommitAsync` | 検証してから rename と削除を適用する |
-| `RecoverAsync` | 落ちたジャーナルを、マーカーの有無で戻すか進める |
+| API                                        | できること                                                                                                                       |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `AddAsync` / `UpdateAsync`                 | ファイルの新規作成と置き換え。内容は `.txnew` へ書く。進捗は `TransferProgress`                                                  |
+| `DeleteAsync`                              | ファイル、または直下だけのディレクトリの削除予約。実削除はコミット時                                                             |
+| `DeleteTreeAsync`                          | ディレクトリとその配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除する                                       |
+| `MoveAsync`                                | 同一ボリューム内のファイルまたはディレクトリの移動予約。ディレクトリはコミット時に 1 回 rename し、中身は付いていく              |
+| `AttachAsync`                              | 外部が作ったファイルまたはディレクトリを、コピーも rename もせず取り込む。ファイルはサイズと最終更新日時。ディレクトリは存在だけ |
+| `CopyAsync`                                | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ      |
+| `ImportAsync`                              | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない                         |
+| `ExportAsync`                              | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない     |
+| `ReadAsync`                                | `.txnew` があればそれ、無ければ本物のファイル。ロックは取らない                                                                  |
+| `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                               |
+| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。省略した書きは BOM なし UTF-8                                                           |
+| `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書きは上と同じ Add / Update。オプション省略時は既定                                                          |
+| `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                 |
+| `CommitAsync`                              | 検証してから rename と削除を適用する                                                                                             |
+| `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める                                                                                 |
 
 親ディレクトリの自動作成はしません。`CopyAsync` と、ディレクトリの `ImportAsync` / `ExportAsync` だけ、コピー先のディレクトリ自身とその空のサブディレクトリを作ります。メタデータフォルダ `.txfio` とその配下は操作できません。
 
@@ -226,11 +226,11 @@ await tx.DeleteTreeAsync("tree");
 
 3 つのコピーは、どれも rename やハードリンクにはしません。ジャンクションとシンボリックリンクは辿りません。ファイルのシンボリックリンクを直接渡すと `InvalidOperationException` で、メッセージは「シンボリックリンクはコピーできません」です。
 
-| API | どこから | どこへ | ジャーナル | コピー元 |
-| --- | --- | --- | --- | --- |
-| `CopyAsync` | ワークフォルダの中 | ワークフォルダの中 | 各ファイルが Add | 残る |
-| `ImportAsync` | ワークフォルダの外 | ワークフォルダの中 | 各ファイルが Add | 残る |
-| `ExportAsync` | ワークフォルダの中 | ワークフォルダの外 | 残さない | 残る |
+| API           | どこから           | どこへ             | ジャーナル       | コピー元 |
+| ------------- | ------------------ | ------------------ | ---------------- | -------- |
+| `CopyAsync`   | ワークフォルダの中 | ワークフォルダの中 | 各ファイルが Add | 残る     |
+| `ImportAsync` | ワークフォルダの外 | ワークフォルダの中 | 各ファイルが Add | 残る     |
+| `ExportAsync` | ワークフォルダの中 | ワークフォルダの外 | 残さない         | 残る     |
 
 ```csharp
 await tx.CopyAsync("src", "dest");
@@ -260,14 +260,14 @@ await tx.ExportAsync("src", @"D:\outgoing\copy");
 
 コミットの成否は例外にしません。`CommitResult` を見てください。それ以外の失敗は例外です。基底は `TxfioException` です。
 
-| 状況 | 型 |
-| --- | --- |
-| 対象が無い、既にある、親が無い、直下に予定外の子がある、コピー先が塞がっている | `ExternalConflictException` |
-| ディレクトリの読み取り、ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move | `UnsupportedOperationException` |
-| 別操作でステージング済み、自分自身の配下への Move や Copy、シンボリックリンクのコピー | `InvalidOperationException` |
-| パスがワークフォルダの外、Import の元が中、Export の先が中 | `ArgumentException` |
-| ほかの Txfio がパスまたはワークフォルダを押さえている | `LockContentionException` |
-| JSON として読めない | `JsonException` |
+| 状況                                                                                  | 型                              |
+| ------------------------------------------------------------------------------------- | ------------------------------- |
+| 対象が無い、既にある、親が無い、直下に予定外の子がある、コピー先が塞がっている        | `ExternalConflictException`     |
+| ディレクトリの読み取り、ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move       | `UnsupportedOperationException` |
+| 別操作でステージング済み、自分自身の配下への Move や Copy、シンボリックリンクのコピー | `InvalidOperationException`     |
+| パスがワークフォルダの外、Import の元が中、Export の先が中                            | `ArgumentException`             |
+| ほかの Txfio がパスまたはワークフォルダを押さえている                                 | `LockContentionException`       |
+| JSON として読めない                                                                   | `JsonException`                 |
 
 `ExternalConflictException` と `LockContentionException` は、失敗したパスを 1 つ持ちます。
 
@@ -289,34 +289,34 @@ SQL の INSERT とファイル作成を、落ちても両方戻る 1 つのト�
 
 コミットの途中で他プロセスから見て中間状態が許されないときも向きません。複数ファイルの反映は 1 操作ずつです。`.txnew` が見えること、素のファイル API がロックを無視することも、許容できないなら向きません。
 
-| 観点 | Txfio | TxFileManager | SQLite にデータを置く |
-| --- | --- | --- | --- |
-| 確定後に残るもの | 普通のファイルとディレクトリ | 普通のファイルとディレクトリ | データベースファイル。個別ファイルにはならない |
-| いつ見えるか | コミットまで本物のパスは旧状態。`.txnew` は見える | 呼んだ瞬間に反映される。分離は Read Uncommitted | 他接続からは、コミット済みの状態が見える |
-| クラッシュ | ジャーナルが残る。`RecoverAsync` が戻すか進める | 復旧は揮発。落ちると途中のファイル操作が残る | DB はジャーナルまたは WAL で復旧する。DB の外のファイルは含まない |
-| 複数対象の揃い | コミット中は一部だけ新しい。`Failed` は本物を変えない | 変更は即時に見える。複数ファイルの Move のロールバックが途中で止まった報告がある | DB 内の変更は 1 つのコミットに揃う |
-| ディレクトリ全削除 | `DeleteTreeAsync`。ステージでは走査せず、コミット時に再帰削除。`DeleteAsync` は直下だけ | `DeleteDirectory`。実行時点で temp へ退避する | パスを表す行を SQL で消す。ファイルツリーの削除ではない |
-| ディレクトリの取り込み | `AttachAsync` は存在だけ。子の変化は見ない。ロールバックでも消さない | ディレクトリを「作ったことにしない」専用 API は無い | 行として入れるならアプリが書く |
-| ディレクトリの移動 | 同一ボリュームで 1 回の rename。ボリューム跨ぎはエラー | `MoveDirectory`。即時。temp が別ボリュームだとコピーと削除になる | パス列の更新 |
-| 一時置き場 | 使わない。`.txnew` は同じディレクトリ | 既定は `Path.GetTempPath()` | データベースファイル自身 |
-| SMB 上の共有 | 対象。サーバーキャッシュの永続化は保証外 | 設計の主対象ではない | ネットワーク共有に置く使い方はサポート外 |
-| DB と同じトランザクション | 参加しない | `TransactionScope` で参加できる | データベースの中だけ |
-| 同時実行 | 利用者間はパス単位。ディレクトリ Move、全削除、ディレクトリコピー、ディレクトリの Import のあいだは哨兵が排他 | スレッドセーフと README にある。分離は Read Uncommitted | 書き込みは原則 1 接続。読み取りは WAL などで並行できる |
-| 素の File API | 止められない | 止められない | DB を経由しない読み書きはトランザクションの外 |
-| プラットフォーム | 保証は Windows | .NET Standard 2.0。Windows と Ubuntu でテストされている | クロスプラットフォーム |
-| API の形 | 非同期のみ。コピーの進捗あり | 同期が中心 | `Microsoft.Data.Sqlite` なら同期と非同期 |
+| 観点                      | Txfio                                                                                                         | TxFileManager                                                                    | SQLite にデータを置く                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 確定後に残るもの          | 普通のファイルとディレクトリ                                                                                  | 普通のファイルとディレクトリ                                                     | データベースファイル。個別ファイルにはならない                    |
+| いつ見えるか              | コミットまで本物のパスは旧状態。`.txnew` は見える                                                             | 呼んだ瞬間に反映される。分離は Read Uncommitted                                  | 他接続からは、コミット済みの状態が見える                          |
+| クラッシュ                | ジャーナルが残る。`RecoverAsync` が戻すか進める                                                               | 復旧は揮発。落ちると途中のファイル操作が残る                                     | DB はジャーナルまたは WAL で復旧する。DB の外のファイルは含まない |
+| 複数対象の揃い            | コミット中は一部だけ新しい。`Failed` は本物を変えない                                                         | 変更は即時に見える。複数ファイルの Move のロールバックが途中で止まった報告がある | DB 内の変更は 1 つのコミットに揃う                                |
+| ディレクトリ全削除        | `DeleteTreeAsync`。ステージでは走査せず、コミット時に再帰削除。`DeleteAsync` は直下だけ                       | `DeleteDirectory`。実行時点で temp へ退避する                                    | パスを表す行を SQL で消す。ファイルツリーの削除ではない           |
+| ディレクトリの取り込み    | `AttachAsync` は存在だけ。子の変化は見ない。ロールバックでも消さない                                          | ディレクトリを「作ったことにしない」専用 API は無い                              | 行として入れるならアプリが書く                                    |
+| ディレクトリの移動        | 同一ボリュームで 1 回の rename。ボリューム跨ぎはエラー                                                        | `MoveDirectory`。即時。temp が別ボリュームだとコピーと削除になる                 | パス列の更新                                                      |
+| 一時置き場                | 使わない。`.txnew` は同じディレクトリ                                                                         | 既定は `Path.GetTempPath()`                                                      | データベースファイル自身                                          |
+| SMB 上の共有              | 対象。サーバーキャッシュの永続化は保証外                                                                      | 設計の主対象ではない                                                             | ネットワーク共有に置く使い方はサポート外                          |
+| DB と同じトランザクション | 参加しない                                                                                                    | `TransactionScope` で参加できる                                                  | データベースの中だけ                                              |
+| 同時実行                  | 利用者間はパス単位。ディレクトリ Move、全削除、ディレクトリコピー、ディレクトリの Import のあいだは哨兵が排他 | スレッドセーフと README にある。分離は Read Uncommitted                          | 書き込みは原則 1 接続。読み取りは WAL などで並行できる            |
+| 素の File API             | 止められない                                                                                                  | 止められない                                                                     | DB を経由しない読み書きはトランザクションの外                     |
+| プラットフォーム          | 保証は Windows                                                                                                | .NET Standard 2.0。Windows と Ubuntu でテストされている                          | クロスプラットフォーム                                            |
+| API の形                  | 非同期のみ。コピーの進捗あり                                                                                  | 同期が中心                                                                       | `Microsoft.Data.Sqlite` なら同期と非同期                          |
 
 TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`（ディレクトリを temp へ移し、ロールバックで戻し、確定後に temp を再帰削除する）に基づきます。作者は揮発エンリストだけをサポートし、プロセスが落ちると途中のまま残ると説明しています。SQLite をネットワークファイルシステム上に置くことは、SQLite 作者が確実な動作の対象外としています。
 
 ## ドキュメント
 
-| 文書 | 役割 |
-| --- | --- |
-| [`docs/design.md`](docs/design.md) | 設計の正本 |
-| [`docs/roadmap.md`](docs/roadmap.md) | 実装順（Phase は仮） |
-| [`docs/conventions.md`](docs/conventions.md) | コーディング規約 |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 進め方 |
-| [`SECURITY.md`](SECURITY.md) | 脆弱性の報告 |
+| 文書                                         | 役割                 |
+| -------------------------------------------- | -------------------- |
+| [`docs/design.md`](docs/design.md)           | 設計の正本           |
+| [`docs/roadmap.md`](docs/roadmap.md)         | 実装順（Phase は仮） |
+| [`docs/conventions.md`](docs/conventions.md) | コーディング規約     |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)         | 進め方               |
+| [`SECURITY.md`](SECURITY.md)                 | 脆弱性の報告         |
 
 ## ローカル検証
 
