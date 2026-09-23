@@ -64,9 +64,18 @@ C#で、ファイルサーバーなどIOが遅い環境でも動作する、git�
 - `ReadAsync(path, CancellationToken)`: そのパスの未確定操作に `.txnew` があればそれを、無ければ本物のファイルを、位置 0 の読み取りストリームで返す。破棄は呼び出し側。全体はメモリにコピーしない。ロックは取らず、ジャーナルにも書かない。Delete、Attach、Move の移動元は本物を読む。`.txnew` も本物も無いときは `ExternalConflictException`。ディレクトリは未対応。開き方は `FileShare.Read | FileShare.Delete` なので、ストリームを閉じる前でもコミットの rename は進む。同じパスの再ステージは、ストリームを閉じるまで失敗しうる。取り消しは呼び出し開始時だけ有効
 - `tx.GetPendingChanges()`: 現在のジャーナル内容（Add/Update/Delete/DeleteTree/Move/Attach 一覧）を返す。ディレクトリのコピーは各ファイルの Add として見える。実装コストはほぼゼロ（ジャーナルをそのまま返すだけ）で、"git status"的なデバッグ・UI表示用途に使う
 
+**文字列と JSON（拡張メソッド）**
+
+`ITransaction` には足さない。名前空間 `Txfio` の拡張メソッドで、同期版は無い。`IProgress` も付けない。中身はいったんメモリに載せて、既存の `ReadAsync` / `AddAsync` / `UpdateAsync` を呼ぶ。大きいバイト列は `Stream` の API を使う。
+
+- `ReadAllTextAsync` / `ReadAllLinesAsync`: `ReadAsync` と同じバイトを文字列、または行の配列にする。行の区切りと、戻り値に改行を含めないことは `File.ReadAllLinesAsync` に合わせる。エンコーディングを省略した読みは `File` と同じ BOM 検出。エンコーディング引数のあるオーバーロードも持つ。ディレクトリ、および対象が無いときは `ReadAsync` と同じ例外
+- `WriteAllTextAsync` / `WriteAllLinesAsync`: ディスク上にそのパスのファイルが無ければ `Add`、あれば `Update`。未コミットの `.txnew` はディスク上のファイルとして見ない。同じトランザクションで続けて書くと、既存の再ステージに乗る（新規のままなら `Add`、既存なら `Update`。`Delete` のあとは `Update`、`Attach` のあとは `Update`）。エンコーディングを省略した書きは BOM なし UTF-8。`WriteAllLinesAsync` の改行は `File.WriteAllLinesAsync` に合わせる。`WriteAllTextAsync` の内容が null なら空として書く。`WriteAllLinesAsync` の内容が null、またはエンコーディング引数が null なら `ArgumentNullException`
+- `ReadFromJsonAsync<T>`: `ReadAsync` のバイトを `System.Text.Json` でデシリアライズする。失敗は `System.Text.Json` の例外のまま。`JsonSerializerOptions` は省略でき、省略時は既定
+- `WriteAsJsonAsync<T>`: シリアライズした JSON を、`WriteAllTextAsync` と同じ Add / Update の規則で書く。`JsonSerializerOptions` は省略でき、省略時は既定
+
 **共通方針**
 
-- 全ての書き込み系APIは非同期（`Task`ベース）で統一する。同期版は提供しない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
+- 全ての書き込み系APIは非同期（`Task`ベース）で統一する。文字列と JSON の拡張も同じで、同期版は置かない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
 - `CancellationToken` を受け付けるが、有効なのはコミット開始前（検証フェーズまで）に限る。物理的な適用（rename/削除の実行）が始まったら`CancellationToken`は無視し、最後まで完了させる。これにより「意図的な中断」と「クラッシュによる中断」を明確に区別できる（前者はコミット中には起こり得ず、後者だけが`RecoverAsync()`の対象になる）。コミット開始前にキャンセルされた場合は`DisposeAsync()`内で通常の非同期ロールバック（`.txnew`削除、コピーが作ったディレクトリの削除、ロック解放、ジャーナル削除）を行いクリーンに終了する
 - `AddAsync` と `UpdateAsync`、`CopyAsync`、および Import の `.txnew` へのコピーと Export の外部へのコピーは、`IProgress<TransferProgress>?` を `CancellationToken` の直前に受け取る。null のときは通知しない。`TransferProgress` は書き終えたバイト数と、開始時点の残りバイト数（シークでき長さを読めるとき。残りが 0 未満なら null）である。81920 バイトを書き終えるたびに通知し、空の内容は最後に 1 回だけ通知する。ストリームは巻き戻さない。ディレクトリのコピーでは全体サイズを事前に測らず、`TotalBytes` は null、書き終えたバイトの合計を通知する。空のディレクトリは最後に 1 回、0 バイトを通知する。Add / Update が通知するのは呼び出し側の内容を `.txnew` へ書くコピーだけで、再ステージの退避とジャーナル書き込みは含めない。`Delete` / `DeleteTree` / `Move` / `Attach` / `Commit` と、コミット件数の進捗は対象外である
 - エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある、コピー先が塞がっている）。未対応（ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move、ディレクトリの `ReadAsync`）は `UnsupportedOperationException`。使い方の誤りは `InvalidOperationException` と `ArgumentException` のまま。他のトランザクションがパスまたはワークフォルダを押さえているときは `LockContentionException`（失敗したパスを 1 つ持つ。内部例外は持たない）。コミットの成否は例外にせず `CommitResult` で返す
