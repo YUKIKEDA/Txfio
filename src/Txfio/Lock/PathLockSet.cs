@@ -12,9 +12,15 @@ internal sealed class PathLockSet
 
     private const int LockViolation = 33;
 
+    private static readonly AsyncLocal<Queue<(FileShare Share, Exception Exception)>?> _openFailures =
+        new AsyncLocal<Queue<(FileShare Share, Exception Exception)>?>();
+
     private readonly Dictionary<string, FileStream> _handles = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
 
     private bool _workFolderExclusive;
+
+    // 共有へ戻せなかったとき、次の取得で開き直す
+    private bool _workFolderShareLost;
 
     /// <summary>
     /// ロックファイルの絶対パスを返す
@@ -34,11 +40,39 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// ワークフォルダの哨兵を共有で開く。既に持っていれば開き直さない
+    /// 次に同じ共有モードで開くとき、指定した例外を投げる。テスト用
+    /// </summary>
+    /// <param name="share">失敗させる共有モード</param>
+    /// <param name="exception">投げる例外</param>
+    internal static void FailNextOpen(FileShare share, Exception exception)
+    {
+        Queue<(FileShare Share, Exception Exception)> queue = _openFailures.Value
+            ?? new Queue<(FileShare Share, Exception Exception)>();
+        queue.Enqueue((share, exception));
+        _openFailures.Value = queue;
+    }
+
+    /// <summary>
+    /// テストが仕込んだオープン失敗を消す
+    /// </summary>
+    internal static void ClearOpenFailures()
+    {
+        _openFailures.Value = null;
+    }
+
+    /// <summary>
+    /// ワークフォルダの哨兵を共有で開く。既に持っていれば開き直さない。失っていれば開き直す
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     internal void AcquireShared(string workFolder)
     {
+        if (_workFolderShareLost)
+        {
+            RestoreShared(workFolder);
+            _workFolderShareLost = false;
+            return;
+        }
+
         if (_handles.ContainsKey(workFolder))
         {
             return;
@@ -59,8 +93,15 @@ internal sealed class PathLockSet
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <exception cref="LockContentionException">他のトランザクションが哨兵を持っている</exception>
+    /// <exception cref="IOException">共有へ戻すときの、共有違反以外の失敗</exception>
     internal void AcquireExclusive(string workFolder)
     {
+        if (_workFolderShareLost)
+        {
+            RestoreShared(workFolder);
+            _workFolderShareLost = false;
+        }
+
         if (_workFolderExclusive && _handles.ContainsKey(workFolder))
         {
             return;
@@ -77,8 +118,18 @@ internal sealed class PathLockSet
             }
             catch (IOException exception) when (IsSharingViolation(exception))
             {
-                RestoreShared(workFolder);
+                RestoreOrMarkLost(workFolder);
                 throw Contention(workFolder);
+            }
+            catch (IOException)
+            {
+                RestoreOrMarkLost(workFolder);
+                throw;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                RestoreOrMarkLost(workFolder);
+                throw;
             }
         }
 
@@ -134,7 +185,7 @@ internal sealed class PathLockSet
             catch (IOException exception) when (IsSharingViolation(exception))
             {
                 ReleaseHandle(workFolder);
-                RestoreShared(workFolder);
+                RestoreOrMarkLost(workFolder);
                 throw Contention(workFolder);
             }
         }
@@ -166,6 +217,7 @@ internal sealed class PathLockSet
 
         _handles.Clear();
         _workFolderExclusive = false;
+        _workFolderShareLost = false;
     }
 
     private static List<string> Order(string[] fullPaths)
@@ -209,6 +261,7 @@ internal sealed class PathLockSet
 
     private static FileStream Open(string workFolder, string fullPath, FileShare share)
     {
+        ThrowIfOpenArmed(share);
         string lockPath = FilePath(workFolder, fullPath);
         string? directory = System.IO.Path.GetDirectoryName(lockPath);
         if (!string.IsNullOrEmpty(directory))
@@ -221,6 +274,17 @@ internal sealed class PathLockSet
             FileMode.OpenOrCreate,
             FileAccess.ReadWrite,
             share);
+    }
+
+    private static void ThrowIfOpenArmed(FileShare share)
+    {
+        Queue<(FileShare Share, Exception Exception)>? failures = _openFailures.Value;
+        if (failures is null || failures.Count == 0 || failures.Peek().Share != share)
+        {
+            return;
+        }
+
+        throw failures.Dequeue().Exception;
     }
 
     private void AcquireOne(string workFolder, string fullPath)
@@ -252,17 +316,42 @@ internal sealed class PathLockSet
 
     private void RestoreShared(string workFolder)
     {
+        if (_handles.ContainsKey(workFolder))
+        {
+            return;
+        }
+
         _workFolderExclusive = false;
         try
         {
-            if (!_handles.ContainsKey(workFolder))
-            {
-                _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.ReadWrite));
-            }
+            _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.ReadWrite));
+        }
+        catch (IOException exception) when (IsSharingViolation(exception))
+        {
+            throw Contention(workFolder);
+        }
+    }
+
+    private void RestoreOrMarkLost(string workFolder)
+    {
+        try
+        {
+            RestoreShared(workFolder);
+        }
+        catch (LockContentionException)
+        {
+            _workFolderShareLost = true;
+            throw;
         }
         catch (IOException)
         {
-            // 共有に戻せなくても、排他は持たない
+            _workFolderShareLost = true;
+            throw;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _workFolderShareLost = true;
+            throw;
         }
     }
 }

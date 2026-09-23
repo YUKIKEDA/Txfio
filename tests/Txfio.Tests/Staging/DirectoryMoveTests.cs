@@ -271,4 +271,106 @@ public sealed class DirectoryMoveTests
         mover.Release();
         other.Release();
     }
+
+    /// <summary>
+    /// 排他への昇格に失敗しても、共有は持ち続ける
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 2つの集合が哨兵を共有で持っている</para>
+    /// <para>手順: 片方を排他にする。失敗したあと、もう片方を解放し、第三者が排他を取る</para>
+    /// <para>期待: 昇格は LockContentionException で、第三者も排他を取れない</para>
+    /// </remarks>
+    [Fact]
+    public async Task AcquireExclusive_昇格に失敗しても共有を持ち続けること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        PathLockSet holder = new PathLockSet();
+        PathLockSet mover = new PathLockSet();
+        holder.AcquireShared(work.Path);
+        mover.AcquireShared(work.Path);
+
+        LockContentionException contention = Assert.Throws<LockContentionException>(() => mover.AcquireExclusive(work.Path));
+
+        Assert.Equal(work.Path, contention.Path);
+        holder.Release();
+        PathLockSet third = new PathLockSet();
+        Assert.Throws<LockContentionException>(() => third.AcquireExclusive(work.Path));
+        mover.Release();
+        third.Release();
+    }
+
+    /// <summary>
+    /// 共有へ戻せない IO 失敗は握りつぶさず、次の取得で開き直す
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 哨兵を共有で持っている。昇格は共有違反、戻しは別の IOException</para>
+    /// <para>手順: 排他を取る。失敗指定を消してから共有を取り直す</para>
+    /// <para>期待: 戻しの IOException がそのまま出る。取り直したあとは別の集合が排他を取れない</para>
+    /// </remarks>
+    [Fact]
+    public async Task AcquireExclusive_共有へ戻せない失敗は次の取得で開くこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        PathLockSet mover = new PathLockSet();
+        mover.AcquireShared(work.Path);
+        PathLockSet.FailNextOpen(FileShare.None, SharingViolation());
+        PathLockSet.FailNextOpen(FileShare.ReadWrite, new IOException("disk"));
+        try
+        {
+            IOException failure = Assert.Throws<IOException>(() => mover.AcquireExclusive(work.Path));
+            Assert.Equal("disk", failure.Message);
+        }
+        finally
+        {
+            PathLockSet.ClearOpenFailures();
+        }
+
+        mover.AcquireShared(work.Path);
+        PathLockSet other = new PathLockSet();
+        Assert.Throws<LockContentionException>(() => other.AcquireExclusive(work.Path));
+        mover.Release();
+        other.Release();
+    }
+
+    /// <summary>
+    /// 共有へ戻せなかったあとの排他は、先に共有を開き直す
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 昇格も共有への戻しも共有違反で失敗している</para>
+    /// <para>手順: 失敗指定を消し、別の集合が共有を持っているあいだに排他を取り直す。その集合を解放してから第三者が排他を取る</para>
+    /// <para>期待: 取り直しは LockContentionException で、第三者も排他を取れない</para>
+    /// </remarks>
+    [Fact]
+    public async Task AcquireExclusive_哨兵を失ったあとは共有を戻してから排他を試すこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        PathLockSet mover = new PathLockSet();
+        mover.AcquireShared(work.Path);
+        PathLockSet.FailNextOpen(FileShare.None, SharingViolation());
+        PathLockSet.FailNextOpen(FileShare.ReadWrite, SharingViolation());
+        try
+        {
+            Assert.Throws<LockContentionException>(() => mover.AcquireExclusive(work.Path));
+        }
+        finally
+        {
+            PathLockSet.ClearOpenFailures();
+        }
+
+        PathLockSet holder = new PathLockSet();
+        holder.AcquireShared(work.Path);
+        Assert.Throws<LockContentionException>(() => mover.AcquireExclusive(work.Path));
+        holder.Release();
+        PathLockSet third = new PathLockSet();
+        Assert.Throws<LockContentionException>(() => third.AcquireExclusive(work.Path));
+        mover.Release();
+        third.Release();
+    }
+
+    private static IOException SharingViolation()
+    {
+        IOException exception = new IOException("sharing");
+        exception.HResult = unchecked((int)0x80070020);
+        return exception;
+    }
 }
