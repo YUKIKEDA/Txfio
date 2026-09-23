@@ -16,8 +16,7 @@ using Txfio;
 await Txfio.RecoverAsync(@"D:\share\work");
 
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
-await using MemoryStream content = new MemoryStream("hello"u8.ToArray());
-await tx.AddAsync("a.txt", content);
+await tx.WriteAllTextAsync("a.txt", "hello");
 CommitResult result = await tx.CommitAsync();
 ```
 
@@ -58,6 +57,9 @@ CommitResult result = await tx.CommitAsync();
 | `ImportAsync` | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない |
 | `ExportAsync` | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない |
 | `ReadAsync` | `.txnew` があればそれ、無ければ本物のファイル。ロックは取らない |
+| `ReadAllTextAsync` / `ReadAllLinesAsync` | 読み取りと同じバイトを文字列、または行の配列にする |
+| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。省略した書きは BOM なし UTF-8 |
+| `ReadFromJsonAsync` / `WriteAsJsonAsync` | `System.Text.Json`。書きは上と同じ Add / Update。オプション省略時は既定 |
 | `GetPendingChanges` | 未確定の操作一覧 |
 | `CommitAsync` | 検証してから rename と削除を適用する |
 | `RecoverAsync` | 落ちたジャーナルを、マーカーの有無で戻すか進める |
@@ -68,16 +70,12 @@ CommitResult result = await tx.CommitAsync();
 
 ## コミットまでディスクは古いまま
 
-ディスク上の `a.txt` が `old` のとき、`UpdateAsync` のあと `ReadAsync` は新しい内容を返します。ディスク上のファイルは、コミットが成功するまで古いままです。
+ディスク上の `a.txt` が `old` のとき、`WriteAllTextAsync` は Update になります。読めるのは新しい内容で、ディスク上のファイルはコミットが成功するまで古いままです。
 
 ```csharp
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
-await using MemoryStream content = new MemoryStream("new"u8.ToArray());
-await tx.UpdateAsync("a.txt", content);
-
-await using Stream staged = await tx.ReadAsync("a.txt");
-using StreamReader reader = new StreamReader(staged);
-string text = await reader.ReadToEndAsync(); // "new"。ディスクの a.txt はまだ "old"
+await tx.WriteAllTextAsync("a.txt", "new");
+string text = await tx.ReadAllTextAsync("a.txt"); // "new"。ディスクの a.txt はまだ "old"
 ```
 
 ## ディレクトリ
