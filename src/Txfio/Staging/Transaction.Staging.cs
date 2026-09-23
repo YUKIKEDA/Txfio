@@ -31,6 +31,8 @@ internal sealed partial class Transaction
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
+        _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
 
@@ -40,6 +42,13 @@ internal sealed partial class Transaction
             JournalOperation existing = _operations[existingIndex];
             if (existing.Kind == PendingChangeKind.Delete)
             {
+                return;
+            }
+
+            if (existing.Kind == PendingChangeKind.Move && existing.IsDirectory)
+            {
+                await FoldDirectoryMoveToDeleteAsync(existingIndex, existing.Path, cancellationToken)
+                    .ConfigureAwait(false);
                 return;
             }
 
@@ -67,6 +76,13 @@ internal sealed partial class Transaction
         if (moveToIndex >= 0)
         {
             JournalOperation move = _operations[moveToIndex];
+            if (move.IsDirectory)
+            {
+                await FoldDirectoryMoveToDeleteAsync(moveToIndex, move.Path, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             await PersistReplacingOperationAsync(
                     moveToIndex,
                     new JournalOperation(PendingChangeKind.Delete, move.Path),
@@ -124,13 +140,10 @@ internal sealed partial class Transaction
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, destPath);
         StagingRules.EnsureSameVolume(sourcePath, destPath);
-        if (Directory.Exists(sourcePath))
-        {
-            throw new UnsupportedOperationException("ディレクトリの移動は未対応です: " + sourcePath);
-        }
-
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, sourcePath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, destPath);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, sourcePath);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, destPath);
 
         if (FindOperationIndex(destPath) >= 0)
         {
@@ -149,6 +162,14 @@ internal sealed partial class Transaction
         }
 
         int sourceIndex = FindOperationIndex(sourcePath);
+        int moveToSource = FindMoveToIndex(sourcePath);
+        if (IsDirectoryMove(sourcePath, sourceIndex, moveToSource))
+        {
+            await MoveDirectoryAsync(sourcePath, destPath, sourceIndex, moveToSource, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
         if (sourceIndex >= 0)
         {
             PendingChangeKind sourceKind = _operations[sourceIndex].Kind;
@@ -166,7 +187,7 @@ internal sealed partial class Transaction
             }
         }
 
-        int moveToSource = FindMoveToIndex(sourcePath);
+        _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, sourcePath, destPath);
         StagingRules.EnsureParentDirectoryExists(destPath);
         StagingRules.EnsureMoveDestinationIsFree(destPath);
@@ -213,6 +234,7 @@ internal sealed partial class Transaction
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
 
         if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
         {
@@ -224,6 +246,7 @@ internal sealed partial class Transaction
             throw new UnsupportedOperationException("ディレクトリの取り込みは未対応です: " + targetPath);
         }
 
+        _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         StagingRules.EnsureAttachTarget(targetPath);
@@ -277,6 +300,109 @@ internal sealed partial class Transaction
         }
 
         StagingFile.TryDelete(existing.StagingPath);
+    }
+
+    private async Task MoveDirectoryAsync(
+        string sourcePath,
+        string destPath,
+        int sourceIndex,
+        int moveToSource,
+        CancellationToken cancellationToken)
+    {
+        string root = sourcePath;
+        int replaceIndex = -1;
+        if (sourceIndex >= 0
+            && _operations[sourceIndex].Kind == PendingChangeKind.Move
+            && _operations[sourceIndex].IsDirectory)
+        {
+            root = _operations[sourceIndex].Path;
+            replaceIndex = sourceIndex;
+        }
+        else if (moveToSource >= 0 && _operations[moveToSource].IsDirectory)
+        {
+            root = _operations[moveToSource].Path;
+            replaceIndex = moveToSource;
+        }
+        else if (sourceIndex >= 0)
+        {
+            if (_operations[sourceIndex].Kind == PendingChangeKind.Delete)
+            {
+                throw new InvalidOperationException("削除予約されたパスは移動できません");
+            }
+
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        StagingRules.ThrowIfDirectoryMoveConflicts(_operations, root, destPath);
+        _locks.AcquireExclusive(_workFolder);
+        _locks.RejectForeignLocks(_workFolder);
+        _locks.Acquire(_workFolder, root, destPath);
+        StagingRules.EnsureParentDirectoryExists(destPath);
+        StagingRules.EnsureMoveDestinationIsFree(destPath);
+        if (!Directory.Exists(root))
+        {
+            throw new ExternalConflictException("移動元のディレクトリが存在しません: " + root, root);
+        }
+
+        if (replaceIndex >= 0)
+        {
+            await PersistReplacingOperationAsync(
+                    replaceIndex,
+                    new JournalOperation(
+                        PendingChangeKind.Move,
+                        root,
+                        newPath: destPath,
+                        isDirectory: true),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        JournalOperation operation = new JournalOperation(
+            PendingChangeKind.Move,
+            root,
+            newPath: destPath,
+            isDirectory: true);
+        _operations.Add(operation);
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _operations.Remove(operation);
+            throw;
+        }
+    }
+
+    private bool IsDirectoryMove(string sourcePath, int sourceIndex, int moveToSource)
+    {
+        if (Directory.Exists(sourcePath))
+        {
+            return true;
+        }
+
+        if (sourceIndex >= 0
+            && _operations[sourceIndex].Kind == PendingChangeKind.Move
+            && _operations[sourceIndex].IsDirectory)
+        {
+            return true;
+        }
+
+        return moveToSource >= 0 && _operations[moveToSource].IsDirectory;
+    }
+
+    private async Task FoldDirectoryMoveToDeleteAsync(
+        int moveIndex,
+        string directoryPath,
+        CancellationToken cancellationToken)
+    {
+        StagingRules.EnsureDirectoryDeleteAllowed(directoryPath, _operations, _transactionId);
+        await PersistReplacingOperationAsync(
+                moveIndex,
+                new JournalOperation(PendingChangeKind.Delete, directoryPath, isDirectory: true),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task MovePendingSourceAsync(
@@ -391,6 +517,7 @@ internal sealed partial class Transaction
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
         PendingChangeKind recordedKind = kind;
@@ -407,12 +534,14 @@ internal sealed partial class Transaction
         else
         {
             moveToIndex = FindMoveToIndex(targetPath);
-            if (moveToIndex >= 0 && kind != PendingChangeKind.Update)
+            if (moveToIndex >= 0
+                && (kind != PendingChangeKind.Update || _operations[moveToIndex].IsDirectory))
             {
                 throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
             }
         }
 
+        _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (moveToIndex >= 0)

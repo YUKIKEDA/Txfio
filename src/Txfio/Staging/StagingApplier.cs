@@ -106,7 +106,9 @@ internal static class StagingApplier
 
         if (operation.Kind == PendingChangeKind.Move)
         {
-            return TryMove(operation.Path, operation.NewPath!);
+            return operation.IsDirectory
+                ? TryMoveDirectory(operation.Path, operation.NewPath!)
+                : TryMove(operation.Path, operation.NewPath!);
         }
 
         if (operation.Kind == PendingChangeKind.Attach)
@@ -159,6 +161,33 @@ internal static class StagingApplier
         try
         {
             StagingFile.TryDelete(stagingPath);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryMoveDirectory(string sourcePath, string destPath)
+    {
+        if (!Directory.Exists(sourcePath))
+        {
+            return Directory.Exists(destPath);
+        }
+
+        if (File.Exists(destPath) || Directory.Exists(destPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            Directory.Move(sourcePath, destPath);
             return true;
         }
         catch (IOException)

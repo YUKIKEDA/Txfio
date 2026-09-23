@@ -72,11 +72,6 @@ internal static class StagingRules
     /// <param name="sourcePath">移動元パス</param>
     internal static void EnsureMoveSourceExists(string sourcePath)
     {
-        if (Directory.Exists(sourcePath))
-        {
-            throw new UnsupportedOperationException("ディレクトリの移動は未対応です: " + sourcePath);
-        }
-
         if (!File.Exists(sourcePath))
         {
             throw new ExternalConflictException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
@@ -158,6 +153,58 @@ internal static class StagingRules
         if (WorkPath.IsInMetadataFolder(workFolder, targetPath))
         {
             throw new InvalidOperationException("メタデータフォルダとその配下のパスは操作できません: " + targetPath);
+        }
+    }
+
+    /// <summary>
+    /// ディレクトリ Move の移動元・移動先の配下への操作を拒否する
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="path">操作しようとしているパス</param>
+    internal static void ThrowIfInsideDirectoryMove(IReadOnlyList<JournalOperation> operations, string path)
+    {
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind != PendingChangeKind.Move || !operation.IsDirectory || operation.NewPath is null)
+            {
+                continue;
+            }
+
+            if (IsInsideDirectory(operation.Path, path) || IsInsideDirectory(operation.NewPath, path))
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+        }
+    }
+
+    /// <summary>
+    /// ディレクトリを自分自身の配下へ移す操作と、移動元・移動先の配下に重なる操作を拒否する
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="sourcePath">移動するディレクトリ</param>
+    /// <param name="destPath">移動先</param>
+    internal static void ThrowIfDirectoryMoveConflicts(
+        IReadOnlyList<JournalOperation> operations,
+        string sourcePath,
+        string destPath)
+    {
+        if (IsInsideDirectory(sourcePath, destPath))
+        {
+            throw new InvalidOperationException("ディレクトリを自分自身の配下へは移動できません: " + sourcePath);
+        }
+
+        foreach (JournalOperation operation in operations)
+        {
+            if (IsInsideDirectory(sourcePath, operation.Path) || IsInsideDirectory(destPath, operation.Path))
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+
+            if (operation.NewPath is not null
+                && (IsInsideDirectory(sourcePath, operation.NewPath) || IsInsideDirectory(destPath, operation.NewPath)))
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
         }
     }
 
@@ -259,6 +306,15 @@ internal static class StagingRules
         }
 
         return true;
+    }
+
+    private static bool IsInsideDirectory(string directoryPath, string path)
+    {
+        string prefix = directoryPath.TrimEnd(
+                System.IO.Path.DirectorySeparatorChar,
+                System.IO.Path.AltDirectorySeparatorChar)
+            + System.IO.Path.DirectorySeparatorChar;
+        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPendingDirectoryDelete(IReadOnlyList<JournalOperation> operations, string? path)

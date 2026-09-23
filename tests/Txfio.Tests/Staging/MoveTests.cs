@@ -71,24 +71,6 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// ディレクトリへの Move は未対応として失敗する
-    /// </summary>
-    /// <remarks>
-    /// <para>前提: 移動元がディレクトリである</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: UnsupportedOperationException になる</para>
-    /// </remarks>
-    [Fact]
-    public async Task MoveAsync_ディレクトリだとUnsupportedOperationExceptionになること()
-    {
-        await using TempDirectory work = TempDirectory.Create();
-        string dir = System.IO.Path.Combine(work.Path, "sub");
-        Directory.CreateDirectory(dir);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.MoveAsync("sub", "other"));
-    }
-
-    /// <summary>
     /// 移動先が既にあると失敗する
     /// </summary>
     /// <remarks>

@@ -14,6 +14,8 @@ internal sealed class PathLockSet
 
     private readonly Dictionary<string, FileStream> _handles = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
 
+    private bool _workFolderExclusive;
+
     /// <summary>
     /// ロックファイルの絶対パスを返す
     /// </summary>
@@ -29,6 +31,113 @@ internal sealed class PathLockSet
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(relative.ToUpperInvariant()));
         string hex = Convert.ToHexString(hash).ToLowerInvariant();
         return System.IO.Path.Combine(MetadataNames.LockFolderPath(workFolder), hex + ".lock");
+    }
+
+    /// <summary>
+    /// ワークフォルダの哨兵を共有で開く。既に持っていれば開き直さない
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    internal void AcquireShared(string workFolder)
+    {
+        if (_handles.ContainsKey(workFolder))
+        {
+            return;
+        }
+
+        try
+        {
+            _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.ReadWrite));
+        }
+        catch (IOException exception) when (IsSharingViolation(exception))
+        {
+            throw Contention(workFolder);
+        }
+    }
+
+    /// <summary>
+    /// ワークフォルダの哨兵を排他で開く。共有を持っていれば閉じて取り直す
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <exception cref="LockContentionException">他のトランザクションが哨兵を持っている</exception>
+    internal void AcquireExclusive(string workFolder)
+    {
+        if (_workFolderExclusive && _handles.ContainsKey(workFolder))
+        {
+            return;
+        }
+
+        if (_handles.ContainsKey(workFolder))
+        {
+            ReleaseHandle(workFolder);
+            try
+            {
+                _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.None));
+                _workFolderExclusive = true;
+                return;
+            }
+            catch (IOException exception) when (IsSharingViolation(exception))
+            {
+                RestoreShared(workFolder);
+                throw Contention(workFolder);
+            }
+        }
+
+        try
+        {
+            _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.None));
+            _workFolderExclusive = true;
+        }
+        catch (IOException exception) when (IsSharingViolation(exception))
+        {
+            throw Contention(workFolder);
+        }
+    }
+
+    /// <summary>
+    /// 自分以外の `.lock` が使用中なら、排他をやめて共有に戻す
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <exception cref="LockContentionException">他のトランザクションがロックを持っている</exception>
+    internal void RejectForeignLocks(string workFolder)
+    {
+        string directory = MetadataNames.LockFolderPath(workFolder);
+        if (!Directory.Exists(directory))
+        {
+            return;
+        }
+
+        HashSet<string> owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string fullPath in _handles.Keys)
+        {
+            owned.Add(FilePath(workFolder, fullPath));
+        }
+
+        foreach (string lockFile in Directory.GetFiles(directory, "*.lock"))
+        {
+            if (owned.Contains(lockFile))
+            {
+                continue;
+            }
+
+            try
+            {
+                using FileStream probe = new FileStream(
+                    lockFile,
+                    FileMode.Open,
+                    FileAccess.ReadWrite,
+                    FileShare.None);
+            }
+            catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+            {
+                continue;
+            }
+            catch (IOException exception) when (IsSharingViolation(exception))
+            {
+                ReleaseHandle(workFolder);
+                RestoreShared(workFolder);
+                throw Contention(workFolder);
+            }
+        }
     }
 
     /// <summary>
@@ -56,6 +165,7 @@ internal sealed class PathLockSet
         }
 
         _handles.Clear();
+        _workFolderExclusive = false;
     }
 
     private static List<string> Order(string[] fullPaths)
@@ -92,13 +202,13 @@ internal sealed class PathLockSet
         return code == SharingViolation || code == LockViolation;
     }
 
-    private void AcquireOne(string workFolder, string fullPath)
+    private static LockContentionException Contention(string workFolder)
     {
-        if (_handles.ContainsKey(fullPath))
-        {
-            return;
-        }
+        return new LockContentionException("他のトランザクションがこのパスを使用中です: " + workFolder, workFolder);
+    }
 
+    private static FileStream Open(string workFolder, string fullPath, FileShare share)
+    {
         string lockPath = FilePath(workFolder, fullPath);
         string? directory = System.IO.Path.GetDirectoryName(lockPath);
         if (!string.IsNullOrEmpty(directory))
@@ -106,18 +216,53 @@ internal sealed class PathLockSet
             Directory.CreateDirectory(directory);
         }
 
+        return new FileStream(
+            lockPath,
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            share);
+    }
+
+    private void AcquireOne(string workFolder, string fullPath)
+    {
+        if (_handles.ContainsKey(fullPath))
+        {
+            return;
+        }
+
         try
         {
-            FileStream stream = new FileStream(
-                lockPath,
-                FileMode.OpenOrCreate,
-                FileAccess.ReadWrite,
-                FileShare.None);
-            _handles.Add(fullPath, stream);
+            _handles.Add(fullPath, Open(workFolder, fullPath, FileShare.None));
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
             throw new LockContentionException("他のトランザクションがこのパスを使用中です: " + fullPath, fullPath);
+        }
+    }
+
+    private void ReleaseHandle(string fullPath)
+    {
+        if (_handles.Remove(fullPath, out FileStream? handle))
+        {
+            handle.Dispose();
+        }
+
+        _workFolderExclusive = false;
+    }
+
+    private void RestoreShared(string workFolder)
+    {
+        _workFolderExclusive = false;
+        try
+        {
+            if (!_handles.ContainsKey(workFolder))
+            {
+                _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.ReadWrite));
+            }
+        }
+        catch (IOException)
+        {
+            // 共有に戻せなくても、排他は持たない
         }
     }
 }
