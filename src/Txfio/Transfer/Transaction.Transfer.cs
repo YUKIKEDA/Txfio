@@ -19,10 +19,16 @@ internal sealed partial class Transaction
         StagingRules.EnsureNotMetadataFolder(_workFolder, target);
         if (Directory.Exists(external))
         {
-            throw new UnsupportedOperationException("ディレクトリの取り込みは未対応です: " + external);
+            await ImportDirectoryAsync(external, target, progress, cancellationToken).ConfigureAwait(false);
+            return;
         }
 
-        await using FileStream source = OpenExternalFile(external, "取り込み元のファイルが存在しません: " + external, external);
+        if (File.Exists(external) && IsReparsePoint(external))
+        {
+            throw new InvalidOperationException("シンボリックリンクはコピーできません: " + external);
+        }
+
+        await using FileStream source = OpenExternalFile(external, "コピー元のファイルが存在しません: " + external, external);
         await StageAsync(PendingChangeKind.Add, target, source, progress, cancellationToken).ConfigureAwait(false);
     }
 
@@ -38,6 +44,18 @@ internal sealed partial class Transaction
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         string destinationPath = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
+        if (Directory.Exists(sourcePath))
+        {
+            await ExportDirectoryAsync(sourcePath, destinationPath, progress, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        if (File.Exists(sourcePath) && IsReparsePoint(sourcePath))
+        {
+            throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
+        }
+
         EnsureExportDestination(destinationPath);
         await using FileStream source = OpenExportSource(sourcePath);
         await StagingFile.CopyToNewFileAsync(source, destinationPath, progress, cancellationToken)
@@ -59,6 +77,53 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(destinationPath);
     }
 
+    private static void CreateExportDirectory(string path, List<string> createdDirectories)
+    {
+        Directory.CreateDirectory(path);
+        createdDirectories.Add(path);
+    }
+
+    private static void DeleteExportedFiles(List<string> createdFiles)
+    {
+        foreach (string path in createdFiles)
+        {
+            StagingFile.TryDelete(path);
+        }
+    }
+
+    private static void DeleteExportedDirectories(List<string> createdDirectories)
+    {
+        createdDirectories.Sort(static (left, right) =>
+        {
+            int byDepth = DirectoryDepth(right).CompareTo(DirectoryDepth(left));
+            if (byDepth != 0)
+            {
+                return byDepth;
+            }
+
+            return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
+        });
+
+        foreach (string path in createdDirectories)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path);
+                }
+            }
+            catch (IOException)
+            {
+                // 失敗したコピーの後始末では、元の例外を残す
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // 失敗したコピーの後始末では、元の例外を残す
+            }
+        }
+    }
+
     private static FileStream OpenExternalFile(string path, string message, string reportedPath)
     {
         try
@@ -77,17 +142,157 @@ internal sealed partial class Transaction
         }
     }
 
+    private async Task ImportDirectoryAsync(
+        string external,
+        string target,
+        IProgress<TransferProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        StagingRules.ThrowIfCopyDestinationInsideSource(external, target);
+        StagingRules.ThrowIfInsideDeleteTree(_operations, target);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, target);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, target);
+        StagingRules.ThrowIfOperationUnderDirectory(_operations, external);
+        StagingRules.ThrowIfOperationUnderDirectory(_operations, target);
+        ThrowIfCopyPathIsStaged(target);
+        EnsureCopyDestinationFree(target);
+        _locks.AcquireExclusive(_workFolder);
+        _locks.RejectForeignLocks(_workFolder);
+        _locks.Acquire(_workFolder, target);
+        int operationCount = _operations.Count;
+        int directoryCount = _createdDirectories.Count;
+        try
+        {
+            if (!Directory.Exists(external))
+            {
+                throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + external, external);
+            }
+
+            EnsureCopyDestinationFree(target);
+            CreateCopyDirectory(target);
+            DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
+            if (!IsReparsePoint(external))
+            {
+                await CopyDirectoryEntriesAsync(external, external, target, tracker, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            if (!tracker.Reported)
+            {
+                progress?.Report(new TransferProgress(0, null));
+            }
+
+            if (_operations.Count > operationCount)
+            {
+                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            RollbackAddedOperations(operationCount);
+            DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
+            throw;
+        }
+    }
+
+    private async Task ExportDirectoryAsync(
+        string sourcePath,
+        string destinationPath,
+        IProgress<TransferProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        EnsureExportDestination(destinationPath);
+        List<string> createdDirectories = new List<string>();
+        List<string> createdFiles = new List<string>();
+        try
+        {
+            if (!Directory.Exists(sourcePath))
+            {
+                throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);
+            }
+
+            EnsureExportDestination(destinationPath);
+            CreateExportDirectory(destinationPath, createdDirectories);
+            DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
+            if (!IsReparsePoint(sourcePath))
+            {
+                await ExportDirectoryEntriesAsync(
+                        sourcePath,
+                        sourcePath,
+                        destinationPath,
+                        tracker,
+                        createdDirectories,
+                        createdFiles,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            if (!tracker.Reported)
+            {
+                progress?.Report(new TransferProgress(0, null));
+            }
+        }
+        catch
+        {
+            DeleteExportedFiles(createdFiles);
+            DeleteExportedDirectories(createdDirectories);
+            throw;
+        }
+    }
+
+    private async Task ExportDirectoryEntriesAsync(
+        string sourceRoot,
+        string current,
+        string destinationRoot,
+        DirectoryCopyProgress progress,
+        List<string> createdDirectories,
+        List<string> createdFiles,
+        CancellationToken cancellationToken)
+    {
+        foreach (string entry in Directory.EnumerateFileSystemEntries(current))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsReparsePoint(entry) || WorkPath.IsThisTransactionStagingFile(entry, _transactionId))
+            {
+                continue;
+            }
+
+            string relative = System.IO.Path.GetRelativePath(sourceRoot, entry);
+            string destination = System.IO.Path.GetFullPath(System.IO.Path.Combine(destinationRoot, relative));
+            if (Directory.Exists(entry))
+            {
+                CreateExportDirectory(destination, createdDirectories);
+                await ExportDirectoryEntriesAsync(
+                        sourceRoot,
+                        entry,
+                        destinationRoot,
+                        progress,
+                        createdDirectories,
+                        createdFiles,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            if (!File.Exists(entry))
+            {
+                continue;
+            }
+
+            await using FileStream source = OpenExportSource(entry);
+            await StagingFile.CopyToNewFileAsync(source, destination, progress, cancellationToken)
+                .ConfigureAwait(false);
+            createdFiles.Add(destination);
+            progress.CompleteFile(new FileInfo(destination).Length);
+        }
+    }
+
     private FileStream OpenExportSource(string sourcePath)
     {
         string? stagingPath = FindStagingPath(sourcePath);
         if (!string.IsNullOrEmpty(stagingPath))
         {
             return OpenExternalFile(stagingPath, "コピー元のファイルが存在しません: " + sourcePath, sourcePath);
-        }
-
-        if (Directory.Exists(sourcePath))
-        {
-            throw new UnsupportedOperationException("ディレクトリのコピーは未対応です: " + sourcePath);
         }
 
         return OpenExternalFile(sourcePath, "コピー元のファイルが存在しません: " + sourcePath, sourcePath);

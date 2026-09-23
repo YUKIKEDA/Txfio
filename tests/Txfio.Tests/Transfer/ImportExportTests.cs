@@ -33,26 +33,22 @@ public sealed class ImportExportTests
     }
 
     /// <summary>
-    /// ワークフォルダの中とディレクトリは取り込めない
+    /// ワークフォルダの中は取り込めない
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダの中のファイルと、外のディレクトリがある</para>
-    /// <para>手順: それぞれ ImportAsync する</para>
-    /// <para>期待: 前者は ArgumentException、後者は UnsupportedOperationException になる</para>
+    /// <para>前提: ワークフォルダの中にファイルがある</para>
+    /// <para>手順: そのファイルを ImportAsync する</para>
+    /// <para>期待: ArgumentException になる</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_ワークフォルダの中とディレクトリは拒否すること()
+    public async Task ImportAsync_ワークフォルダの中はArgumentExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using TempDirectory outside = TempDirectory.Create();
         string inside = System.IO.Path.Combine(work.Path, "in.txt");
         await File.WriteAllTextAsync(inside, "in");
-        string directory = System.IO.Path.Combine(outside.Path, "sub");
-        Directory.CreateDirectory(directory);
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ArgumentException>(() => tx.ImportAsync(inside, "a.txt"));
-        await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.ImportAsync(directory, "a.txt"));
     }
 
     /// <summary>
