@@ -23,11 +23,25 @@ public sealed class StagingApplierTests
             work.Path,
             "b.txt." + Guid.NewGuid().ToString("D") + ".txnew");
         await File.WriteAllTextAsync(staging, "updated");
+        PathState sourceState = PathState.Capture(source);
+        PathState updated = PathState.Capture(staging);
 
         JournalOperation[] operations =
         {
-            new JournalOperation(PendingChangeKind.Update, dest, staging),
-            new JournalOperation(PendingChangeKind.Move, source, stagingPath: null, dest),
+            new JournalOperation(
+                PendingChangeKind.Update,
+                dest,
+                staging,
+                before: sourceState,
+                after: updated),
+            new JournalOperation(
+                PendingChangeKind.Move,
+                source,
+                newPath: dest,
+                before: sourceState,
+                after: PathState.Absent,
+                destBefore: PathState.Absent,
+                destAfter: sourceState),
         };
 
         Assert.True(StagingApplier.TryApplyAll(operations));

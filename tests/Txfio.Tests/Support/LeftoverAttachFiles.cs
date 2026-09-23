@@ -28,13 +28,15 @@ internal sealed class LeftoverAttachFiles
         string targetPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, fileName));
         await File.WriteAllTextAsync(targetPath, content);
         FileInfo info = new FileInfo(targetPath);
+        string state = "{\"exists\":true,\"length\":" + info.Length.ToString(CultureInfo.InvariantCulture) +
+            ",\"lastWriteTimeUtc\":" + JsonSerializer.Serialize(info.LastWriteTimeUtc) + "}";
+        string after = committing ? ",\"after\":" + state : string.Empty;
 
         string committingLiteral = committing ? "true" : "false";
         string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") +
             "\",\"committing\":" + committingLiteral +
             ",\"operations\":[{\"kind\":\"Attach\",\"path\":" + JsonSerializer.Serialize(targetPath) +
-            ",\"expectedLength\":" + info.Length.ToString(CultureInfo.InvariantCulture) +
-            ",\"expectedLastWriteTimeUtc\":" + JsonSerializer.Serialize(info.LastWriteTimeUtc) + "}]}";
+            ",\"before\":" + state + after + "}]}";
         await File.WriteAllTextAsync(journalPath, json);
         return new LeftoverAttachFiles(journalPath, targetPath);
     }

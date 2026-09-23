@@ -35,11 +35,17 @@ internal sealed class LeftoverAddFiles
             System.IO.Path.GetFileName(targetPath) + "." + transactionId.ToString("D") + ".txnew");
         await File.WriteAllTextAsync(stagingPath, content);
 
+        string states = string.Empty;
+        if (committing)
+        {
+            states = ",\"before\":" + SnapshotJson.Absent + ",\"after\":" + SnapshotJson.File(stagingPath);
+        }
+
         string committingLiteral = committing ? "true" : "false";
         string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") +
             "\",\"committing\":" + committingLiteral +
             ",\"operations\":[{\"kind\":\"Add\",\"path\":" + JsonSerializer.Serialize(targetPath) +
-            ",\"stagingPath\":" + JsonSerializer.Serialize(stagingPath) + "}]}";
+            ",\"stagingPath\":" + JsonSerializer.Serialize(stagingPath) + states + "}]}";
         await File.WriteAllTextAsync(journalPath, json);
         return new LeftoverAddFiles(journalPath, stagingPath, targetPath);
     }

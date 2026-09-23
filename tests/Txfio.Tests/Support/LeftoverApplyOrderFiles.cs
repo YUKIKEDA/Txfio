@@ -37,14 +37,22 @@ internal sealed class LeftoverApplyOrderFiles
         string stagingPath = destPath + "." + transactionId.ToString("D") + ".txnew";
         await File.WriteAllTextAsync(sourcePath, "moved");
         await File.WriteAllTextAsync(stagingPath, "updated");
+        string sourceState = SnapshotJson.File(sourcePath);
+        string updatedState = SnapshotJson.File(stagingPath);
 
         string committingLiteral = committing ? "true" : "false";
         string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") +
             "\",\"committing\":" + committingLiteral +
             ",\"operations\":[{\"kind\":\"Update\",\"path\":" + JsonSerializer.Serialize(destPath) +
             ",\"stagingPath\":" + JsonSerializer.Serialize(stagingPath) +
+            ",\"before\":" + sourceState +
+            ",\"after\":" + updatedState +
             "},{\"kind\":\"Move\",\"path\":" + JsonSerializer.Serialize(sourcePath) +
-            ",\"newPath\":" + JsonSerializer.Serialize(destPath) + "}]}";
+            ",\"newPath\":" + JsonSerializer.Serialize(destPath) +
+            ",\"before\":" + sourceState +
+            ",\"after\":" + SnapshotJson.Absent +
+            ",\"destBefore\":" + SnapshotJson.Absent +
+            ",\"destAfter\":" + sourceState + "}]}";
         await File.WriteAllTextAsync(journalPath, json);
         return new LeftoverApplyOrderFiles(journalPath, sourcePath, destPath, stagingPath);
     }

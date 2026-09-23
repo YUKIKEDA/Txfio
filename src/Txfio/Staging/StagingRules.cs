@@ -135,25 +135,6 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 対象ファイルのサイズと最終更新日時が期待どおりかを判定する
-    /// </summary>
-    /// <param name="path">対象パス</param>
-    /// <param name="expectedLength">期待するサイズ</param>
-    /// <param name="expectedLastWriteTimeUtc">期待する最終更新日時（UTC）</param>
-    /// <returns>ファイルがあり、サイズと最終更新日時が一致すれば <see langword="true"/></returns>
-    internal static bool MatchesExpectedState(string path, long? expectedLength, DateTime? expectedLastWriteTimeUtc)
-    {
-        if (!expectedLength.HasValue || !expectedLastWriteTimeUtc.HasValue || !File.Exists(path))
-        {
-            return false;
-        }
-
-        FileInfo info = new FileInfo(path);
-        return info.Length == expectedLength.Value
-            && info.LastWriteTimeUtc == expectedLastWriteTimeUtc.Value;
-    }
-
-    /// <summary>
     /// 対象の親ディレクトリが存在するかを検証する
     /// </summary>
     /// <param name="targetPath">対象パス</param>

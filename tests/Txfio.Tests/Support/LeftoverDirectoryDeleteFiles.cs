@@ -26,11 +26,17 @@ internal sealed class LeftoverDirectoryDeleteFiles
         string targetPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, directoryName));
         Directory.CreateDirectory(targetPath);
 
+        string states = string.Empty;
+        if (committing)
+        {
+            states = ",\"before\":" + SnapshotJson.Directory + ",\"after\":" + SnapshotJson.Absent;
+        }
+
         string committingLiteral = committing ? "true" : "false";
         string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") +
             "\",\"committing\":" + committingLiteral +
             ",\"operations\":[{\"kind\":\"Delete\",\"path\":" + JsonSerializer.Serialize(targetPath) +
-            ",\"isDirectory\":true}]}";
+            ",\"isDirectory\":true" + states + "}]}";
         await File.WriteAllTextAsync(journalPath, json);
         return new LeftoverDirectoryDeleteFiles(journalPath, targetPath);
     }

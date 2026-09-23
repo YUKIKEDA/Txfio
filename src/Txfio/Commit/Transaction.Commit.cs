@@ -18,11 +18,13 @@ internal sealed partial class Transaction
             return CommitResult.Succeeded;
         }
 
-        if (!TryValidateForCommit())
+        if (!OperationOutcomes.TryStamp(_operations, _transactionId, out JournalOperation[] stamped))
         {
             return CommitResult.Failed;
         }
 
+        _operations.Clear();
+        _operations.AddRange(stamped);
         await PersistAsync(committing: true, CancellationToken.None).ConfigureAwait(false);
 
         bool conflict = !StagingApplier.TryApplyAll(_operations);
@@ -35,77 +37,5 @@ internal sealed partial class Transaction
         _committed = true;
         _operations.Clear();
         return conflict ? CommitResult.PartialConflict : CommitResult.Succeeded;
-    }
-
-    private bool TryValidateForCommit()
-    {
-        foreach (JournalOperation operation in _operations)
-        {
-            if (operation.Kind == PendingChangeKind.Delete)
-            {
-                if (operation.IsDirectory)
-                {
-                    if (!StagingRules.MatchesDirectoryDeletePreconditions(
-                        operation.Path,
-                        _operations,
-                        _transactionId))
-                    {
-                        return false;
-                    }
-
-                    continue;
-                }
-
-                if (!File.Exists(operation.Path))
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if (operation.Kind == PendingChangeKind.Move)
-            {
-                if (string.IsNullOrEmpty(operation.NewPath)
-                    || !File.Exists(operation.Path)
-                    || File.Exists(operation.NewPath))
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if (operation.Kind == PendingChangeKind.Attach)
-            {
-                if (!StagingRules.MatchesExpectedState(
-                    operation.Path,
-                    operation.ExpectedLength,
-                    operation.ExpectedLastWriteTimeUtc))
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
-            {
-                return false;
-            }
-
-            bool targetExists = File.Exists(operation.Path);
-            if (operation.Kind == PendingChangeKind.Add && targetExists)
-            {
-                return false;
-            }
-
-            if (operation.Kind == PendingChangeKind.Update && !targetExists)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

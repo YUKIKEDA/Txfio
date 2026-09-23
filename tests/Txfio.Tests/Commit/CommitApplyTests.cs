@@ -104,6 +104,57 @@ public sealed class CommitApplyTests
     }
 
     /// <summary>
+    /// Update のあと外部が内容を変えても、Commit 直前のディスクを Before にして成功する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Update したあと、対象の内容を外部が変えている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Succeeded で対象は Update の内容</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_Update後に内容が変わってもSucceededになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.UpdateAsync("a.txt", content);
+        await File.WriteAllTextAsync(target, "external");
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal("new", await File.ReadAllTextAsync(target));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+    }
+
+    /// <summary>
+    /// Add の対象が検証時に既にあると Failed になり、実体は触らない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add したあと、対象パスをディレクトリにしている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Failed で、ディレクトリと .txnew は残り、journal は Committing にならない</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_Add対象が既にあるとFailedになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
+        await tx.AddAsync("a.txt", content);
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        Directory.CreateDirectory(target);
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Failed, result);
+        Assert.True(Directory.Exists(target));
+        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        string journal = Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        Assert.Contains("\"committing\":false", await File.ReadAllTextAsync(journal), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Add と Update と Delete を混ぜたコミットはすべて反映する
     /// </summary>
     /// <remarks>
@@ -135,27 +186,28 @@ public sealed class CommitApplyTests
     }
 
     /// <summary>
-    /// 適用中に競合したら PartialConflict とし、ジャーナルを残す
+    /// 検証は通るが Update の適用が失敗したら PartialConflict とし、ジャーナルを残す
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add したあと、対象パスがディレクトリになっていて Move できない</para>
+    /// <para>前提: Update したあと、対象ファイルを共有読み取りで開いたままにしている</para>
     /// <para>手順: CommitAsync する</para>
-    /// <para>期待: PartialConflict で、committing の journal と .txnew が残る</para>
+    /// <para>期待: PartialConflict で、committing の journal と .txnew が残り、対象は元の内容</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_適用に失敗するとPartialConflictでjournalが残ること()
     {
         await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "old");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
-        await tx.AddAsync("a.txt", content);
-
-        string target = System.IO.Path.Combine(work.Path, "a.txt");
-        Directory.CreateDirectory(target);
+        await tx.UpdateAsync("a.txt", content);
+        await using FileStream locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
 
         CommitResult result = await tx.CommitAsync();
         Assert.Equal(CommitResult.PartialConflict, result);
         Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Equal("old", await File.ReadAllTextAsync(target));
     }
 }

@@ -14,8 +14,10 @@ internal sealed class JournalOperation
     /// <param name="path">対象パス</param>
     /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Delete / Move / Attach は null）</param>
     /// <param name="newPath">Move の移動先（それ以外は null）</param>
-    /// <param name="expectedLength">Attach 時点のサイズ（それ以外は null）</param>
-    /// <param name="expectedLastWriteTimeUtc">Attach 時点の最終更新日時（UTC、それ以外は null）</param>
+    /// <param name="before">対象パスの適用直前状態（未記録なら null）</param>
+    /// <param name="after">対象パスの適用直後状態（未記録なら null）</param>
+    /// <param name="destBefore">Move の移動先の適用直前状態（それ以外は null）</param>
+    /// <param name="destAfter">Move の移動先の適用直後状態（それ以外は null）</param>
     /// <param name="isDirectory">Delete の対象がディレクトリなら <see langword="true"/></param>
     [JsonConstructor]
     public JournalOperation(
@@ -23,16 +25,20 @@ internal sealed class JournalOperation
         string path,
         string? stagingPath = null,
         string? newPath = null,
-        long? expectedLength = null,
-        DateTime? expectedLastWriteTimeUtc = null,
+        PathState? before = null,
+        PathState? after = null,
+        PathState? destBefore = null,
+        PathState? destAfter = null,
         bool isDirectory = false)
     {
         Kind = kind;
         Path = path;
         StagingPath = stagingPath;
         NewPath = newPath;
-        ExpectedLength = expectedLength;
-        ExpectedLastWriteTimeUtc = expectedLastWriteTimeUtc;
+        Before = before;
+        After = after;
+        DestBefore = destBefore;
+        DestAfter = destAfter;
         IsDirectory = isDirectory;
     }
 
@@ -57,20 +63,58 @@ internal sealed class JournalOperation
     public string? NewPath { get; }
 
     /// <summary>
-    /// Attach 時点のサイズ（それ以外は null）
+    /// 対象パスの適用直前状態（未記録なら null）
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public long? ExpectedLength { get; }
+    public PathState? Before { get; }
 
     /// <summary>
-    /// Attach 時点の最終更新日時（UTC、それ以外は null）
+    /// 対象パスの適用直後状態（未記録なら null）
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public DateTime? ExpectedLastWriteTimeUtc { get; }
+    public PathState? After { get; }
+
+    /// <summary>
+    /// Move の移動先の適用直前状態（それ以外は null）
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PathState? DestBefore { get; }
+
+    /// <summary>
+    /// Move の移動先の適用直後状態（それ以外は null）
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PathState? DestAfter { get; }
 
     /// <summary>
     /// Delete の対象がディレクトリかどうか
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsDirectory { get; }
+
+    /// <summary>
+    /// Before / After を付けたコピーを返す
+    /// </summary>
+    /// <param name="before">対象パスの適用直前状態</param>
+    /// <param name="after">対象パスの適用直後状態</param>
+    /// <param name="destBefore">Move の移動先の適用直前状態</param>
+    /// <param name="destAfter">Move の移動先の適用直後状態</param>
+    /// <returns>状態を記録した操作</returns>
+    internal JournalOperation WithOutcome(
+        PathState before,
+        PathState after,
+        PathState? destBefore = null,
+        PathState? destAfter = null)
+    {
+        return new JournalOperation(
+            Kind,
+            Path,
+            StagingPath,
+            NewPath,
+            before,
+            after,
+            destBefore,
+            destAfter,
+            IsDirectory);
+    }
 }
