@@ -124,6 +124,19 @@ internal static class OperationOutcomes
 
         PathState before = Current(projected, operation.Path);
         PathState destBefore = Current(projected, operation.NewPath);
+        if (operation.IsDirectory)
+        {
+            if (!before.IsDirectory || destBefore.Exists)
+            {
+                return false;
+            }
+
+            projected[operation.Path] = PathState.Absent;
+            projected[operation.NewPath] = before;
+            stamped = operation.WithOutcome(before, PathState.Absent, PathState.Absent, before);
+            return true;
+        }
+
         if (!before.IsFile || destBefore.Exists)
         {
             return false;

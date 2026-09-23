@@ -38,7 +38,7 @@ public sealed class PathLockTests
     /// <remarks>
     /// <para>前提: 2つのトランザクションを開始している</para>
     /// <para>手順: それぞれ別のパスを Add する</para>
-    /// <para>期待: どちらもステージングされ、ロックファイルが2つある</para>
+    /// <para>期待: どちらもステージングされ、ロックファイルが 3 つある</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_別パスは同時にステージングできること()
@@ -53,7 +53,7 @@ public sealed class PathLockTests
 
         string lockDirectory = System.IO.Path.GetDirectoryName(
             PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt")))!;
-        Assert.Equal(2, Directory.GetFiles(lockDirectory, "*.lock").Length);
+        Assert.Equal(3, Directory.GetFiles(lockDirectory, "*.lock").Length);
         Assert.Single(first.GetPendingChanges());
         Assert.Single(second.GetPendingChanges());
     }
@@ -64,7 +64,7 @@ public sealed class PathLockTests
     /// <remarks>
     /// <para>前提: 既存ファイルを Update している</para>
     /// <para>手順: 同じトランザクションでもう一度 Update する</para>
-    /// <para>期待: 例外にならず、ロックファイルは1つのままである</para>
+    /// <para>期待: 例外にならず、ロックファイルは哨兵と対象の 2 つのままである</para>
     /// </remarks>
     [Fact]
     public async Task UpdateAsync_同じトランザクションの再ステージは競合しないこと()
@@ -78,7 +78,7 @@ public sealed class PathLockTests
         await tx.UpdateAsync("a.txt", first);
         await tx.UpdateAsync("a.txt", second);
 
-        Assert.Single(Directory.GetFiles(System.IO.Path.GetDirectoryName(PathLockSet.FilePath(work.Path, target))!, "*.lock"));
+        Assert.Equal(2, Directory.GetFiles(System.IO.Path.GetDirectoryName(PathLockSet.FilePath(work.Path, target))!, "*.lock").Length);
         Assert.Single(tx.GetPendingChanges());
     }
 
@@ -261,24 +261,26 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリ Move は新しいロックを取らない
+    /// ディレクトリ Move は他のトランザクションの変更を止める
     /// </summary>
     /// <remarks>
     /// <para>前提: ディレクトリがある</para>
     /// <para>手順: Move してから、別トランザクションがそのディレクトリを Delete する</para>
-    /// <para>期待: Move は UnsupportedOperationException になり、その時点ではロックフォルダが無く、そのあと Delete は予約できる</para>
+    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ディレクトリでは新しいロックを取らないこと()
+    public async Task MoveAsync_ディレクトリはワークフォルダで他の変更を止めること()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
         await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await Assert.ThrowsAsync<UnsupportedOperationException>(() => first.MoveAsync("sub", "other"));
-        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, ".txfio", "locks")));
-        await second.DeleteAsync("sub");
-        Assert.Single(second.GetPendingChanges());
+        await first.MoveAsync("sub", "other");
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => second.DeleteAsync("sub"));
+
+        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(PendingChangeKind.Move, Assert.Single(first.GetPendingChanges()).Kind);
     }
 
     /// <summary>

@@ -35,7 +35,7 @@ public sealed class ProcessLockTests
     /// <remarks>
     /// <para>前提: 子プロセスが b.txt を Add してロックを持っている</para>
     /// <para>手順: 親プロセスが a.txt を Add する</para>
-    /// <para>期待: 両方ステージングされ、ロックファイルが 2 つある</para>
+    /// <para>期待: 両方ステージングされ、ロックファイルが 3 つある</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_別プロセスが別パスを押さえていてもステージングできること()
@@ -51,7 +51,7 @@ public sealed class ProcessLockTests
 
         string lockDirectory = System.IO.Path.GetDirectoryName(
             PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt")))!;
-        Assert.Equal(2, Directory.GetFiles(lockDirectory, "*.lock").Length);
+        Assert.Equal(3, Directory.GetFiles(lockDirectory, "*.lock").Length);
         Assert.Single(parent.GetPendingChanges());
         await child.StopAsync();
     }
