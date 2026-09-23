@@ -15,7 +15,7 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 2 並行性・ロック | 完了 |
 | Phase 3 拡張と公開 | 進行中（次は設計 Issue #43） |
 
-Phase 3 の実装（Issue #33、#35、#37、#39）は main にある。次は全削除・ディレクトリ Attach・コピーの設計（Issue #43）。実装はそのマージ後。
+Phase 3 の実装（Issue #33、#35、#37、#39）と利用者向け README（Issue #41）は main にある。次は全削除・ディレクトリ Attach・コピーの設計（Issue #43）。実装はそのマージ後。そのあと公開（リポジトリ public と nuget.org）。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -55,6 +55,7 @@ Phase 3 の実装（Issue #33、#35、#37、#39）は main にある。次は全
 - [x] Issue #35: Add / Update のコピー進捗（`TransferProgress`。退避とジャーナルは通知しない。コミット件数は含めない）
 - [x] Issue #37: Import / Export（外からのコピー＋Add、外への読み取りコピー。コピー元は消さない）
 - [x] Issue #39: ディレクトリ Move（1 回の rename。実行中はワークフォルダの哨兵を排他）
+- [x] Issue #41: 利用者向け README（できること、できないこと、TxFileManager と SQLite との比較）
 - Issue #43: 設計: 全削除、ディレクトリ Attach、Copy、ディレクトリの Import / Export（実装は含めない）
 
 ## 公開（Phase 3 完了後）
