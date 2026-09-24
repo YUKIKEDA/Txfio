@@ -13,9 +13,9 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 0 リポジトリ基盤 | 完了 |
 | Phase 1 MVP | 完了 |
 | Phase 2 並行性・ロック | 完了 |
-| Phase 3 拡張と公開 | 進行中（次は ZIP アーカイブの README Issue #115） |
+| Phase 3 拡張と公開 | 進行中（次は ZIP の作成で入れるファイルと名前を組で指定する Issue #119） |
 
-Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、#67、#73、#79）と利用者向け README（Issue #41、#54、#69、#75）、設計（Issue #43、#53、#65、#71、#77、#109）は main にある。次は ZIP アーカイブの README（Issue #115）。公開（nuget.org）はその後。
+Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、#67、#73、#79）と利用者向け README（Issue #41、#54、#69、#75）、設計（Issue #43、#53、#65、#71、#77、#109、#117）は main にある。次は組で指定する作成（Issue #119）。公開（nuget.org）はその後。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -75,7 +75,9 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #109: 設計: ZIP アーカイブの作成と展開（Create / Export / Extract / Import の 4 メソッド。実装は含めない）
 - [x] Issue #111: ZIP アーカイブの作成（`CreateArchiveAsync` / `ExportArchiveAsync`）
 - [x] Issue #113: ZIP アーカイブの展開（`ExtractArchiveAsync` / `ImportArchiveAsync`。エントリ名は書く前に全部検証する）
-- Issue #115: README に ZIP アーカイブの操作を書く
+- [x] Issue #115: README に ZIP アーカイブの操作を書く
+- [x] Issue #117: 設計: ZIP の作成で、入れるファイルと名前を組で指定する（実装は含めない）
+- Issue #119: ZIP の作成で、入れるファイルと名前を組で指定する
 
 ## 公開（Phase 3 完了後）
 
