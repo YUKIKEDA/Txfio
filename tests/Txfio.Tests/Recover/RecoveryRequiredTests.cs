@@ -51,7 +51,7 @@ public sealed class RecoveryRequiredTests : IDisposable
     /// <remarks>
     /// <para>前提: d/old.txt がある。tx2 を開始したあと、tx1 が d の DeleteTree を AfterCommitting で止めて Dispose している</para>
     /// <para>手順: tx2 が d/important.txt を Add して CommitAsync し、Dispose してから RecoverAsync する</para>
-    /// <para>期待: コミットは RecoveryRequiredException で d/important.txt は作られない。Recover は RolledForward で d は消え、ジャーナルは残らない</para>
+    /// <para>期待: コミットは RecoveryRequiredException になり、d/important.txt は作られない。Recover は RolledForward で d は消え、ジャーナルは残らない</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_開始後に別トランザクションが落ちるとRecoveryRequiredExceptionで実体に触れないこと()

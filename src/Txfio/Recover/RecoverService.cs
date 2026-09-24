@@ -69,7 +69,7 @@ internal static class RecoverService
                     bool appliedAll = StagingApplier.TryApplyAll(document.Operations);
                     if (!appliedAll)
                     {
-                        // 結果は 1 回だけ伝え、次の Recover でやり直さない
+                        // 結果は 1 回だけ返し、次の Recover でやり直さない
                         StagingApplier.DeleteStagingFiles(document.Operations);
                         conflictDetected = true;
                     }

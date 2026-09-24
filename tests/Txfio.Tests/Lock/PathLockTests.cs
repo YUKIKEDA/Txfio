@@ -141,8 +141,8 @@ public sealed class PathLockTests
     /// </summary>
     /// <remarks>
     /// <para>前提: Add したあと、ジャーナルを共有なしで開いている</para>
-    /// <para>手順: DisposeAsync する</para>
-    /// <para>期待: IOException になり、別トランザクションが同じパスを Add できる</para>
+    /// <para>手順: DisposeAsync し、BeginAsync する。ジャーナルを閉じてから RecoverAsync し、別トランザクションが同じパスを Add する</para>
+    /// <para>期待: Dispose は IOException になり、BeginAsync は RecoveryRequiredException（Path はワークフォルダ）。Recover は RolledBack で、そのあと Add できる</para>
     /// </remarks>
     [Fact]
     public async Task DisposeAsync_ジャーナル削除に失敗してもロックを閉じること()
@@ -152,9 +152,17 @@ public sealed class PathLockTests
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await first.AddAsync("a.txt", content);
         string journal = Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
-        using FileStream hold = new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None);
+        using (FileStream hold = new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.True(hold.CanRead);
+            await Assert.ThrowsAsync<IOException>(async () => await first.DisposeAsync());
 
-        await Assert.ThrowsAsync<IOException>(async () => await first.DisposeAsync());
+            RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
+                () => global::Txfio.Txfio.BeginAsync(work.Path));
+            Assert.Equal(work.Path, required.Path);
+        }
+
+        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
 
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream again = LeftoverAddFiles.Utf8Stream("other");

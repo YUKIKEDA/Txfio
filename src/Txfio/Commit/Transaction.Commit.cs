@@ -20,7 +20,7 @@ internal sealed partial class Transaction
             return CommitResult.Succeeded;
         }
 
-        // 開始のあとで落ちたトランザクションの残骸にも、確定したデータを消させない
+        // 開始後に落ちたトランザクションの残骸でも、確定したデータは消さない
         StaleJournals.ThrowIfAny(_workFolder);
 
         if (!OperationOutcomes.TryStamp(_operations, _transactionId, out JournalOperation[] stamped))
@@ -35,7 +35,7 @@ internal sealed partial class Transaction
 
         bool conflict = !StagingApplier.TryApplyAll(_operations);
 
-        // 衝突しても残さない。残すと、あとの Recover が他のトランザクションの確定したパスへやり直す
+        // 衝突しても残さない。残すと、あとの Recover が他のトランザクションの確定したパスを対象にやり直す
         if (conflict)
         {
             StagingApplier.DeleteStagingFiles(_operations);
