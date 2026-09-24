@@ -187,15 +187,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// メタデータフォルダ配下の Update / Attach は失敗する
+    /// メタデータフォルダ配下の Update は失敗する
     /// </summary>
     /// <remarks>
     /// <para>前提: .txfio 配下にファイルがある</para>
-    /// <para>手順: UpdateAsync と AttachAsync する</para>
-    /// <para>期待: どちらも InvalidOperationException になる</para>
+    /// <para>手順: UpdateAsync する</para>
+    /// <para>期待: InvalidOperationException になり、ファイルは残る</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateとAttach_メタデータフォルダ配下だとInvalidOperationExceptionになること()
+    public async Task Update_メタデータフォルダ配下だとInvalidOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
@@ -204,7 +204,6 @@ public sealed class DirectoryDeleteTests
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.UpdateAsync(".txfio/foo", content));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AttachAsync(".txfio/foo"));
         Assert.Equal("keep", await File.ReadAllTextAsync(inside));
         Assert.Empty(tx.GetPendingChanges());
     }

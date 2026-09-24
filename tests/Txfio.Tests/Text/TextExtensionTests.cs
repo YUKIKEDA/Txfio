@@ -98,30 +98,6 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// Attach のあとに書くと Update になる
-    /// </summary>
-    /// <remarks>
-    /// <para>前提: a.txt を Attach している</para>
-    /// <para>手順: WriteAllTextAsync する</para>
-    /// <para>期待: pending は Update で、ディスクは Attach 時点のまま</para>
-    /// </remarks>
-    [Fact]
-    public async Task WriteAllTextAsync_AttachのあとはUpdateになること()
-    {
-        await using TempDirectory work = TempDirectory.Create();
-        string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await tx.AttachAsync("a.txt");
-
-        await tx.WriteAllTextAsync("a.txt", "new");
-
-        Assert.Equal(PendingChangeKind.Update, Assert.Single(tx.GetPendingChanges()).Kind);
-        Assert.Equal("new", await tx.ReadAllTextAsync("a.txt"));
-        Assert.Equal("old", await File.ReadAllTextAsync(target));
-    }
-
-    /// <summary>
     /// null の文字列は空として Add する
     /// </summary>
     /// <remarks>

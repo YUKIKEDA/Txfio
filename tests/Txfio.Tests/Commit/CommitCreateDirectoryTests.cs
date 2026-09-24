@@ -59,7 +59,7 @@ public sealed class CommitCreateDirectoryTests
     /// 他の操作の検証失敗でも、作ったディレクトリは破棄で消える
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory と、サイズが変わったファイルの Attach がある</para>
+    /// <para>前提: CreateDirectory と、コミット前に消されたファイルの Update がある</para>
     /// <para>手順: CommitAsync してから破棄する</para>
     /// <para>期待: Failed で、drop と中のファイルが無い</para>
     /// </remarks>
@@ -67,15 +67,16 @@ public sealed class CommitCreateDirectoryTests
     public async Task CommitAsync_検証失敗の破棄でディレクトリが消えること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        string attached = System.IO.Path.Combine(work.Path, "a.txt");
+        string updated = System.IO.Path.Combine(work.Path, "a.txt");
         string child = System.IO.Path.Combine(work.Path, "drop", "b.txt");
-        await File.WriteAllTextAsync(attached, "old");
+        await File.WriteAllTextAsync(updated, "old");
         await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
         {
             await tx.CreateDirectoryAsync("drop");
             await File.WriteAllTextAsync(child, "gone");
-            await tx.AttachAsync("a.txt");
-            await File.WriteAllTextAsync(attached, "changed");
+            await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+            await tx.UpdateAsync("a.txt", content);
+            File.Delete(updated);
 
             CommitResult result = await tx.CommitAsync();
 

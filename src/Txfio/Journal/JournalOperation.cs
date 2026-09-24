@@ -12,7 +12,7 @@ internal sealed class JournalOperation
     /// </summary>
     /// <param name="kind">操作の種類</param>
     /// <param name="path">対象パス</param>
-    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Delete / Move / Attach は null）</param>
+    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Add / Update 以外は null）</param>
     /// <param name="newPath">Move の移動先（それ以外は null）</param>
     /// <param name="before">対象パスの適用直前状態（未記録なら null）</param>
     /// <param name="after">対象パスの適用直後状態（未記録なら null）</param>
@@ -53,7 +53,7 @@ internal sealed class JournalOperation
     public string Path { get; }
 
     /// <summary>
-    /// ステージングファイル（`.txnew`）のパス（Delete / Move / Attach は null）
+    /// ステージングファイル（`.txnew`）のパス（Add / Update 以外は null）
     /// </summary>
     public string? StagingPath { get; }
 

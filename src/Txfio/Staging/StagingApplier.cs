@@ -6,7 +6,7 @@ namespace Txfio;
 internal static class StagingApplier
 {
     /// <summary>
-    /// Add / Move / Attach / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する
+    /// Add / Move / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
@@ -28,7 +28,7 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// Add / Move / Attach / CreateDirectory、Update、Delete と DeleteTree（深い順）の順に並べる
+    /// Add / Move / CreateDirectory、Update、Delete と DeleteTree（深い順）の順に並べる
     /// </summary>
     /// <param name="operations">操作一覧</param>
     /// <returns>適用順の操作</returns>
@@ -39,7 +39,6 @@ internal static class StagingApplier
         {
             if (operation.Kind == PendingChangeKind.Add
                 || operation.Kind == PendingChangeKind.Move
-                || operation.Kind == PendingChangeKind.Attach
                 || operation.Kind == PendingChangeKind.CreateDirectory)
             {
                 ordered.Add(operation);
@@ -118,8 +117,7 @@ internal static class StagingApplier
                 : TryMove(operation.Path, operation.NewPath!);
         }
 
-        if (operation.Kind == PendingChangeKind.Attach
-            || operation.Kind == PendingChangeKind.CreateDirectory)
+        if (operation.Kind == PendingChangeKind.CreateDirectory)
         {
             return true;
         }
