@@ -35,6 +35,7 @@ CommitResult result = await tx.CommitAsync();
 ## できないこと
 
 - ディレクトリの `ReadAsync`。渡すと `UnsupportedOperationException` です
+- ZIP 以外のアーカイブ（tar、GZip 単体など）。ZIP の作成と展開では、既存のファイルへの上書きや、既存のディレクトリへの展開もしません
 - ボリュームをまたぐ `MoveAsync`。コピーと削除には切り替えません。ファイルなら `ImportAsync` と `ExportAsync` を明示的に使います
 - 複数ファイルが、外から見て一時点で揃うこと。コミット中は、一部だけ新しい状態が見えます
 - コミット開始後の取り消し。適用が始まったら最後まで進め、落ちた分は `RecoverAsync` の対象です
@@ -56,6 +57,10 @@ CommitResult result = await tx.CommitAsync();
 | `CopyAsync`                                | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ                        |
 | `ImportAsync`                              | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない                                           |
 | `ExportAsync`                              | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない                       |
+| `CreateArchiveAsync`                       | ワークフォルダ内のファイルまたはディレクトリから ZIP を作り、`.txnew` に書いて Add として残す                                                      |
+| `ExportArchiveAsync`                       | 読み取りと同じバイトで、ワークフォルダの外に ZIP を作る。ジャーナルには残さず、ロックもしない                                                      |
+| `ExtractArchiveAsync`                      | ワークフォルダ内の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す                                                                   |
+| `ImportArchiveAsync`                       | ワークフォルダの外の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す。ZIP は消さない                                                 |
 | `ReadAsync`                                | `.txnew` があればそれ、無ければ本物のファイル。ロックは取らない                                                                                    |
 | `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                                                 |
 | `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                                       |
@@ -64,7 +69,7 @@ CommitResult result = await tx.CommitAsync();
 | `CommitAsync`                              | 検証してから rename と削除を適用する                                                                                                               |
 | `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める                                                                                                   |
 
-親ディレクトリの自動作成はしません。`CopyAsync` と、ディレクトリの `ImportAsync` / `ExportAsync` だけ、コピー先のディレクトリ自身とその空のサブディレクトリを作ります。`CreateDirectoryAsync` は、対象の空ディレクトリだけを作り、親は作りません。メタデータフォルダ `.txfio` とその配下は操作できません。
+親ディレクトリの自動作成はしません。`CopyAsync` と、ディレクトリの `ImportAsync` / `ExportAsync` だけ、コピー先のディレクトリ自身とその空のサブディレクトリを作ります。`ExtractArchiveAsync` / `ImportArchiveAsync` も、展開先のディレクトリ自身とエントリにあるディレクトリを作ります。`CreateDirectoryAsync` は、対象の空ディレクトリだけを作り、親は作りません。メタデータフォルダ `.txfio` とその配下は操作できません。
 
 ## トランザクションの流れ
 
@@ -151,9 +156,9 @@ flowchart TD
 
 このロックは、Txfio の利用者同士の協調です。素の `File` API やエクスプローラーは止めません。
 
-変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` はロックを開きも消しもしません。
+変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの `CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` はロックを開きも消しもしません。
 
-ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync` と `ExportAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
+ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 
 ## AddAsync
 
@@ -398,6 +403,46 @@ flowchart TD
   missing -->|いいえ| out["外へコピー。ジャーナルには残さない"]
 ```
 
+## ZIP アーカイブ
+
+ZIP は `System.IO.Compression` で読み書きし、ほかの操作と同じトランザクションに入ります。ワークフォルダの中と外の区別は、Copy / Import / Export と同じです。反対側のパスを渡すと `ArgumentException` です。ZIP のパスや展開先が既にある、または親が無いときは `ExternalConflictException` で、上書きも混ぜ込みもしません。
+
+| API                   | 読むもの                                          | 書くもの                                 | ロック                                                                  |
+| --------------------- | ------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
+| `CreateArchiveAsync`  | ディスク上のファイル。`CopyAsync` と同じ          | 中の ZIP を 1 件の Add                   | ディレクトリならワークフォルダ全体を排他。ファイルなら共有。元と ZIP も |
+| `ExportArchiveAsync`  | 読み取りと同じバイト。Update の内容が入る         | 外の ZIP。成功した ZIP は破棄しても残る  | しない                                                                  |
+| `ExtractArchiveAsync` | 中の ZIP を読み取りと同じバイトで。未コミットも可 | 新しいディレクトリへ、ファイルごとの Add | ワークフォルダ全体を排他。展開先も                                      |
+| `ImportArchiveAsync`  | 外の ZIP                                          | 同上                                     | 同上                                                                    |
+
+作成では、`CompressionLevel`（省略時は `Optimal`）と、ディレクトリ名をエントリのルートに含めるか（省略時は含めない）を選べます。空のサブディレクトリはディレクトリエントリになり、エントリの日時は元のファイルの最終更新日時です。エントリ名は UTF-8 で書きます。進捗は圧縮前のバイト数で、`TotalBytes` は null です。
+
+`ExportArchiveAsync` は `ExportAsync` と同じく、ディレクトリでは未コミットの Add を含みません。ファイルを直接渡せば、Add した内容も入ります。
+
+展開では、展開したファイルの最終更新日時をエントリの日時にします。UTF-8 の印が無い古い ZIP（Windows で作った Shift_JIS 名など）は、`entryNameEncoding` で読み方を指定します。進捗は展開後のバイト数で、`TotalBytes` はエントリの合計サイズです。
+
+失敗、取り消し、破棄では、作りかけの `.txnew`（Export なら外の ZIP）と、この操作が作ったディレクトリを消します。
+
+```csharp
+await tx.ExportArchiveAsync("reports", @"D:\outgoing\reports.zip");
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+await tx.ImportArchiveAsync(@"D:\incoming\drop.zip", "incoming", Encoding.GetEncoding(932));
+```
+
+展開は、書き始める前にエントリ名を全部確かめます。1 つでも次に当たれば、何もステージせず、展開先も作らずに `InvalidDataException` です。展開先の外へ出る名前（`..`、先頭の `/`、ドライブ指定）、Windows のパスに使えない名前（`<>:"|?*`、末尾の `.` や空白、`CON` や `NUL` などの予約名）、`.txnew` で終わる名前、大文字と小文字だけが違う重複、同じ名前のファイルとディレクトリです。ZIP 自体が壊れているときも `InvalidDataException` です。
+
+```mermaid
+flowchart TD
+  ext["ExtractArchiveAsync / ImportArchiveAsync"] --> side{"ZIP か展開先が反対側?"}
+  side -->|はい| arg["ArgumentException"]
+  side -->|いいえ| busy{"展開先の配下に操作がある、または操作済み?"}
+  busy -->|はい| inv["InvalidOperationException"]
+  busy -->|いいえ| blocked{"ZIP が無い、展開先が既にある、または親が無い?"}
+  blocked -->|はい| conflict["ExternalConflictException"]
+  blocked -->|いいえ| names{"危険なエントリ名がある?"}
+  names -->|はい| data["InvalidDataException。何も残さない"]
+  names -->|いいえ| add["各ファイルを Add"]
+```
+
 ## 同じパスへ続けて呼ぶ
 
 同じパスへ続けて呼ぶと、予約は次のように 1 件へ畳みます。図に無い組み合わせは `InvalidOperationException` で、メッセージは「このパスは既に別の操作でステージングされています」です。`DeleteTreeAsync` の配下への操作、ディレクトリ Move の移動元と移動先の配下への操作も、同じ例外です。`CreateDirectory` の配下は、この図の各枝に従います。
@@ -427,6 +472,7 @@ flowchart TD
 | パスがワークフォルダの外、Import の元が中、Export の先が中                            | `ArgumentException`             |
 | ほかの Txfio がパスまたはワークフォルダを押さえている                                 | `LockContentionException`       |
 | JSON として読めない                                                                   | `JsonException`                 |
+| ZIP のエントリ名が危険、または ZIP が壊れている                                       | `InvalidDataException`          |
 
 `ExternalConflictException` と `LockContentionException` は、失敗したパスを 1 つ持ちます。
 
@@ -459,7 +505,7 @@ SQL の INSERT とファイル作成を、落ちても両方戻る 1 つのト�
 | 一時置き場                | 使わない。`.txnew` は同じディレクトリ                                                                                                 | 既定は `Path.GetTempPath()`                                                      | データベースファイル自身                                          |
 | SMB 上の共有              | 対象。サーバーキャッシュの永続化は保証外                                                                                              | 設計の主対象ではない                                                             | ネットワーク共有に置く使い方はサポート外                          |
 | DB と同じトランザクション | 参加しない                                                                                                                            | `TransactionScope` で参加できる                                                  | データベースの中だけ                                              |
-| 同時実行                  | 利用者間はパス単位。ディレクトリ Move、全削除、ディレクトリコピー、ディレクトリの Import、`CreateDirectoryAsync` のあいだはワークフォルダ全体を排他で押さえる | スレッドセーフと README にある。分離は Read Uncommitted                          | 書き込みは原則 1 接続。読み取りは WAL などで並行できる            |
+| 同時実行                  | 利用者間はパス単位。ディレクトリ Move、全削除、ディレクトリコピー、ディレクトリの Import、`CreateDirectoryAsync`、ZIP の展開のあいだはワークフォルダ全体を排他で押さえる | スレッドセーフと README にある。分離は Read Uncommitted                          | 書き込みは原則 1 接続。読み取りは WAL などで並行できる            |
 | 素の File API             | 止められない                                                                                                                          | 止められない                                                                     | DB を経由しない読み書きはトランザクションの外                     |
 | プラットフォーム          | 保証は Windows                                                                                                                        | .NET Standard 2.0。Windows と Ubuntu でテストされている                          | クロスプラットフォーム                                            |
 | API の形                  | 非同期のみ。コピーの進捗あり                                                                                                          | 同期が中心                                                                       | `Microsoft.Data.Sqlite` なら同期と非同期                          |

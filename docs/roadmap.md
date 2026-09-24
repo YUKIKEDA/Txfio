@@ -75,6 +75,7 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #109: 設計: ZIP アーカイブの作成と展開（Create / Export / Extract / Import の 4 メソッド。実装は含めない）
 - Issue #111: ZIP アーカイブの作成（`CreateArchiveAsync` / `ExportArchiveAsync`）
 - Issue #113: ZIP アーカイブの展開（`ExtractArchiveAsync` / `ImportArchiveAsync`。エントリ名は書く前に全部検証する）
+- Issue #115: README に ZIP アーカイブの操作を書く
 
 ## 公開（Phase 3 完了後）
 
