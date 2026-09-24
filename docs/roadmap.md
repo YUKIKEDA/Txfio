@@ -87,6 +87,7 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #132: 設計: コピーが作るディレクトリを実体より先にジャーナルへ書く（実装は含めない）
 - [x] Issue #85: `.txnew` とコピー先ディレクトリを、ジャーナルより先に作らない
 - [x] Issue #86: Before と After が同じでも、`.txnew` が残る Update は適用する
+- [x] Issue #136: 設計: 大文字小文字だけが違う Move は InvalidOperationException にする（実装は含めない）
 
 ## 公開（Phase 3 完了後）
 
