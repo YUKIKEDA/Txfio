@@ -40,6 +40,16 @@ internal static class CrashInjector
     }
 
     /// <summary>
+    /// 次の Dispose を、ロックを閉じるだけにする
+    /// </summary>
+    internal static void SuppressRollback()
+    {
+        State state = new State("suppress");
+        state.Injected = true;
+        _state.Value = state;
+    }
+
+    /// <summary>
     /// 指定した地点に達していれば、止め済みにして例外を投げる
     /// </summary>
     /// <param name="name">現在の地点</param>

@@ -202,6 +202,54 @@ internal static class StagingApplier
     }
 
     /// <summary>
+    /// 再ステージの退避 <c>.txnew.prev</c> を、ワークフォルダ配下から消す
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="transactionId">トランザクション ID</param>
+    internal static void DeleteStagingBackups(string workFolder, Guid transactionId)
+    {
+        string suffix = "." + transactionId.ToString("D") + ".txnew.prev";
+        string pattern = "*" + suffix;
+        foreach (string path in Directory.EnumerateFiles(workFolder, pattern, SearchOption.AllDirectories))
+        {
+            if (WorkPath.IsInMetadataFolder(workFolder, path)
+                || !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// 作成ディレクトリを深い順に、再帰せず消す
+    /// </summary>
+    /// <param name="directories">消すディレクトリ</param>
+    internal static void DeleteCreatedDirectories(IReadOnlyList<string> directories)
+    {
+        List<string> pending = new List<string>(directories);
+        pending.Sort(static (left, right) =>
+        {
+            int byDepth = PathDepth(right).CompareTo(PathDepth(left));
+            if (byDepth != 0)
+            {
+                return byDepth;
+            }
+
+            return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
+        });
+
+        foreach (string path in pending)
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path);
+            }
+        }
+    }
+
+    /// <summary>
     /// CreateDirectory が作ったディレクトリを、中身ごと消す
     /// </summary>
     /// <param name="operations">操作一覧</param>

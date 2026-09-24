@@ -159,40 +159,21 @@ internal sealed partial class Transaction
         _locks.AcquireExclusive(_workFolder);
         _locks.RejectForeignLocks(_workFolder);
         _locks.Acquire(_workFolder, target);
-        int operationCount = _operations.Count;
-        int directoryCount = _createdDirectories.Count;
-        try
+        if (!Directory.Exists(external))
         {
-            if (!Directory.Exists(external))
-            {
-                throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + external, external);
-            }
-
-            EnsureCopyDestinationFree(target);
-            CreateCopyDirectory(target);
-            DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
-            if (!IsReparsePoint(external))
-            {
-                await CopyDirectoryEntriesAsync(external, external, target, tracker, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            if (!tracker.Reported)
-            {
-                progress?.Report(new TransferProgress(0, null));
-            }
-
-            if (_operations.Count > operationCount)
-            {
-                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            }
+            throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + external, external);
         }
-        catch
+
+        EnsureCopyDestinationFree(target);
+        List<string> directories = new List<string> { target };
+        List<PlannedCopyFile> files = new List<PlannedCopyFile>();
+        if (!IsReparsePoint(external))
         {
-            RollbackAddedOperations(operationCount);
-            DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
-            throw;
+            PlanDirectoryEntries(external, external, target, directories, files, cancellationToken);
         }
+
+        await ApplyPlannedDirectoryCopyAsync(directories, files, progress, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task ExportDirectoryAsync(

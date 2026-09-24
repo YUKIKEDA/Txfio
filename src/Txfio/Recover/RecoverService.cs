@@ -100,6 +100,8 @@ internal static class RecoverService
 
                 StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
                 StagingApplier.DeleteStagingFiles(document.Operations);
+                StagingApplier.DeleteStagingBackups(workFolder, document.TransactionId);
+                StagingApplier.DeleteCreatedDirectories(document.CreatedDirectories);
                 await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
                 rolledBack = true;
             }

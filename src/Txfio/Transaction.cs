@@ -76,6 +76,7 @@ internal sealed partial class Transaction : ITransaction
             }
 
             StagingApplier.DeleteCreateDirectoryTrees(_operations);
+            StagingApplier.DeleteStagingBackups(_workFolder, _transactionId);
             DeleteCreatedDirectoriesFrom(0, ignoreIoFailures: false);
             await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
         }
@@ -136,7 +137,24 @@ internal sealed partial class Transaction : ITransaction
             JournalStore.CurrentVersion,
             _transactionId,
             committing,
-            _operations.ToArray());
+            _operations.ToArray(),
+            _createdDirectories.ToArray());
         return JournalStore.SaveAsync(_journalPath, document, cancellationToken);
+    }
+
+    private async Task TryPersistUndoAsync()
+    {
+        try
+        {
+            await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            // ジャーナルが残っていれば、次の Recover が消す
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // ジャーナルが残っていれば、次の Recover が消す
+        }
     }
 }

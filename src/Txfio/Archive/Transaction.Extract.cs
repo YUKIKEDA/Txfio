@@ -92,24 +92,52 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(destination);
+        List<string> directories = new List<string> { destination };
+        List<PlannedExtractFile> files = new List<PlannedExtractFile>();
+        foreach (ArchiveEntryPlan plan in plans)
+        {
+            string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(destination, plan.RelativePath));
+            if (plan.IsDirectory)
+            {
+                RecordExtractDirectory(destination, path, directories);
+                continue;
+            }
+
+            string? parent = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(parent))
+            {
+                RecordExtractDirectory(destination, parent, directories);
+            }
+
+            files.Add(new PlannedExtractFile(plan.Entry, path));
+        }
+
         int operationCount = _operations.Count;
         int directoryCount = _createdDirectories.Count;
+        foreach (string directory in directories)
+        {
+            _createdDirectories.Add(directory);
+        }
+
+        foreach (PlannedExtractFile file in files)
+        {
+            string stagingPath = WorkPath.StagingFilePath(file.Path, _transactionId);
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, file.Path, stagingPath));
+        }
+
         try
         {
-            CreateCopyDirectory(destination);
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            foreach (string directory in directories)
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             ExtractProgress tracker = new ExtractProgress(progress, totalBytes);
-            foreach (ArchiveEntryPlan plan in plans)
+            foreach (PlannedExtractFile file in files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(destination, plan.RelativePath));
-                if (plan.IsDirectory)
-                {
-                    EnsureExtractDirectory(destination, path);
-                    continue;
-                }
-
-                EnsureExtractDirectory(destination, System.IO.Path.GetDirectoryName(path)!);
-                long bytes = await ExtractFileAsync(plan.Entry, path, tracker, cancellationToken)
+                long bytes = await ExtractFileAsync(file.Entry, file.Path, tracker, cancellationToken)
                     .ConfigureAwait(false);
                 tracker.CompleteFile(bytes);
             }
@@ -118,35 +146,45 @@ internal sealed partial class Transaction
             {
                 progress?.Report(new TransferProgress(0, totalBytes));
             }
-
-            if (_operations.Count > operationCount)
-            {
-                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            }
         }
         catch
         {
             RollbackAddedOperations(operationCount);
             DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
+            await TryPersistUndoAsync().ConfigureAwait(false);
             throw;
         }
     }
 
-    private void EnsureExtractDirectory(string destination, string path)
+    private void RecordExtractDirectory(string destination, string path, List<string> directories)
     {
-        if (Directory.Exists(path))
+        if (ContainsPath(directories, path))
         {
             return;
         }
 
         string? parent = System.IO.Path.GetDirectoryName(path);
         if (parent is not null
-            && !string.Equals(parent, destination, StringComparison.OrdinalIgnoreCase))
+            && !string.Equals(parent, destination, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(parent, path, StringComparison.OrdinalIgnoreCase))
         {
-            EnsureExtractDirectory(destination, parent);
+            RecordExtractDirectory(destination, parent, directories);
         }
 
-        CreateCopyDirectory(path);
+        directories.Add(path);
+    }
+
+    private bool ContainsPath(List<string> directories, string path)
+    {
+        foreach (string directory in directories)
+        {
+            if (string.Equals(directory, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<long> ExtractFileAsync(
@@ -163,9 +201,21 @@ internal sealed partial class Transaction
                 .ConfigureAwait(false);
         }
 
-        _operations.Add(new JournalOperation(PendingChangeKind.Add, path, stagingPath));
         File.SetLastWriteTimeUtc(stagingPath, entry.LastWriteTime.UtcDateTime);
         return new FileInfo(stagingPath).Length;
+    }
+
+    private sealed class PlannedExtractFile
+    {
+        internal PlannedExtractFile(ZipArchiveEntry entry, string path)
+        {
+            Entry = entry;
+            Path = path;
+        }
+
+        internal ZipArchiveEntry Entry { get; }
+
+        internal string Path { get; }
     }
 
     private sealed class ExtractProgress : IProgress<TransferProgress>
