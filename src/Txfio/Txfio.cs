@@ -12,6 +12,7 @@ public static class Txfio
     /// <param name="cancellationToken">開始処理を取り消すトークン</param>
     /// <returns>開始したトランザクション</returns>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
     public static async Task<ITransaction> BeginAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -23,6 +24,7 @@ public static class Txfio
 
         cancellationToken.ThrowIfCancellationRequested();
         EnsureMetadataFolder(workFolder);
+        StaleJournals.ThrowIfAny(workFolder);
 
         Guid transactionId = Guid.NewGuid();
         string journalPath = MetadataNames.JournalPath(workFolder, transactionId);
@@ -49,6 +51,7 @@ public static class Txfio
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
     /// <returns>復旧結果</returns>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="LockContentionException">他のトランザクションがワークフォルダを押さえている</exception>
     public static async Task<RecoverResult> RecoverAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

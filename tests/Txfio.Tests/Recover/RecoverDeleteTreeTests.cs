@@ -52,7 +52,7 @@ public sealed class RecoverDeleteTreeTests
     /// <remarks>
     /// <para>前提: Committing の DeleteTree journal があり、同じパスがファイルである</para>
     /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: ConflictDetected で journal とファイルは残る</para>
+    /// <para>期待: ConflictDetected でファイルは残り、journal は消える</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_ファイルにすり替わるとConflictDetectedになること()
@@ -65,7 +65,7 @@ public sealed class RecoverDeleteTreeTests
         RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.ConflictDetected, result);
         Assert.Equal("file", await File.ReadAllTextAsync(target));
-        Assert.NotEmpty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
     private static async Task<string> WriteDeleteTreeAsync(string workFolder, bool committing)

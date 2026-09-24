@@ -51,45 +51,45 @@ public sealed class RecoverLockTests : IDisposable
     }
 
     /// <summary>
-    /// Recover より先に取り直したロックは、Recover のあとも有効である
+    /// 落ちたトランザクションのあとで取り直したロックでは、コミットも Recover も進まない
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add を AfterCommitting で止めたあと、別トランザクションが同じパスを Add している</para>
-    /// <para>手順: RecoverAsync し、取り直したトランザクションが再ステージし、第三者が同じパスを Add する</para>
-    /// <para>期待: 対象は止めた Add の内容になり、再ステージでき、第三者の Add は LockContentionException になる</para>
+    /// <para>前提: holder を開始したあと、Add を AfterCommitting で止めて Dispose している。holder は別のパスを Add している</para>
+    /// <para>手順: RecoverAsync し、holder で CommitAsync する。holder を Dispose してから、もう一度 RecoverAsync する</para>
+    /// <para>期待: 1 回目の Recover は LockContentionException で対象は無い。コミットは RecoveryRequiredException で holder の対象も無い。2 回目は RolledForward で対象は止めた Add の内容になる</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_先に取り直したロックは閉じないこと()
+    public async Task RecoverAsync_取り直したロックがあるあいだは処理しないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        string lockFile = PathLockSet.FilePath(work.Path, target);
-        CrashInjector.Arm(CrashInjector.AfterCommitting);
-        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path))
+        string held = System.IO.Path.Combine(work.Path, "b.txt");
+        await using (ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path))
         {
-            await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
-            await crashed.AddAsync("a.txt", content);
-            await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
-        }
+            CrashInjector.Arm(CrashInjector.AfterCommitting);
+            await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path))
+            {
+                await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
+                await crashed.AddAsync("a.txt", content);
+                await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
+            }
 
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
-        await holder.AddAsync("a.txt", held);
-        Assert.True(File.Exists(lockFile));
+            CrashInjector.Reset();
+            await using MemoryStream heldContent = LeftoverAddFiles.Utf8Stream("held");
+            await holder.AddAsync("b.txt", heldContent);
+
+            LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+                () => global::Txfio.Txfio.RecoverAsync(work.Path));
+            Assert.Equal(work.Path, contention.Path);
+            Assert.False(File.Exists(target));
+
+            await Assert.ThrowsAsync<RecoveryRequiredException>(() => holder.CommitAsync());
+            Assert.False(File.Exists(held));
+        }
 
         RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
-        Assert.True(File.Exists(lockFile));
-        Assert.Single(holder.GetPendingChanges());
-
-        await using MemoryStream again = LeftoverAddFiles.Utf8Stream("again");
-        await holder.UpdateAsync("a.txt", again);
-        Assert.Single(holder.GetPendingChanges());
-
-        await using ITransaction third = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using MemoryStream other = LeftoverAddFiles.Utf8Stream("other");
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => third.AddAsync("a.txt", other));
-        Assert.Equal(target, contention.Path);
+        Assert.False(File.Exists(held));
     }
 }

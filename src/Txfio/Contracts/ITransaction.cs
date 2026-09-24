@@ -293,6 +293,7 @@ public interface ITransaction : IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
     /// <returns>確定結果</returns>
+    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている。実体には触れず、未コミットのまま残る</exception>
     Task<CommitResult> CommitAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

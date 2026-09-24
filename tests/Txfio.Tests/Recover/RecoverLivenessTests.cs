@@ -15,15 +15,15 @@ public sealed class RecoverLivenessTests : IDisposable
     }
 
     /// <summary>
-    /// 生きているトランザクションのジャーナルは Recover で巻き戻さず、そのままコミットできる
+    /// 変更中のトランザクションがあれば、Recover は哨兵を取れず何もしない
     /// </summary>
     /// <remarks>
     /// <para>前提: トランザクションが Add と CreateDirectory をし、作ったディレクトリへ素のファイル API で書いている</para>
     /// <para>手順: Dispose もコミットもしないまま RecoverAsync し、そのあと同じトランザクションで CommitAsync する</para>
-    /// <para>期待: NoPendingTransactions で、ジャーナル、.txnew、ディレクトリの中身が残り、コミットは Succeeded になる</para>
+    /// <para>期待: LockContentionException（Path はワークフォルダ）で、ジャーナル、.txnew、ディレクトリの中身が残り、コミットは Succeeded になる</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_生きているトランザクションは巻き戻さずコミットできること()
+    public async Task RecoverAsync_変更中のトランザクションがあるとLockContentionExceptionで何もしないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -35,9 +35,10 @@ public sealed class RecoverLivenessTests : IDisposable
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(raw, "raw");
 
-        RecoverResult recovered = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => global::Txfio.Txfio.RecoverAsync(work.Path));
 
-        Assert.Equal(RecoverResult.NoPendingTransactions, recovered);
+        Assert.Equal(work.Path, contention.Path);
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Equal("raw", await File.ReadAllTextAsync(raw));
@@ -103,10 +104,10 @@ public sealed class RecoverLivenessTests : IDisposable
     /// <remarks>
     /// <para>前提: Add を AfterCommitting で止め、まだ Dispose していない</para>
     /// <para>手順: RecoverAsync し、Dispose してからもう一度 RecoverAsync する</para>
-    /// <para>期待: 1 回目は NoPendingTransactions で対象は無く、2 回目は RolledForward で対象は Add の内容になる</para>
+    /// <para>期待: 1 回目は LockContentionException で対象は無く、2 回目は RolledForward で対象は Add の内容になる</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_Committingでも持ち主が生きていれば飛ばすこと()
+    public async Task RecoverAsync_Committingでも持ち主が生きていれば触れないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -119,7 +120,7 @@ public sealed class RecoverLivenessTests : IDisposable
 
         await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
 
-        Assert.Equal(RecoverResult.NoPendingTransactions, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        await Assert.ThrowsAsync<LockContentionException>(() => global::Txfio.Txfio.RecoverAsync(work.Path));
         Assert.False(File.Exists(target));
 
         await tx.DisposeAsync();
@@ -132,15 +133,16 @@ public sealed class RecoverLivenessTests : IDisposable
     /// 生きているトランザクションを飛ばしても、落ちたトランザクションは復旧する
     /// </summary>
     /// <remarks>
-    /// <para>前提: AfterCommitting で止めて Dispose したトランザクションと、Add したまま生きているトランザクションがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で止めた Add が反映され、生きている方のジャーナルと生存ロックは残る</para>
+    /// <para>前提: まだ操作していない生きているトランザクションと、そのあと AfterCommitting で止めて Dispose したトランザクションがある</para>
+    /// <para>手順: RecoverAsync し、生きている方で Add してコミットする</para>
+    /// <para>期待: RolledForward で止めた Add が反映され、生きている方のジャーナルと生存ロックは残り、コミットは Succeeded になる</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_落ちた方だけを復旧すること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
+        await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
         CrashInjector.Arm(CrashInjector.AfterCommitting);
         await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path))
         {
@@ -150,9 +152,6 @@ public sealed class RecoverLivenessTests : IDisposable
         }
 
         CrashInjector.Reset();
-        await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using MemoryStream liveContent = LeftoverAddFiles.Utf8Stream("live");
-        await live.AddAsync("b.txt", liveContent);
 
         RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
@@ -160,6 +159,8 @@ public sealed class RecoverLivenessTests : IDisposable
         Assert.Equal("crashed", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.Single(Directory.GetFiles(metadata, "tx-*.lock"));
+        await using MemoryStream liveContent = LeftoverAddFiles.Utf8Stream("live");
+        await live.AddAsync("b.txt", liveContent);
         Assert.Equal(CommitResult.Succeeded, await live.CommitAsync());
         Assert.Equal("live", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
     }

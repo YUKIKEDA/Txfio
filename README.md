@@ -30,7 +30,7 @@ CommitResult result = await tx.CommitAsync();
 | `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
 | `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
 
-落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。結果は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` です。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、結果にも数えません。
+落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。結果は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` です。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、結果にも数えません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。
 
 ## できないこと
 
@@ -126,7 +126,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 全部終わるとジャーナルを消します。`.txnew` は本物の名前へ rename されているので、残りません。
 
-適用の途中で、ほかのプロセスがファイルを変えていたときは `PartialConflict` です。戻り値は例外ではありません。確定は進んでいます。`Succeeded` と見比べて扱ってください。
+適用の途中で、ほかのプロセスがファイルを変えていたときは `PartialConflict` です。戻り値は例外ではありません。確定は進んでいます。適用しなかった操作の `.txnew` とジャーナルは消えます。`Succeeded` と見比べて扱ってください。
 
 ### コミットせず破棄すると
 
@@ -148,7 +148,9 @@ flowchart TD
   match -->|どちらでもない| conflict["ConflictDetected"]
 ```
 
-`ConflictDetected` は、落ちたあとにだれかがファイルを変えていて、戻すことも進めることも安全にできないときです。
+`ConflictDetected` は、落ちたあとにだれかがファイルを変えていて、戻すことも進めることも安全にできないときです。その操作は飛ばし、ほかの操作は進めて、`.txnew` とジャーナルを消します。次の `RecoverAsync` はやり直しません。
+
+落ちたジャーナルが残っているあいだ、新しいトランザクションは `BeginAsync` でも `CommitAsync` でも `RecoveryRequiredException` です。落ちたあとに配下へ確定したデータを、復旧が消さないようにするためです。`CommitAsync` で断られたときは本物に触れていません。破棄してから `RecoverAsync` を呼びます。
 
 `RecoverAsync` は自動では走りません。開くたびに先に呼んでください。ディレクトリの全削除やディレクトリの移動のあと、残骸の `.txnew` が残っているかもしれないときも、先に呼びます。
 
@@ -156,7 +158,7 @@ flowchart TD
 
 このロックは、Txfio の利用者同士の協調です。素の `File` API やエクスプローラーは止めません。
 
-変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの（組ならディレクトリを含む）`CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` はロックを開きも消しもしません。
+変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの（組ならディレクトリを含む）`CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、何もせず `LockContentionException` です。`.lock` ファイルは消しません。
 
 ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 
@@ -483,10 +485,11 @@ flowchart TD
 | 別操作でステージング済み、自分自身の配下への Move や Copy、シンボリックリンクのコピー | `InvalidOperationException`     |
 | パスがワークフォルダの外、Import の元が中、Export の先が中                            | `ArgumentException`             |
 | ほかの Txfio がパスまたはワークフォルダを押さえている                                 | `LockContentionException`       |
+| 落ちたジャーナルが残っている（先に `RecoverAsync`）                                   | `RecoveryRequiredException`     |
 | JSON として読めない                                                                   | `JsonException`                 |
 | ZIP のエントリ名が危険、または ZIP が壊れている                                       | `InvalidDataException`          |
 
-`ExternalConflictException` と `LockContentionException` は、失敗したパスを 1 つ持ちます。
+`ExternalConflictException` と `LockContentionException` は、失敗したパスを 1 つ持ちます。`RecoveryRequiredException` の `Path` はワークフォルダです。
 
 ## TxFileManager と SQLite
 

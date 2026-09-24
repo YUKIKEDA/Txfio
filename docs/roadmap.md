@@ -80,7 +80,7 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - Issue #119: ZIP の作成で、入れるファイルと名前を組で指定する
 - [x] Issue #121: 設計: Recover は生きているトランザクションのジャーナルを飛ばす（実装は含めない）
 - [x] Issue #81: トランザクションごとの生存ロック `.txfio/tx-{guid}.lock`（Recover は開けたジャーナルだけを処理する）
-- Issue #82: 残骸ジャーナルがあるあいだ `BeginAsync` と `CommitAsync` を拒否する（`RecoveryRequiredException`）。Recover は哨兵を排他で持ち、衝突したジャーナルも消す
+- [x] Issue #82: 残骸ジャーナルがあるあいだ `BeginAsync` と `CommitAsync` を拒否する（`RecoveryRequiredException`）。Recover は哨兵を排他で持ち、衝突したジャーナルも消す
 
 ## 公開（Phase 3 完了後）
 

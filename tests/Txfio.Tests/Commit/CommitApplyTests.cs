@@ -186,15 +186,15 @@ public sealed class CommitApplyTests
     }
 
     /// <summary>
-    /// 検証は通るが Update の適用が失敗したら PartialConflict とし、ジャーナルを残す
+    /// 検証は通るが Update の適用が失敗したら PartialConflict とし、ジャーナルと .txnew を消す
     /// </summary>
     /// <remarks>
     /// <para>前提: Update したあと、対象ファイルを共有読み取りで開いたままにしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: PartialConflict で、committing の journal と .txnew が残り、対象は元の内容</para>
+    /// <para>手順: CommitAsync し、そのあと別のトランザクションを開始する</para>
+    /// <para>期待: PartialConflict で、journal と .txnew は残らず、対象は元の内容。次のトランザクションは開始できる</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_適用に失敗するとPartialConflictでjournalが残ること()
+    public async Task CommitAsync_適用に失敗するとPartialConflictでjournalを消すこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -206,8 +206,11 @@ public sealed class CommitApplyTests
 
         CommitResult result = await tx.CommitAsync();
         Assert.Equal(CommitResult.PartialConflict, result);
-        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
-        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Equal("old", await File.ReadAllTextAsync(target));
+
+        await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+        Assert.Empty(next.GetPendingChanges());
     }
 }
