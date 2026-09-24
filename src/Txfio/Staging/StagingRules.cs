@@ -236,17 +236,16 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// CreateDirectory したディレクトリ自身と配下への操作を拒否する
+    /// CreateDirectory したディレクトリ自身への操作を拒否する
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="path">操作しようとしているパス</param>
-    internal static void ThrowIfInsideCreateDirectory(IReadOnlyList<JournalOperation> operations, string path)
+    internal static void ThrowIfCreateDirectoryPath(IReadOnlyList<JournalOperation> operations, string path)
     {
         foreach (JournalOperation operation in operations)
         {
             if (operation.Kind == PendingChangeKind.CreateDirectory
-                && (string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase)
-                    || IsInsideDirectory(operation.Path, path)))
+                && string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
             }

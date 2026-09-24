@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// 空ディレクトリをすぐ作り、破棄ではその木を消す
+/// 空ディレクトリを呼び出した時点で作る。配下の操作は通常どおりで、破棄ではそのディレクトリを中身ごと消す
 /// </content>
 internal sealed partial class Transaction
 {
@@ -15,7 +15,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
-        StagingRules.ThrowIfInsideCreateDirectory(_operations, targetPath);
+        StagingRules.ThrowIfCreateDirectoryPath(_operations, targetPath);
         StagingRules.ThrowIfOperationUnderDirectory(_operations, targetPath);
         if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
         {

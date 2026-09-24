@@ -85,4 +85,28 @@ public sealed class CommitCreateDirectoryTests
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "drop")));
         Assert.False(File.Exists(child));
     }
+
+    /// <summary>
+    /// 配下の Add はコミットで本物のパスへ残り、ディレクトリも残る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: drop を CreateDirectory し、drop/a.txt を Add している</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Succeeded で a.txt が残り、.txnew は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_配下のAddが残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string child = System.IO.Path.Combine(work.Path, "drop", "a.txt");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.CreateDirectoryAsync("drop");
+        await tx.WriteAllTextAsync("drop/a.txt", "staged");
+
+        CommitResult result = await tx.CommitAsync();
+
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal("staged", await File.ReadAllTextAsync(child));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "drop"), "*.txnew"));
+    }
 }

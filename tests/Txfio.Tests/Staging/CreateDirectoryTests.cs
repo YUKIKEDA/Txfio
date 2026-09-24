@@ -96,23 +96,25 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 入れ子の CreateDirectory は拒否する
+    /// 入れ子の CreateDirectory は親と同じ規則で作れる
     /// </summary>
     /// <remarks>
     /// <para>前提: drop を CreateDirectory している</para>
     /// <para>手順: drop/child を CreateDirectoryAsync する</para>
-    /// <para>期待: InvalidOperationException で、pending は drop の 1 件のまま</para>
+    /// <para>期待: 両方のディレクトリがあり、pending は CreateDirectory の 2 件である</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_配下はInvalidOperationExceptionになること()
+    public async Task CreateDirectoryAsync_配下も作れること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CreateDirectoryAsync("drop/child"));
+        await tx.CreateDirectoryAsync("drop/child");
 
-        Assert.Equal(PendingChangeKind.CreateDirectory, Assert.Single(tx.GetPendingChanges()).Kind);
+        Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "drop", "child")));
+        Assert.Equal(2, tx.GetPendingChanges().Count);
+        Assert.All(tx.GetPendingChanges(), change => Assert.Equal(PendingChangeKind.CreateDirectory, change.Kind));
     }
 
     /// <summary>
@@ -138,24 +140,170 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 配下への Add は拒否する
+    /// 配下への Add は pending に出る。素のファイル API で書いたファイルは出ない
     /// </summary>
     /// <remarks>
     /// <para>前提: drop を CreateDirectory している</para>
-    /// <para>手順: drop/a.txt を AddAsync する</para>
-    /// <para>期待: InvalidOperationException で、pending は CreateDirectory のまま</para>
+    /// <para>手順: drop/a.txt を AddAsync し、drop/raw.txt を素のファイル API で書く</para>
+    /// <para>期待: pending は CreateDirectory と Add の 2 件である</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_CreateDirectoryの配下はInvalidOperationExceptionになること()
+    public async Task AddAsync_配下は予約として見えること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("yes");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "drop", "raw.txt"), "raw");
+
+        await tx.AddAsync("drop/a.txt", content);
+
+        Assert.Equal(2, tx.GetPendingChanges().Count);
+        Assert.Contains(
+            tx.GetPendingChanges(),
+            change => change.Kind == PendingChangeKind.Add
+                && change.Path.EndsWith("a.txt", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(
+            tx.GetPendingChanges(),
+            change => change.Path.EndsWith("raw.txt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// 作ったディレクトリ自身への変更系は畳まない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: drop を CreateDirectory している</para>
+    /// <para>手順: そのパスへ Delete、DeleteTree、Move の元と先、Attach、Update、もう一度の CreateDirectory を呼ぶ</para>
+    /// <para>期待: どれも InvalidOperationException で、pending は 1 件のまま</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateDirectoryAsync_そのパス自身の変更系はInvalidOperationExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string drop = System.IO.Path.Combine(work.Path, "drop");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "src.txt"), "src");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.CreateDirectoryAsync("drop");
+
+        InvalidOperationException delete = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => tx.DeleteAsync("drop"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteTreeAsync("drop"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("drop", "other"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("src.txt", "drop"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AttachAsync("drop"));
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("no");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.UpdateAsync("drop", content));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CreateDirectoryAsync("drop"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AddAsync("drop/a.txt", content));
-
+        Assert.Contains("このパスは既に別の操作でステージングされています", delete.Message, StringComparison.Ordinal);
         Assert.Equal(PendingChangeKind.CreateDirectory, Assert.Single(tx.GetPendingChanges()).Kind);
+        Assert.True(Directory.Exists(drop));
+        Assert.True(File.Exists(System.IO.Path.Combine(work.Path, "src.txt")));
+    }
+
+    /// <summary>
+    /// 配下に操作が無いディレクトリはコピー元にできる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: drop を CreateDirectory し、素のファイル API で drop/a.txt を書いている</para>
+    /// <para>手順: drop を copy へ CopyAsync する</para>
+    /// <para>期待: copy/a.txt が Add になり、drop は残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task CopyAsync_配下に操作が無ければコピー元にできること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.CreateDirectoryAsync("drop");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "drop", "a.txt"), "raw");
+
+        await tx.CopyAsync("drop", "copy");
+
+        Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "drop")));
+        Assert.Contains(
+            tx.GetPendingChanges(),
+            change => change.Kind == PendingChangeKind.Add
+                && change.Path.EndsWith(System.IO.Path.Combine("copy", "a.txt"), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// 配下に操作があると、そのディレクトリはコピー元にできない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: drop を CreateDirectory し、drop/a.txt を Add している</para>
+    /// <para>手順: drop を copy へ CopyAsync する</para>
+    /// <para>期待: InvalidOperationException で、copy は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task CopyAsync_配下に操作があるとInvalidOperationExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.CreateDirectoryAsync("drop");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
+        await tx.AddAsync("drop/a.txt", content);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CopyAsync("drop", "copy"));
+
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "copy")));
+    }
+
+    /// <summary>
+    /// 外のディレクトリは、作ったディレクトリの配下へ Import できる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: drop を CreateDirectory し、ワークフォルダの外に src/a.txt がある</para>
+    /// <para>手順: src を drop/in へ ImportAsync する</para>
+    /// <para>期待: drop/in/a.txt が Add になり、外の src は残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task ImportAsync_配下へディレクトリを取り込めること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using TempDirectory outside = TempDirectory.Create();
+        string source = System.IO.Path.Combine(outside.Path, "src");
+        Directory.CreateDirectory(source);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "in");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.CreateDirectoryAsync("drop");
+
+        await tx.ImportAsync(source, "drop/in");
+
+        Assert.True(File.Exists(System.IO.Path.Combine(source, "a.txt")));
+        Assert.Contains(
+            tx.GetPendingChanges(),
+            change => change.Kind == PendingChangeKind.Add
+                && change.Path.EndsWith(System.IO.Path.Combine("drop", "in", "a.txt"), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// 破棄は、配下へ Add したサイドカーと Attach したファイルも消す
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 開始前のファイルを drop へ動かして Attach し、drop/new.txt を Add している</para>
+    /// <para>手順: Commit せず破棄する</para>
+    /// <para>期待: drop も、動かしたファイルも、Add も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task DisposeAsync_配下のAddとAttachも消えること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string moved = System.IO.Path.Combine(work.Path, "drop", "keep.txt");
+        string added = System.IO.Path.Combine(work.Path, "drop", "new.txt");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "keep.txt"), "old");
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        {
+            await tx.CreateDirectoryAsync("drop");
+            File.Move(System.IO.Path.Combine(work.Path, "keep.txt"), moved);
+            await tx.AttachAsync("drop/keep.txt");
+            await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+            await tx.AddAsync("drop/new.txt", content);
+        }
+
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "drop")));
+        Assert.False(File.Exists(moved));
+        Assert.False(File.Exists(added));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "keep.txt")));
     }
 
     /// <summary>
