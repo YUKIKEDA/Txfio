@@ -114,6 +114,11 @@ internal static class StagingApplier
             return false;
         }
 
+        if (operation.Kind is PendingChangeKind.Add or PendingChangeKind.Update)
+        {
+            return TryApplyStagedFile(operation);
+        }
+
         if (Matches(operation, after: true))
         {
             return TryDeleteStaging(operation.StagingPath);
@@ -296,6 +301,40 @@ internal static class StagingApplier
         return dest is not null
             && operation.NewPath is not null
             && dest.Matches(operation.NewPath);
+    }
+
+    private static bool TryApplyStagedFile(JournalOperation operation)
+    {
+        if (string.IsNullOrEmpty(operation.StagingPath))
+        {
+            return false;
+        }
+
+        // .txnew が残り Before と一致するなら未適用。Before と After が同じ時刻でも適用する
+        if (File.Exists(operation.StagingPath) && Matches(operation, after: false))
+        {
+            try
+            {
+                bool overwrite = operation.Kind == PendingChangeKind.Update;
+                File.Move(operation.StagingPath, operation.Path, overwrite);
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        if (Matches(operation, after: true))
+        {
+            return TryDeleteStaging(operation.StagingPath);
+        }
+
+        return false;
     }
 
     private static bool TryDeleteStaging(string? stagingPath)
