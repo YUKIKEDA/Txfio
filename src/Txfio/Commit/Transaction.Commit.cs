@@ -31,8 +31,10 @@ internal sealed partial class Transaction
         _operations.Clear();
         _operations.AddRange(stamped);
         await PersistAsync(committing: true, CancellationToken.None).ConfigureAwait(false);
+        _committingWritten = true;
         CrashInjector.CheckPoint(CrashInjector.AfterCommitting);
 
+        // 適用中の例外は再送出する。Dispose はロールバックしない
         bool conflict = !StagingApplier.TryApplyAll(_operations);
 
         // 衝突しても残さない。残すと、あとの Recover が他のトランザクションの確定したパスを対象にやり直す

@@ -81,6 +81,7 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #121: 設計: Recover は生きているトランザクションのジャーナルを飛ばす（実装は含めない）
 - [x] Issue #81: トランザクションごとの生存ロック `.txfio/tx-{guid}.lock`（Recover は開けたジャーナルだけを処理する）
 - [x] Issue #82: 残骸ジャーナルがあるあいだ `BeginAsync` と `CommitAsync` を拒否する（`RecoveryRequiredException`）。Recover は哨兵を排他で持ち、衝突したジャーナルも消す
+- [x] Issue #83: `Committing` を書いたあとの例外では Dispose がロールバックしない。例外は再送出し、次の `RecoverAsync` がロールフォワードする
 
 ## 公開（Phase 3 完了後）
 

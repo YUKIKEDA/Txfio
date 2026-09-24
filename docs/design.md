@@ -101,7 +101,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **トランザクションのライフサイクル**
 
-- `await using var tx = await Txfio.BeginAsync(path);` のパターンで表現し、`IAsyncDisposable`とする。例外などで Commit されず Dispose された場合は、自動的にロールバックする
+- `await using var tx = await Txfio.BeginAsync(path);` のパターンで表現し、`IAsyncDisposable`とする。`Committing` を書く前に Commit されず Dispose された場合は、自動的にロールバックする。`Committing` を書いたあとに適用で例外が出たら、その例外を再送出する。Dispose はロールバックせず、ロックだけ閉じる。ジャーナルと `.txnew` は残り、次の `RecoverAsync` がロールフォワードする
 
 **ディレクトリ操作**
 

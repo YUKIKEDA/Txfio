@@ -13,6 +13,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly PathLockSet _locks = new PathLockSet();
     private FileStream? _liveness;
     private bool _committed;
+    private bool _committingWritten;
     private bool _disposed;
 
     /// <summary>
@@ -53,15 +54,16 @@ internal sealed partial class Transaction : ITransaction
         }
 
         _disposed = true;
-        if (CrashInjector.ShouldSkipRollback)
+        if (_committed)
         {
-            _locks.Release();
             ReleaseLiveness();
             return;
         }
 
-        if (_committed)
+        // Committing を書いたあとはロールバックしない。ジャーナルを残し、次の Recover が進める
+        if (CrashInjector.ShouldSkipRollback || _committingWritten)
         {
+            _locks.Release();
             ReleaseLiveness();
             return;
         }

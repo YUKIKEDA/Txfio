@@ -130,9 +130,9 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 ### コミットせず破棄すると
 
-`await using` を抜ける、または `DisposeAsync` すると、未コミットの `.txnew`、コピーが作ったディレクトリ、`CreateDirectoryAsync` のディレクトリ、ジャーナルが消えます。`CreateDirectoryAsync` の中へ素のファイル API で書いたものも、そのディレクトリごと消えます。それ以外の、このトランザクションが触れていないファイルは残ります。
+`await using` を抜ける、または `DisposeAsync` すると、印を書く前なら、未コミットの `.txnew`、コピーが作ったディレクトリ、`CreateDirectoryAsync` のディレクトリ、ジャーナルが消えます。`CreateDirectoryAsync` の中へ素のファイル API で書いたものも、そのディレクトリごと消えます。それ以外の、このトランザクションが触れていないファイルは残ります。
 
-コミット開始前にキャンセルしたときも、破棄のときに同じ片付けをします。
+コミット開始前にキャンセルしたときも、破棄のときに同じ片付けをします。印を書いたあとに適用で例外が出たら、破棄はそれらを消さず、ロックだけ閉じます。例外はそのまま届きます。ジャーナルと `.txnew` は残り、次の `RecoverAsync` が進めます。
 
 ### 落ちると
 
