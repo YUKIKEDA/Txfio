@@ -30,7 +30,7 @@ CommitResult result = await tx.CommitAsync();
 | `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
 | `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
 
-落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。結果は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` です。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、結果にも数えません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。
+落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。結果は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、結果にも数えません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。JSON として読めないジャーナルは消さないので、直すか消すまで同じ例外のままです。
 
 ## できないこと
 
@@ -67,7 +67,7 @@ CommitResult result = await tx.CommitAsync();
 | `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                                  |
 | `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                                   |
 | `CommitAsync`                              | 検証してから rename と削除を適用する                                                                                                               |
-| `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める                                                                                                   |
+| `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める。JSON として読めなければ `JournalUnreadable`                                                      |
 
 親ディレクトリの自動作成はしません。`CopyAsync` と、ディレクトリの `ImportAsync` / `ExportAsync` だけ、コピー先のディレクトリ自身とその空のサブディレクトリを作ります。`ExtractArchiveAsync` / `ImportArchiveAsync` も、展開先のディレクトリ自身とエントリにあるディレクトリを作ります。`CreateDirectoryAsync` は、対象の空ディレクトリだけを作り、親は作りません。メタデータフォルダ `.txfio` とその配下は操作できません。
 
@@ -142,6 +142,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 flowchart TD
   call["RecoverAsync"] --> has{"ジャーナルがある?"}
   has -->|ない| none["NoPendingTransactions"]
+  has -->|JSON として読めない| unreadable["JournalUnreadable"]
   has -->|適用開始の印が無い| back["RolledBack"]
   has -->|印がある| match{"Before / After と一致する?"}
   match -->|適用済み、または再実行できた| forward["RolledForward"]
@@ -149,6 +150,8 @@ flowchart TD
 ```
 
 `ConflictDetected` は、落ちたあとにだれかがファイルを変えていて、戻すことも進めることも安全にできないときです。その操作は飛ばし、ほかの操作は進めて、`.txnew` とジャーナルを消します。次の `RecoverAsync` はやり直しません。
+
+`JournalUnreadable` は、ジャーナルが JSON として読めないときです。ジャーナルは残し、ファイル名から分かる `.txnew` だけ消します。`CreateDirectoryAsync` で作ったディレクトリは特定できないので残します。直すか消すまで、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` のままです。1 件でも読めなければ、ほかを処理したあともこの結果を返します。
 
 落ちたジャーナルが残っているあいだ、新しいトランザクションは `BeginAsync` でも `CommitAsync` でも `RecoveryRequiredException` です。落ちたあとに配下へ確定したデータを、復旧が消さないようにするためです。`CommitAsync` で断られたときは本物に触れていません。破棄してから `RecoverAsync` を呼びます。
 
