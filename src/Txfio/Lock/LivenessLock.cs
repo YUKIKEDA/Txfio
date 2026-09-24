@@ -6,7 +6,7 @@ namespace Txfio;
 internal static class LivenessLock
 {
     /// <summary>
-    /// 開始するトランザクションの生存ロックを作って開く
+    /// トランザクション開始用の生存ロックを作って開く
     /// </summary>
     /// <param name="lockPath">生存ロックのパス</param>
     /// <returns>トランザクションが終わるまで持つハンドル</returns>

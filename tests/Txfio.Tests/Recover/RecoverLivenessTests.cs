@@ -168,7 +168,7 @@ public sealed class RecoverLivenessTests : IDisposable
     /// 生存ロックの無いジャーナルは、落ちたトランザクションとしてロールバックする
     /// </summary>
     /// <remarks>
-    /// <para>前提: 未コミットのジャーナルだけがあり、tx-*.lock は無い（生存ロックを持たない前の版が残したもの）</para>
+    /// <para>前提: 未コミットのジャーナルだけがあり、tx-*.lock は無い（生存ロック導入前の版が残したジャーナル）</para>
     /// <para>手順: RecoverAsync する</para>
     /// <para>期待: RolledBack で、ジャーナルも tx-*.lock も残らない</para>
     /// </remarks>
