@@ -150,6 +150,7 @@ internal sealed partial class Transaction
     {
         StagingRules.ThrowIfCopyDestinationInsideSource(external, target);
         StagingRules.ThrowIfInsideDeleteTree(_operations, target);
+        StagingRules.ThrowIfInsideCreateDirectory(_operations, target);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, target);
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, target);
         StagingRules.ThrowIfOperationUnderDirectory(_operations, external);

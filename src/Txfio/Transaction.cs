@@ -68,6 +68,7 @@ internal sealed partial class Transaction : ITransaction
                 StagingFile.TryDelete(operation.StagingPath);
             }
 
+            StagingApplier.DeleteCreateDirectoryTrees(_operations);
             DeleteCreatedDirectoriesFrom(0, ignoreIoFailures: false);
             await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
         }

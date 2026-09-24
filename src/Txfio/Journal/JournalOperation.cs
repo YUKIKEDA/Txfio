@@ -18,7 +18,7 @@ internal sealed class JournalOperation
     /// <param name="after">対象パスの適用直後状態（未記録なら null）</param>
     /// <param name="destBefore">Move の移動先の適用直前状態（それ以外は null）</param>
     /// <param name="destAfter">Move の移動先の適用直後状態（それ以外は null）</param>
-    /// <param name="isDirectory">ディレクトリの Delete、DeleteTree、またはディレクトリの Move なら <see langword="true"/></param>
+    /// <param name="isDirectory">ディレクトリの Delete、DeleteTree、Move、または CreateDirectory なら <see langword="true"/></param>
     [JsonConstructor]
     public JournalOperation(
         PendingChangeKind kind,
@@ -87,7 +87,7 @@ internal sealed class JournalOperation
     public PathState? DestAfter { get; }
 
     /// <summary>
-    /// ディレクトリの Delete、DeleteTree、またはディレクトリの Move なら <see langword="true"/>
+    /// ディレクトリの Delete、DeleteTree、Move、または CreateDirectory なら <see langword="true"/>
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsDirectory { get; }

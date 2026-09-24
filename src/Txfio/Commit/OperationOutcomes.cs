@@ -69,6 +69,11 @@ internal static class OperationOutcomes
             return TryProjectAttach(operation, projected, out stamped);
         }
 
+        if (operation.Kind == PendingChangeKind.CreateDirectory)
+        {
+            return TryProjectCreateDirectory(operation, projected, out stamped);
+        }
+
         if (operation.Kind == PendingChangeKind.DeleteTree)
         {
             return TryProjectDeleteTree(operation, projected, out stamped);
@@ -190,6 +195,23 @@ internal static class OperationOutcomes
 
         projected[operation.Path] = operation.Before;
         stamped = operation.WithOutcome(operation.Before, operation.Before);
+        return true;
+    }
+
+    private static bool TryProjectCreateDirectory(
+        JournalOperation operation,
+        Dictionary<string, PathState> projected,
+        out JournalOperation stamped)
+    {
+        stamped = operation;
+        PathState current = Current(projected, operation.Path);
+        if (!current.IsDirectory)
+        {
+            return false;
+        }
+
+        projected[operation.Path] = current;
+        stamped = operation.WithOutcome(current, current);
         return true;
     }
 

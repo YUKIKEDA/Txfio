@@ -53,6 +53,7 @@ internal static class RecoverService
 
             if (document is not null)
             {
+                StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
                 foreach (JournalOperation operation in document.Operations)
                 {
                     StagingFile.TryDelete(operation.StagingPath);

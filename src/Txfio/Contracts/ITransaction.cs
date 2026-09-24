@@ -93,6 +93,18 @@ public interface ITransaction : IAsyncDisposable
     Task AttachAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 外部プロセスが中へ書く空ディレクトリを、呼び出した時点で作る
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>作成の完了</returns>
+    /// <exception cref="ExternalConflictException">対象が既にある、または親ディレクトリが無い</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、配下に操作がある、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ワークフォルダ内のファイルまたはディレクトリをコピーする
     /// </summary>
     /// <param name="source">コピー元（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
