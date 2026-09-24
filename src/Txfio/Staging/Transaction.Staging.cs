@@ -33,7 +33,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
-        StagingRules.ThrowIfInsideCreateDirectory(_operations, targetPath);
+        StagingRules.ThrowIfCreateDirectoryPath(_operations, targetPath);
         _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
@@ -143,7 +143,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
-        StagingRules.ThrowIfInsideCreateDirectory(_operations, targetPath);
+        StagingRules.ThrowIfCreateDirectoryPath(_operations, targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
         if (existingIndex >= 0
@@ -219,8 +219,8 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDirectoryMove(_operations, destPath);
         StagingRules.ThrowIfInsideDeleteTree(_operations, sourcePath);
         StagingRules.ThrowIfInsideDeleteTree(_operations, destPath);
-        StagingRules.ThrowIfInsideCreateDirectory(_operations, sourcePath);
-        StagingRules.ThrowIfInsideCreateDirectory(_operations, destPath);
+        StagingRules.ThrowIfCreateDirectoryPath(_operations, sourcePath);
+        StagingRules.ThrowIfCreateDirectoryPath(_operations, destPath);
 
         if (FindOperationIndex(destPath) >= 0)
         {
@@ -313,7 +313,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
-        StagingRules.ThrowIfInsideCreateDirectory(_operations, targetPath);
+        StagingRules.ThrowIfCreateDirectoryPath(_operations, targetPath);
 
         if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
         {
@@ -679,7 +679,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
-        StagingRules.ThrowIfInsideCreateDirectory(_operations, targetPath);
+        StagingRules.ThrowIfCreateDirectoryPath(_operations, targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
         PendingChangeKind recordedKind = kind;

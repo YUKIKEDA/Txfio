@@ -93,7 +93,7 @@ public interface ITransaction : IAsyncDisposable
     Task AttachAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 空ディレクトリを呼び出した時点で作り、中身は素のファイル API で書く
+    /// 空ディレクトリを呼び出した時点で作る。配下では通常の操作ができ、中身は素のファイル API でも書ける
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>

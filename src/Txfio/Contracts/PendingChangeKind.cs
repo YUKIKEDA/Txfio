@@ -36,7 +36,7 @@ public enum PendingChangeKind
     DeleteTree = 5,
 
     /// <summary>
-    /// 空ディレクトリを作り、中身は素のファイル API で書く
+    /// 空ディレクトリを呼び出した時点で作る。配下の操作は別のエントリになる
     /// </summary>
     CreateDirectory = 6,
 }

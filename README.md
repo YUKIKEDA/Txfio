@@ -39,7 +39,6 @@ CommitResult result = await tx.CommitAsync();
 - 複数ファイルが、外から見て一時点で揃うこと。コミット中は、一部だけ新しい状態が見えます
 - コミット開始後の取り消し。適用が始まったら最後まで進め、落ちた分は `RecoverAsync` の対象です
 - SQL や DTC と同じトランザクションへの参加
-- `CreateDirectoryAsync` したディレクトリの中を、Txfio の変更系で書くこと。中身は素のファイル API で書きます。同じプロセスでも別プロセスでもよいです。ファイルの読み取りと `ExportAsync` はできます
 - 素のファイル API やエクスプローラーからの変更を防ぐこと。コミット前の `.txnew` も見えます
 - Linux での動作保証
 
@@ -54,7 +53,7 @@ CommitResult result = await tx.CommitAsync();
 | `DeleteTreeAsync`                          | ディレクトリとその配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除する                                       |
 | `MoveAsync`                                | 同一ボリューム内のファイルまたはディレクトリの移動予約。ディレクトリはコミット時に 1 回 rename し、中身は付いていく              |
 | `AttachAsync`                              | 外部が作ったファイルまたはディレクトリを、コピーも rename もせず取り込む。ファイルはサイズと最終更新日時を記録し、ディレクトリは存在だけを記録する |
-| `CreateDirectoryAsync`                     | 空ディレクトリを呼んだ時点で作る。中身は素のファイル API で書く。破棄ではそのディレクトリを中身ごと消す                                           |
+| `CreateDirectoryAsync`                     | 空ディレクトリを呼んだ時点で作る。配下は通常の操作ができる。破棄ではそのディレクトリを中身ごと消す                                 |
 | `CopyAsync`                                | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ      |
 | `ImportAsync`                              | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない                         |
 | `ExportAsync`                              | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない     |
@@ -107,7 +106,7 @@ await tx.WriteAllTextAsync("a.txt", "new");
 string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 ```
 
-`GetPendingChanges` は、まだコミットしていない操作の一覧です。ディレクトリのコピーは、ファイルごとの Add として見えます。`CreateDirectoryAsync` はディレクトリ 1 件で、中のファイルは出ません。
+`GetPendingChanges` は、まだコミットしていない操作の一覧です。ディレクトリのコピーは、ファイルごとの Add として見えます。`CreateDirectoryAsync` の配下で予約した操作は出ます。素のファイル API で書いたファイルは出ません。
 
 ### コミットすると
 
@@ -127,7 +126,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 ### コミットせず破棄すると
 
-`await using` を抜ける、または `DisposeAsync` すると、未コミットの `.txnew`、コピーが作ったディレクトリ、`CreateDirectoryAsync` のディレクトリ、ジャーナルが消えます。`CreateDirectoryAsync` の中へ素のファイル API で書いたものも、そのディレクトリごと消えます。それ以外の、このトランザクションが触れていないファイルは残ります。Attach したファイルとディレクトリは消しません。
+`await using` を抜ける、または `DisposeAsync` すると、未コミットの `.txnew`、コピーが作ったディレクトリ、`CreateDirectoryAsync` のディレクトリ、ジャーナルが消えます。`CreateDirectoryAsync` の中へ素のファイル API で書いたもの、およびその中へ Attach したものも、そのディレクトリごと消えます。それ以外の、このトランザクションが触れていないファイルは残ります。木の外へ Attach したファイルとディレクトリは消しません。
 
 コミット開始前にキャンセルしたときも、破棄のときに同じ片付けをします。
 
@@ -248,18 +247,19 @@ await tx.ExportAsync("src", @"D:\outgoing\copy");
 
 ## 空ディレクトリを作る
 
-`CreateDirectoryAsync` だけは、呼んだ時点で本物のパスに空ディレクトリを作ります。中身は素のファイル API で書きます。同じプロセスでも別プロセスでもよいです。ジャーナルはディレクトリ 1 件で、中は走査しません。
+`CreateDirectoryAsync` だけは、呼んだ時点で本物のパスに空ディレクトリを作ります。中身は素のファイル API で書きます。同じプロセスでも別プロセスでもよいです。配下では、親が最初からあるディレクトリと同じ操作ができます。ジャーナルの `CreateDirectory` はディレクトリ 1 件で、素のファイルは走査しません。
 
 ```csharp
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
 await tx.CreateDirectoryAsync("drop");
 await File.WriteAllTextAsync(@"D:\share\work\drop\a.txt", "from-api");
+await tx.WriteAllTextAsync(@"drop\b.txt", "from-txfio");
 CommitResult result = await tx.CommitAsync();
 ```
 
-コミットが `Succeeded` なら、`drop` と `a.txt` はその場所に残ります。rename はしません。コミットせず破棄すると、`drop` も `a.txt` も消えます。
+コミットが `Succeeded` なら、`drop` と両方のファイルはその場所に残ります。rename はしません。コミットせず破棄すると、`drop` ごと消えます。中へ Attach したものも消えます。
 
-そのディレクトリ自身と配下への Add、Update、Delete、DeleteTree、Move、Copy、Import、Attach、入れ子の `CreateDirectoryAsync` は `InvalidOperationException` です。ファイルの `ReadAsync` と、ファイルまたはディレクトリの `ExportAsync` はできます。兄弟の `CreateDirectoryAsync` と、木の外の操作は続けられます。
+そのパス自身への Delete、DeleteTree、Move、Attach、Update、もう一度の `CreateDirectoryAsync` は `InvalidOperationException` です。配下にこのトランザクションの操作が無いときだけ、そのディレクトリをコピー元にできます。兄弟の `CreateDirectoryAsync` と、木の外の操作は続けられます。
 
 既にあるパス、親が無いパスは `ExternalConflictException` です。コミットの前にディレクトリが無い、またはファイルに変わっていると `Failed` です。そのファイルは破棄しても残ります。
 
@@ -310,7 +310,7 @@ CommitResult result = await tx.CommitAsync();
 | `MoveAsync` | 別ボリューム → `UnsupportedOperationException`。元が無い、先がある → `ExternalConflictException`。配下や自分自身の配下 → `InvalidOperationException` |
 | `AttachAsync`（ファイル） | 無い → `ExternalConflictException`。サイズか最終更新日時が変わるとコミットは `Failed` |
 | `AttachAsync`（ディレクトリ） | 無い、またはファイルだとコミットは `Failed` |
-| `CreateDirectoryAsync` | 既にある、親が無い → `ExternalConflictException`。自身と配下の変更系 → `InvalidOperationException`。コミット時に無い、またはファイル → `Failed` |
+| `CreateDirectoryAsync` | 既にある、親が無い → `ExternalConflictException`。そのパス自身の変更系 → `InvalidOperationException`。コミット時に無い、またはファイル → `Failed` |
 | `CopyAsync` / `ImportAsync` | 先が塞がっている、親が無い → `ExternalConflictException`。シンボリックリンク、同一パス、配下 → `InvalidOperationException`。Import の元がワークフォルダの中 → `ArgumentException` |
 | `ExportAsync` | 先がワークフォルダの中 → `ArgumentException`。先が塞がっている、親が無い、元が無い → `ExternalConflictException` |
 | `ReadAsync` | ディレクトリ → `UnsupportedOperationException`。`.txnew` も本物も無い → `ExternalConflictException` |
@@ -324,7 +324,7 @@ CommitResult result = await tx.CommitAsync();
 | --- | --- | --- |
 | Add、Update、ファイルの Delete、ファイルの Move、ファイルの Attach、ファイルの Copy、ファイルの Import | 共有。別パスは並行できる | 名指ししたパス。Move とファイルの Copy は元と先。ファイルの Import は先だけ |
 | ディレクトリの Delete、ディレクトリの Attach | 共有 | そのディレクトリだけ。子はロックしない |
-| `DeleteTreeAsync`、ディレクトリの Move、ディレクトリの Copy、ディレクトリの Import、`CreateDirectoryAsync` | 排他。ほかの変更は `LockContentionException` | 対象。Move は元と先。ディレクトリの Copy は元と先で、子はロックしない。ディレクトリの Import は先だけ。`CreateDirectoryAsync` はそのディレクトリ |
+| `DeleteTreeAsync`、ディレクトリの Move、ディレクトリの Copy、ディレクトリの Import、`CreateDirectoryAsync` | 排他。ほかの変更は `LockContentionException` | 対象。Move は元と先。ディレクトリの Copy は元と先で、子はロックしない。ディレクトリの Import は先だけ。`CreateDirectoryAsync` はそのディレクトリ。配下の操作はそれぞれの行 |
 | `ReadAsync`、`ExportAsync` | 取らない | 取らない |
 
 ### 再ステージ
@@ -344,9 +344,9 @@ CommitResult result = await tx.CommitAsync();
 | Move | 元または先の Delete | 元の Delete。ディレクトリの Delete は直下の規則のまま |
 | Move | 続けて Move | 最初の元から最後の先への Move |
 | ディレクトリの Move | 元または先そのものの `DeleteTreeAsync` | Move を消し、元ディレクトリの DeleteTree |
-| `CreateDirectory` | そのディレクトリ自身と配下の変更系 | 畳まない |
+| `CreateDirectory` | そのパス自身の Delete、DeleteTree、Move、Attach、Update、もう一度の `CreateDirectory` | 畳まない |
 
-`DeleteTreeAsync` の配下への操作、ディレクトリ Move の移動元と移動先の配下への操作も、同じ例外です。
+`DeleteTreeAsync` の配下への操作、ディレクトリ Move の移動元と移動先の配下への操作も、同じ例外です。`CreateDirectory` の配下は、各行の規則に従います。
 
 ### 復旧
 
