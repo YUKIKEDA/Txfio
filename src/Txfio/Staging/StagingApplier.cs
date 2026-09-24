@@ -5,6 +5,31 @@ namespace Txfio;
 /// </summary>
 internal static class StagingApplier
 {
+    private static readonly AsyncLocal<ApplyFailure?> _nextApplyFailure = new AsyncLocal<ApplyFailure?>();
+
+    /// <summary>
+    /// 次の適用で、指定した例外を投げる。テスト用
+    /// </summary>
+    /// <param name="exception">投げる例外</param>
+    internal static void FailNextApply(Exception exception)
+    {
+        _nextApplyFailure.Value = new ApplyFailure(exception);
+    }
+
+    /// <summary>
+    /// テストが仕込んだ適用の失敗を消す
+    /// </summary>
+    internal static void ClearApplyFailure()
+    {
+        ApplyFailure? failure = _nextApplyFailure.Value;
+        if (failure is not null)
+        {
+            failure.Exception = null;
+        }
+
+        _nextApplyFailure.Value = null;
+    }
+
     /// <summary>
     /// Add / Move / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する
     /// </summary>
@@ -75,6 +100,7 @@ internal static class StagingApplier
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
     internal static bool TryApply(JournalOperation operation)
     {
+        ThrowIfApplyArmed();
         if (operation.Before is null || operation.After is null)
         {
             return false;
@@ -170,6 +196,19 @@ internal static class StagingApplier
 
             Directory.Delete(operation.Path, recursive: true);
         }
+    }
+
+    private static void ThrowIfApplyArmed()
+    {
+        ApplyFailure? failure = _nextApplyFailure.Value;
+        if (failure?.Exception is null)
+        {
+            return;
+        }
+
+        Exception exception = failure.Exception;
+        failure.Exception = null;
+        throw exception;
     }
 
     private static bool Matches(JournalOperation operation, bool after)
@@ -350,5 +389,15 @@ internal static class StagingApplier
         {
             return false;
         }
+    }
+
+    private sealed class ApplyFailure
+    {
+        internal ApplyFailure(Exception exception)
+        {
+            Exception = exception;
+        }
+
+        internal Exception? Exception { get; set; }
     }
 }
