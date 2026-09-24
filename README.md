@@ -57,7 +57,7 @@ CommitResult result = await tx.CommitAsync();
 | `CopyAsync`                                | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ                        |
 | `ImportAsync`                              | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない                                           |
 | `ExportAsync`                              | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない                       |
-| `CreateArchiveAsync`                       | ワークフォルダ内のファイルまたはディレクトリから ZIP を作り、`.txnew` に書いて Add として残す                                                      |
+| `CreateArchiveAsync`                       | ワークフォルダ内のファイルかディレクトリ、または元と名前の組の列から ZIP を作り、Add として残す               |
 | `ExportArchiveAsync`                       | 読み取りと同じバイトで、ワークフォルダの外に ZIP を作る。ジャーナルには残さず、ロックもしない                                                      |
 | `ExtractArchiveAsync`                      | ワークフォルダ内の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す                                                                   |
 | `ImportArchiveAsync`                       | ワークフォルダの外の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す。ZIP は消さない                                                 |
@@ -156,7 +156,7 @@ flowchart TD
 
 このロックは、Txfio の利用者同士の協調です。素の `File` API やエクスプローラーは止めません。
 
-変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの `CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` はロックを開きも消しもしません。
+変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの（組ならディレクトリを含む）`CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` はロックを開きも消しもしません。
 
 ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 
@@ -415,6 +415,18 @@ ZIP は `System.IO.Compression` で読み書きし、ほかの操作と同じト
 | `ImportArchiveAsync`  | 外の ZIP                                          | 同上                                     | 同上                                                                    |
 
 作成では、`CompressionLevel`（省略時は `Optimal`）と、ディレクトリ名をエントリのルートに含めるか（省略時は含めない）を選べます。空のサブディレクトリはディレクトリエントリになり、エントリの日時は元のファイルの最終更新日時です。エントリ名は UTF-8 で書きます。進捗は圧縮前のバイト数で、`TotalBytes` は null です。
+
+入れるものと名前を選ぶときは、`ArchiveEntrySource` の列を渡します。Create と Export の両方で使えます。名前を省略するとワークフォルダからの相対パスになり、ディレクトリに空文字を渡すと中身を ZIP のルートに置きます。ディレクトリは配下を再帰で入れます。ZIP の中はリストの順です。同じファイルを別の名前で 2 回入れても構いません。空のリストなら空の ZIP です。名前は展開と同じ規則（下の段落）で確かめ、当たれば `ArgumentException` です。ファイルだけのリストならワークフォルダ全体は共有のままで、ディレクトリを含むと排他になります。
+
+```csharp
+await tx.ExportArchiveAsync(
+    new[]
+    {
+        new ArchiveEntrySource(@"reports\2026-09.csv", "monthly/09.csv"),
+        new ArchiveEntrySource("assets", ""),
+    },
+    @"D:\outgoing\bundle.zip");
+```
 
 `ExportArchiveAsync` は `ExportAsync` と同じく、ディレクトリでは未コミットの Add を含みません。ファイルを直接渡せば、Add した内容も入ります。
 

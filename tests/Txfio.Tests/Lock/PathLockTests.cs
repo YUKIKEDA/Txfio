@@ -470,4 +470,55 @@ public sealed class PathLockTests
         Assert.Equal(work.Path, contention.Path);
         Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
     }
+
+    /// <summary>
+    /// ファイルだけを組で指定した ZIP 作成は、ほかのパスの変更を止めない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt と b.txt がある</para>
+    /// <para>手順: a.txt だけを組で指定して ZIP を作ってから、別トランザクションが b.txt を Delete する</para>
+    /// <para>期待: Delete は成功し、どちらのトランザクションも操作を 1 件持つ</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateArchiveAsync_ファイルだけの組はほかのパスの変更を止めないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.CreateArchiveAsync(new[] { new ArchiveEntrySource("a.txt") }, "a.zip");
+
+        await second.DeleteAsync("b.txt");
+
+        Assert.Single(first.GetPendingChanges());
+        Assert.Single(second.GetPendingChanges());
+    }
+
+    /// <summary>
+    /// ディレクトリを含む組で指定した ZIP 作成は、他のトランザクションの変更を止める
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 子ファイルがあるディレクトリと、別のファイルが 2 つある</para>
+    /// <para>手順: ファイル 1 つとディレクトリを組で指定して ZIP を作ってから、別トランザクションがもう一方のファイルを Delete する</para>
+    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateArchiveAsync_ディレクトリを含む組はワークフォルダで他の変更を止めること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "src");
+        Directory.CreateDirectory(source);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.CreateArchiveAsync(new[] { new ArchiveEntrySource("a.txt"), new ArchiveEntrySource("src") }, "all.zip");
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.DeleteAsync("b.txt"));
+
+        Assert.Equal(work.Path, contention.Path);
+    }
 }

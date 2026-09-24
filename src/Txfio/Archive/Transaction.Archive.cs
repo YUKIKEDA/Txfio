@@ -11,7 +11,7 @@ internal sealed partial class Transaction
     private static readonly DateTime _maximumEntryTime = new DateTime(2107, 12, 31, 23, 59, 58);
 
     /// <inheritdoc />
-    public async Task CreateArchiveAsync(
+    public Task CreateArchiveAsync(
         string source,
         string archivePath,
         CompressionLevel compressionLevel = CompressionLevel.Optimal,
@@ -22,78 +22,38 @@ internal sealed partial class Transaction
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
-        string archive = WorkPath.ResolveInWorkFolder(_workFolder, archivePath);
-        StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
-        StagingRules.EnsureNotMetadataFolder(_workFolder, archive);
-        StagingRules.ThrowIfArchiveInsideSource(sourcePath, archive);
-        StagingRules.ThrowIfInsideDeleteTree(_operations, sourcePath);
-        StagingRules.ThrowIfInsideDeleteTree(_operations, archive);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, sourcePath);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, archive);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, sourcePath);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, archive);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, sourcePath);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, archive);
-        ThrowIfCopyPathIsStaged(sourcePath);
-        ThrowIfCopyPathIsStaged(archive);
-        EnsureCopySourceAvailable(sourcePath);
-        EnsureCopyDestinationFree(archive);
-
-        bool isDirectory = Directory.Exists(sourcePath);
-        if (isDirectory)
-        {
-            _locks.AcquireExclusive(_workFolder);
-            _locks.RejectForeignLocks(_workFolder);
-        }
-        else
-        {
-            _locks.AcquireShared(_workFolder);
-        }
-
-        _locks.Acquire(_workFolder, sourcePath, archive);
-        if (isDirectory ? !Directory.Exists(sourcePath) : !File.Exists(sourcePath))
-        {
-            throw new ExternalConflictException("入力が存在しません: " + sourcePath, sourcePath);
-        }
-
-        EnsureCopyDestinationFree(archive);
-        string stagingPath = WorkPath.StagingFilePath(archive, _transactionId);
-        int operationCount = _operations.Count;
-        try
-        {
-            await using (FileStream output = new FileStream(
-                stagingPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough))
-            {
-                await WriteArchiveAsync(
-                        output,
-                        sourcePath,
-                        isDirectory,
-                        compressionLevel,
-                        includeBaseDirectory,
-                        OpenArchiveSourceFromDisk,
-                        progress,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            RollbackAddedOperations(operationCount);
-            StagingFile.TryDelete(stagingPath);
-            throw;
-        }
+        ArchiveRoot root = ToSingleArchiveRoot(sourcePath, includeBaseDirectory);
+        return CreateArchiveCoreAsync(
+            new[] { root },
+            archivePath,
+            compressionLevel,
+            validateNames: false,
+            progress,
+            cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task ExportArchiveAsync(
+    public Task CreateArchiveAsync(
+        IEnumerable<ArchiveEntrySource> entries,
+        string archivePath,
+        CompressionLevel compressionLevel = CompressionLevel.Optimal,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfCannotMutate();
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<ArchiveRoot> roots = ToArchiveRoots(entries);
+        return CreateArchiveCoreAsync(
+            roots,
+            archivePath,
+            compressionLevel,
+            validateNames: true,
+            progress,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task ExportArchiveAsync(
         string source,
         string externalArchivePath,
         CompressionLevel compressionLevel = CompressionLevel.Optimal,
@@ -104,42 +64,89 @@ internal sealed partial class Transaction
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
-        string destinationPath = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalArchivePath);
-        StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
-        bool isDirectory = Directory.Exists(sourcePath);
-        if (!isDirectory)
-        {
-            if (File.Exists(sourcePath) && IsReparsePoint(sourcePath))
-            {
-                throw new InvalidOperationException("シンボリックリンクは ZIP に入れられません: " + sourcePath);
-            }
+        ArchiveRoot root = ToSingleArchiveRoot(sourcePath, includeBaseDirectory);
+        return ExportArchiveCoreAsync(
+            new[] { root },
+            externalArchivePath,
+            compressionLevel,
+            validateNames: false,
+            progress,
+            cancellationToken);
+    }
 
-            // 入力が無いときは、書き出し先より先に知らせる
-            await using FileStream probe = OpenExportSource(sourcePath);
+    /// <inheritdoc />
+    public Task ExportArchiveAsync(
+        IEnumerable<ArchiveEntrySource> entries,
+        string externalArchivePath,
+        CompressionLevel compressionLevel = CompressionLevel.Optimal,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfCannotMutate();
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<ArchiveRoot> roots = ToArchiveRoots(entries);
+        return ExportArchiveCoreAsync(
+            roots,
+            externalArchivePath,
+            compressionLevel,
+            validateNames: true,
+            progress,
+            cancellationToken);
+    }
+
+    private static ArchiveRoot ToSingleArchiveRoot(string sourcePath, bool includeBaseDirectory)
+    {
+        string name = System.IO.Path.GetFileName(sourcePath.TrimEnd(
+            System.IO.Path.DirectorySeparatorChar,
+            System.IO.Path.AltDirectorySeparatorChar));
+        if (Directory.Exists(sourcePath))
+        {
+            return new ArchiveRoot(sourcePath, true, includeBaseDirectory ? name : string.Empty);
         }
 
-        EnsureExportDestination(destinationPath);
-        FileStream output = OpenNewExportArchive(destinationPath);
+        return new ArchiveRoot(sourcePath, false, name);
+    }
+
+    private static string ToArchiveRootName(string entryName, bool isDirectory)
+    {
+        string name = entryName.Replace('\\', '/');
         try
         {
-            await using (output.ConfigureAwait(false))
+            if (!isDirectory)
             {
-                await WriteArchiveAsync(
-                        output,
-                        sourcePath,
-                        isDirectory,
-                        compressionLevel,
-                        includeBaseDirectory,
-                        OpenExportSource,
-                        progress,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                ArchiveEntryNames.Split(name, out bool endsWithSeparator);
+                if (endsWithSeparator)
+                {
+                    throw new InvalidDataException("ファイルのエントリ名が区切りで終わっています: " + entryName);
+                }
+
+                return name;
             }
+
+            if (name.Length == 0)
+            {
+                return name;
+            }
+
+            string trimmed = name.EndsWith('/') ? name[..^1] : name;
+            ArchiveEntryNames.Split(trimmed + "/", out _);
+            return trimmed;
         }
-        catch
+        catch (InvalidDataException exception)
         {
-            StagingFile.TryDelete(destinationPath);
-            throw;
+            throw new ArgumentException(exception.Message, "entries", exception);
+        }
+    }
+
+    private static void ValidateArchiveNames(List<PlannedArchiveEntry> planned)
+    {
+        try
+        {
+            ArchiveEntryNames.Validate(planned.Select(static entry => entry.Name));
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new ArgumentException(exception.Message, "entries", exception);
         }
     }
 
@@ -209,12 +216,10 @@ internal sealed partial class Transaction
         progress.CompleteFile(copied);
     }
 
-    private async Task WriteArchiveAsync(
+    private static async Task WriteArchiveAsync(
         Stream output,
-        string sourcePath,
-        bool isDirectory,
+        List<PlannedArchiveEntry> planned,
         CompressionLevel compressionLevel,
-        bool includeBaseDirectory,
         Func<string, FileStream> openFile,
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
@@ -222,39 +227,17 @@ internal sealed partial class Transaction
         DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
         using (ZipArchive zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
         {
-            if (isDirectory)
+            foreach (PlannedArchiveEntry entry in planned)
             {
-                string prefix = includeBaseDirectory
-                    ? System.IO.Path.GetFileName(sourcePath.TrimEnd(
-                        System.IO.Path.DirectorySeparatorChar,
-                        System.IO.Path.AltDirectorySeparatorChar)) + "/"
-                    : string.Empty;
-                bool wroteChild = !IsReparsePoint(sourcePath)
-                    && await WriteDirectoryEntriesAsync(
-                            zip,
-                            sourcePath,
-                            sourcePath,
-                            prefix,
-                            compressionLevel,
-                            openFile,
-                            tracker,
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                if (!wroteChild && prefix.Length > 0)
+                cancellationToken.ThrowIfCancellationRequested();
+                if (entry.FilePath is null)
                 {
-                    zip.CreateEntry(prefix);
+                    zip.CreateEntry(entry.Name);
+                    continue;
                 }
-            }
-            else
-            {
-                await using FileStream content = openFile(sourcePath);
-                await WriteEntryAsync(
-                        zip,
-                        System.IO.Path.GetFileName(sourcePath),
-                        content,
-                        compressionLevel,
-                        tracker,
-                        cancellationToken)
+
+                await using FileStream content = openFile(entry.FilePath);
+                await WriteEntryAsync(zip, entry.Name, content, compressionLevel, tracker, cancellationToken)
                     .ConfigureAwait(false);
             }
         }
@@ -267,17 +250,211 @@ internal sealed partial class Transaction
         await output.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> WriteDirectoryEntriesAsync(
-        ZipArchive zip,
+    private IReadOnlyList<ArchiveRoot> ToArchiveRoots(IEnumerable<ArchiveEntrySource> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        List<ArchiveRoot> roots = new List<ArchiveRoot>();
+        foreach (ArchiveEntrySource? entry in entries.ToList())
+        {
+            if (entry is null)
+            {
+                throw new ArgumentNullException(nameof(entries), "ZIP に入れる要素が null です");
+            }
+
+            if (entry.SourcePath is null)
+            {
+                throw new ArgumentNullException(nameof(entries), "ZIP に入れる要素のパスが null です");
+            }
+
+            string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, entry.SourcePath);
+            bool isDirectory = Directory.Exists(sourcePath);
+            string entryName = entry.EntryName
+                ?? System.IO.Path.GetRelativePath(_workFolder, sourcePath);
+            roots.Add(new ArchiveRoot(sourcePath, isDirectory, ToArchiveRootName(entryName, isDirectory)));
+        }
+
+        return roots;
+    }
+
+    private async Task CreateArchiveCoreAsync(
+        IReadOnlyList<ArchiveRoot> roots,
+        string archivePath,
+        CompressionLevel compressionLevel,
+        bool validateNames,
+        IProgress<TransferProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        string archive = WorkPath.ResolveInWorkFolder(_workFolder, archivePath);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, archive);
+        foreach (ArchiveRoot root in roots)
+        {
+            StagingRules.EnsureNotMetadataFolder(_workFolder, root.SourcePath);
+            StagingRules.ThrowIfArchiveInsideSource(root.SourcePath, archive);
+            StagingRules.ThrowIfInsideDeleteTree(_operations, root.SourcePath);
+            StagingRules.ThrowIfInsideDirectoryMove(_operations, root.SourcePath);
+            StagingRules.ThrowIfTouchesDeletedDirectory(_operations, root.SourcePath);
+            StagingRules.ThrowIfOperationUnderDirectory(_operations, root.SourcePath);
+            ThrowIfCopyPathIsStaged(root.SourcePath);
+        }
+
+        StagingRules.ThrowIfInsideDeleteTree(_operations, archive);
+        StagingRules.ThrowIfInsideDirectoryMove(_operations, archive);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, archive);
+        StagingRules.ThrowIfOperationUnderDirectory(_operations, archive);
+        ThrowIfCopyPathIsStaged(archive);
+        foreach (ArchiveRoot root in roots)
+        {
+            EnsureCopySourceAvailable(root.SourcePath);
+        }
+
+        EnsureCopyDestinationFree(archive);
+        if (roots.Any(static root => root.IsDirectory))
+        {
+            _locks.AcquireExclusive(_workFolder);
+            _locks.RejectForeignLocks(_workFolder);
+        }
+        else
+        {
+            _locks.AcquireShared(_workFolder);
+        }
+
+        _locks.Acquire(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray());
+        foreach (ArchiveRoot root in roots)
+        {
+            if (root.IsDirectory ? !Directory.Exists(root.SourcePath) : !File.Exists(root.SourcePath))
+            {
+                throw new ExternalConflictException("入力が存在しません: " + root.SourcePath, root.SourcePath);
+            }
+        }
+
+        EnsureCopyDestinationFree(archive);
+        List<PlannedArchiveEntry> planned = PlanArchiveEntries(roots, cancellationToken);
+        if (validateNames)
+        {
+            ValidateArchiveNames(planned);
+        }
+
+        string stagingPath = WorkPath.StagingFilePath(archive, _transactionId);
+        int operationCount = _operations.Count;
+        try
+        {
+            await using (FileStream output = new FileStream(
+                stagingPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 4096,
+                FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await WriteArchiveAsync(
+                        output,
+                        planned,
+                        compressionLevel,
+                        OpenArchiveSourceFromDisk,
+                        progress,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            RollbackAddedOperations(operationCount);
+            StagingFile.TryDelete(stagingPath);
+            throw;
+        }
+    }
+
+    private async Task ExportArchiveCoreAsync(
+        IReadOnlyList<ArchiveRoot> roots,
+        string externalArchivePath,
+        CompressionLevel compressionLevel,
+        bool validateNames,
+        IProgress<TransferProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        string destinationPath = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalArchivePath);
+        foreach (ArchiveRoot root in roots)
+        {
+            StagingRules.EnsureNotMetadataFolder(_workFolder, root.SourcePath);
+            if (root.IsDirectory)
+            {
+                continue;
+            }
+
+            if (File.Exists(root.SourcePath) && IsReparsePoint(root.SourcePath))
+            {
+                throw new InvalidOperationException("シンボリックリンクは ZIP に入れられません: " + root.SourcePath);
+            }
+
+            // 入力が無いときは、書き出し先より先に知らせる
+            await using FileStream probe = OpenExportSource(root.SourcePath);
+        }
+
+        EnsureExportDestination(destinationPath);
+        List<PlannedArchiveEntry> planned = PlanArchiveEntries(roots, cancellationToken);
+        if (validateNames)
+        {
+            ValidateArchiveNames(planned);
+        }
+
+        FileStream output = OpenNewExportArchive(destinationPath);
+        try
+        {
+            await using (output.ConfigureAwait(false))
+            {
+                await WriteArchiveAsync(
+                        output,
+                        planned,
+                        compressionLevel,
+                        OpenExportSource,
+                        progress,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            StagingFile.TryDelete(destinationPath);
+            throw;
+        }
+    }
+
+    private List<PlannedArchiveEntry> PlanArchiveEntries(
+        IReadOnlyList<ArchiveRoot> roots,
+        CancellationToken cancellationToken)
+    {
+        List<PlannedArchiveEntry> planned = new List<PlannedArchiveEntry>();
+        foreach (ArchiveRoot root in roots)
+        {
+            if (!root.IsDirectory)
+            {
+                planned.Add(new PlannedArchiveEntry(root.EntryName, root.SourcePath));
+                continue;
+            }
+
+            string prefix = root.EntryName.Length > 0 ? root.EntryName + "/" : string.Empty;
+            bool plannedChild = !IsReparsePoint(root.SourcePath)
+                && PlanDirectoryEntries(root.SourcePath, root.SourcePath, prefix, planned, cancellationToken);
+            if (!plannedChild && prefix.Length > 0)
+            {
+                planned.Add(new PlannedArchiveEntry(prefix, null));
+            }
+        }
+
+        return planned;
+    }
+
+    private bool PlanDirectoryEntries(
         string sourceRoot,
         string current,
         string prefix,
-        CompressionLevel compressionLevel,
-        Func<string, FileStream> openFile,
-        DirectoryCopyProgress progress,
+        List<PlannedArchiveEntry> planned,
         CancellationToken cancellationToken)
     {
-        bool wroteAny = false;
+        bool plannedAny = false;
         foreach (string entry in Directory.EnumerateFileSystemEntries(current))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -291,22 +468,12 @@ internal sealed partial class Transaction
                     .Replace(System.IO.Path.DirectorySeparatorChar, '/');
             if (Directory.Exists(entry))
             {
-                bool wroteChild = await WriteDirectoryEntriesAsync(
-                        zip,
-                        sourceRoot,
-                        entry,
-                        prefix,
-                        compressionLevel,
-                        openFile,
-                        progress,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                if (!wroteChild)
+                if (!PlanDirectoryEntries(sourceRoot, entry, prefix, planned, cancellationToken))
                 {
-                    zip.CreateEntry(entryName + "/");
+                    planned.Add(new PlannedArchiveEntry(entryName + "/", null));
                 }
 
-                wroteAny = true;
+                plannedAny = true;
                 continue;
             }
 
@@ -315,12 +482,14 @@ internal sealed partial class Transaction
                 continue;
             }
 
-            await using FileStream content = openFile(entry);
-            await WriteEntryAsync(zip, entryName, content, compressionLevel, progress, cancellationToken)
-                .ConfigureAwait(false);
-            wroteAny = true;
+            planned.Add(new PlannedArchiveEntry(entryName, entry));
+            plannedAny = true;
         }
 
-        return wroteAny;
+        return plannedAny;
     }
+
+    private sealed record ArchiveRoot(string SourcePath, bool IsDirectory, string EntryName);
+
+    private sealed record PlannedArchiveEntry(string Name, string? FilePath);
 }

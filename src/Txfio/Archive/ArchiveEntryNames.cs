@@ -20,36 +20,31 @@ internal static class ArchiveEntryNames
     internal static IReadOnlyList<ArchiveEntryPlan> Plan(IReadOnlyCollection<ZipArchiveEntry> entries)
     {
         List<ArchiveEntryPlan> plans = new List<ArchiveEntryPlan>(entries.Count);
-        HashSet<string> files = new HashSet<string>(StringComparer.Ordinal);
-        HashSet<string> directories = new HashSet<string>(StringComparer.Ordinal);
-        HashSet<string> ancestors = new HashSet<string>(StringComparer.Ordinal);
+        NameSet names = new NameSet();
         foreach (ZipArchiveEntry entry in entries)
         {
-            string[] segments = Split(entry.FullName, out bool isDirectory);
-            string key = string.Join('/', segments).ToUpperInvariant();
-            if (files.Contains(key) || directories.Contains(key))
-            {
-                throw new InvalidDataException("ZIP に同じ名前のエントリがあります: " + entry.FullName);
-            }
-
-            (isDirectory ? directories : files).Add(key);
-            for (int count = 1; count < segments.Length; count++)
-            {
-                ancestors.Add(string.Join('/', segments, 0, count).ToUpperInvariant());
-            }
-
+            string[] segments = names.Add(entry.FullName, out bool isDirectory);
             plans.Add(new ArchiveEntryPlan(entry, System.IO.Path.Combine(segments), isDirectory));
         }
 
-        foreach (string file in files)
+        names.EnsureNoFileDirectoryConflict();
+        return plans;
+    }
+
+    /// <summary>
+    /// これから書くエントリ名をすべて検証する
+    /// </summary>
+    /// <param name="fullNames">エントリ名（ディレクトリは末尾が `/`）</param>
+    /// <exception cref="InvalidDataException">危険な名前、Windows で使えない名前、重複、またはファイルとディレクトリの同名がある</exception>
+    internal static void Validate(IEnumerable<string> fullNames)
+    {
+        NameSet names = new NameSet();
+        foreach (string fullName in fullNames)
         {
-            if (ancestors.Contains(file))
-            {
-                throw new InvalidDataException("ZIP に同じ名前のファイルとディレクトリがあります: " + file);
-            }
+            names.Add(fullName, out _);
         }
 
-        return plans;
+        names.EnsureNoFileDirectoryConflict();
     }
 
     /// <summary>
@@ -115,5 +110,41 @@ internal static class ArchiveEntryNames
         }
 
         return names;
+    }
+
+    private sealed class NameSet
+    {
+        private readonly HashSet<string> _files = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _directories = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _ancestors = new HashSet<string>(StringComparer.Ordinal);
+
+        internal string[] Add(string fullName, out bool isDirectory)
+        {
+            string[] segments = Split(fullName, out isDirectory);
+            string key = string.Join('/', segments).ToUpperInvariant();
+            if (_files.Contains(key) || _directories.Contains(key))
+            {
+                throw new InvalidDataException("ZIP に同じ名前のエントリがあります: " + fullName);
+            }
+
+            (isDirectory ? _directories : _files).Add(key);
+            for (int count = 1; count < segments.Length; count++)
+            {
+                _ancestors.Add(string.Join('/', segments, 0, count).ToUpperInvariant());
+            }
+
+            return segments;
+        }
+
+        internal void EnsureNoFileDirectoryConflict()
+        {
+            foreach (string file in _files)
+            {
+                if (_ancestors.Contains(file))
+                {
+                    throw new InvalidDataException("ZIP に同じ名前のファイルとディレクトリがあります: " + file);
+                }
+            }
+        }
     }
 }
