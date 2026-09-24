@@ -442,4 +442,32 @@ public sealed class PathLockTests
         Assert.Equal(work.Path, contention.Path);
         Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
     }
+
+    /// <summary>
+    /// ZIP の展開は他のトランザクションの変更を止める
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ZIP と、別のファイルがある</para>
+    /// <para>手順: ZIP を展開してから、別トランザクションがそのファイルを Delete する</para>
+    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// </remarks>
+    [Fact]
+    public async Task ExtractArchiveAsync_ワークフォルダで他の変更を止めること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "src");
+        Directory.CreateDirectory(source);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
+        System.IO.Compression.ZipFile.CreateFromDirectory(source, System.IO.Path.Combine(work.Path, "src.zip"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.ExtractArchiveAsync("src.zip", "dest");
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.DeleteAsync("a.txt"));
+
+        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
+    }
 }
