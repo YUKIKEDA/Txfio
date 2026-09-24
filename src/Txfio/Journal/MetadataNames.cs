@@ -62,4 +62,37 @@ internal static class MetadataNames
     {
         return System.IO.Path.ChangeExtension(journalPath, ".lock");
     }
+
+    /// <summary>
+    /// 上書き用の一時ファイルのパスを返す
+    /// </summary>
+    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
+    /// <returns>`.txfio/tx-{guid}.journal.tmp` のパス</returns>
+    internal static string JournalTempPath(string journalPath)
+    {
+        return journalPath + ".tmp";
+    }
+
+    /// <summary>
+    /// ジャーナルのファイル名からトランザクション ID を取る
+    /// </summary>
+    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
+    /// <param name="transactionId">取れた ID</param>
+    /// <returns>ファイル名が `tx-{guid}.journal` なら <see langword="true"/></returns>
+    internal static bool TryGetTransactionId(string journalPath, out Guid transactionId)
+    {
+        string name = System.IO.Path.GetFileName(journalPath);
+        const string prefix = "tx-";
+        const string suffix = ".journal";
+        if (name.Length > prefix.Length + suffix.Length
+            && name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            string id = name.Substring(prefix.Length, name.Length - prefix.Length - suffix.Length);
+            return Guid.TryParseExact(id, "D", out transactionId);
+        }
+
+        transactionId = Guid.Empty;
+        return false;
+    }
 }

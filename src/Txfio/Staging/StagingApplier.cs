@@ -182,6 +182,26 @@ internal static class StagingApplier
     }
 
     /// <summary>
+    /// このトランザクションの `.txnew` を、ワークフォルダ配下から消す
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="transactionId">トランザクション ID</param>
+    internal static void DeleteStagingFiles(string workFolder, Guid transactionId)
+    {
+        string pattern = "*." + transactionId.ToString("D") + ".txnew";
+        foreach (string path in Directory.EnumerateFiles(workFolder, pattern, SearchOption.AllDirectories))
+        {
+            if (WorkPath.IsInMetadataFolder(workFolder, path)
+                || !WorkPath.IsThisTransactionStagingFile(path, transactionId))
+            {
+                continue;
+            }
+
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
     /// CreateDirectory が作ったディレクトリを、中身ごと消す
     /// </summary>
     /// <param name="operations">操作一覧</param>

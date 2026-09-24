@@ -10,7 +10,8 @@ internal static class RecoverService
     /// </summary>
     /// <param name="workFolder">既存のワークフォルダ</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>復旧結果</returns>
+    /// <returns>復旧結果。JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/></returns>
+    /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
     internal static async Task<RecoverResult> RecoverAsync(string workFolder, CancellationToken cancellationToken)
     {
         string metadataFolder = MetadataNames.FolderPath(workFolder);
@@ -29,7 +30,7 @@ internal static class RecoverService
                 metadataFolder,
                 MetadataNames.JournalSearchPattern,
                 SearchOption.TopDirectoryOnly);
-            return await RecoverJournalsAsync(journals, cancellationToken).ConfigureAwait(false);
+            return await RecoverJournalsAsync(workFolder, journals, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -37,11 +38,15 @@ internal static class RecoverService
         }
     }
 
-    private static async Task<RecoverResult> RecoverJournalsAsync(string[] journals, CancellationToken cancellationToken)
+    private static async Task<RecoverResult> RecoverJournalsAsync(
+        string workFolder,
+        string[] journals,
+        CancellationToken cancellationToken)
     {
         bool rolledBack = false;
         bool rolledForward = false;
         bool conflictDetected = false;
+        bool journalUnreadable = false;
         foreach (string journalPath in journals)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -61,8 +66,22 @@ internal static class RecoverService
                     continue;
                 }
 
+                // 落ちた上書きの一時ファイルは、読む前に消す
+                JournalStore.DeleteTemp(journalPath);
                 JournalDocument? document = await JournalStore.TryReadAsync(journalPath, cancellationToken)
                     .ConfigureAwait(false);
+
+                if (document is null)
+                {
+                    // 文書が読めないので作ったディレクトリは特定できない。そのトランザクション ID の .txnew だけ消す
+                    if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
+                    {
+                        StagingApplier.DeleteStagingFiles(workFolder, transactionId);
+                    }
+
+                    journalUnreadable = true;
+                    continue;
+                }
 
                 if (document is { Committing: true })
                 {
@@ -79,12 +98,8 @@ internal static class RecoverService
                     continue;
                 }
 
-                if (document is not null)
-                {
-                    StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
-                    StagingApplier.DeleteStagingFiles(document.Operations);
-                }
-
+                StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
+                StagingApplier.DeleteStagingFiles(document.Operations);
                 await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
                 rolledBack = true;
             }
@@ -92,6 +107,11 @@ internal static class RecoverService
             {
                 await liveness.DisposeAsync().ConfigureAwait(false);
             }
+        }
+
+        if (journalUnreadable)
+        {
+            return RecoverResult.JournalUnreadable;
         }
 
         if (conflictDetected)

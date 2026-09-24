@@ -24,4 +24,9 @@ public enum RecoverResult
     /// Before / After のどちらとも一致しない操作があった
     /// </summary>
     ConflictDetected = 3,
+
+    /// <summary>
+    /// JSON として読めないジャーナルがあった
+    /// </summary>
+    JournalUnreadable = 4,
 }
