@@ -120,15 +120,18 @@ internal sealed partial class Transaction
 
         EnsureCopyDestinationFree(destinationPath);
         int operationCount = _operations.Count;
+        string stagingPath = WorkPath.StagingFilePath(destinationPath, _transactionId);
+        _operations.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
         try
         {
-            await CopyFileToAddAsync(sourcePath, destinationPath, progress, cancellationToken)
-                .ConfigureAwait(false);
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            await WriteCopySourceAsync(sourcePath, stagingPath, progress, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch
         {
             RollbackAddedOperations(operationCount);
+            await TryPersistUndoAsync().ConfigureAwait(false);
             throw;
         }
     }
@@ -142,52 +145,29 @@ internal sealed partial class Transaction
         _locks.AcquireExclusive(_workFolder);
         _locks.RejectForeignLocks(_workFolder);
         _locks.Acquire(_workFolder, sourcePath, destinationPath);
-        int operationCount = _operations.Count;
-        int directoryCount = _createdDirectories.Count;
-        try
+        if (!Directory.Exists(sourcePath))
         {
-            if (!Directory.Exists(sourcePath))
-            {
-                throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);
-            }
-
-            EnsureCopyDestinationFree(destinationPath);
-            CreateCopyDirectory(destinationPath);
-            DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
-            if (!IsReparsePoint(sourcePath))
-            {
-                await CopyDirectoryEntriesAsync(
-                        sourcePath,
-                        sourcePath,
-                        destinationPath,
-                        tracker,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            if (!tracker.Reported)
-            {
-                progress?.Report(new TransferProgress(0, null));
-            }
-
-            if (_operations.Count > operationCount)
-            {
-                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            }
+            throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);
         }
-        catch
+
+        EnsureCopyDestinationFree(destinationPath);
+        List<string> directories = new List<string> { destinationPath };
+        List<PlannedCopyFile> files = new List<PlannedCopyFile>();
+        if (!IsReparsePoint(sourcePath))
         {
-            RollbackAddedOperations(operationCount);
-            DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
-            throw;
+            PlanDirectoryEntries(sourcePath, sourcePath, destinationPath, directories, files, cancellationToken);
         }
+
+        await ApplyPlannedDirectoryCopyAsync(directories, files, progress, cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    private async Task CopyDirectoryEntriesAsync(
+    private void PlanDirectoryEntries(
         string sourceRoot,
         string current,
         string destinationRoot,
-        DirectoryCopyProgress progress,
+        List<string> directories,
+        List<PlannedCopyFile> files,
         CancellationToken cancellationToken)
     {
         foreach (string entry in Directory.EnumerateFileSystemEntries(current))
@@ -202,30 +182,78 @@ internal sealed partial class Transaction
             string destination = System.IO.Path.GetFullPath(System.IO.Path.Combine(destinationRoot, relative));
             if (Directory.Exists(entry))
             {
-                CreateCopyDirectory(destination);
-                await CopyDirectoryEntriesAsync(sourceRoot, entry, destinationRoot, progress, cancellationToken)
-                    .ConfigureAwait(false);
+                directories.Add(destination);
+                PlanDirectoryEntries(sourceRoot, entry, destinationRoot, directories, files, cancellationToken);
                 continue;
             }
 
-            if (!File.Exists(entry))
+            if (File.Exists(entry))
             {
-                continue;
+                files.Add(new PlannedCopyFile(entry, destination));
             }
-
-            long bytes = await CopyFileToAddAsync(entry, destination, progress, cancellationToken)
-                .ConfigureAwait(false);
-            progress.CompleteFile(bytes);
         }
     }
 
-    private async Task<long> CopyFileToAddAsync(
-        string sourcePath,
-        string destinationPath,
+    private async Task ApplyPlannedDirectoryCopyAsync(
+        IReadOnlyList<string> directories,
+        IReadOnlyList<PlannedCopyFile> files,
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        string stagingPath = WorkPath.StagingFilePath(destinationPath, _transactionId);
+        int operationCount = _operations.Count;
+        int directoryCount = _createdDirectories.Count;
+        foreach (string directory in directories)
+        {
+            _createdDirectories.Add(directory);
+        }
+
+        foreach (PlannedCopyFile file in files)
+        {
+            string stagingPath = WorkPath.StagingFilePath(file.DestinationPath, _transactionId);
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, file.DestinationPath, stagingPath));
+        }
+
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            foreach (string directory in directories)
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
+            foreach (PlannedCopyFile file in files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                long bytes = await WriteCopySourceAsync(
+                        file.SourcePath,
+                        WorkPath.StagingFilePath(file.DestinationPath, _transactionId),
+                        tracker,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                tracker.CompleteFile(bytes);
+            }
+
+            if (!tracker.Reported)
+            {
+                progress?.Report(new TransferProgress(0, null));
+            }
+        }
+        catch
+        {
+            RollbackAddedOperations(operationCount);
+            DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
+            await TryPersistUndoAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<long> WriteCopySourceAsync(
+        string sourcePath,
+        string stagingPath,
+        IProgress<TransferProgress>? progress,
+        CancellationToken cancellationToken)
+    {
         await using FileStream source = new FileStream(
             sourcePath,
             FileMode.Open,
@@ -234,14 +262,7 @@ internal sealed partial class Transaction
             bufferSize: 4096,
             FileOptions.Asynchronous);
         await StagingFile.WriteAsync(stagingPath, source, progress, cancellationToken).ConfigureAwait(false);
-        _operations.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
         return new FileInfo(stagingPath).Length;
-    }
-
-    private void CreateCopyDirectory(string path)
-    {
-        Directory.CreateDirectory(path);
-        _createdDirectories.Add(path);
     }
 
     private void RollbackAddedOperations(int operationCount)
@@ -293,6 +314,19 @@ internal sealed partial class Transaction
                 // 失敗したコピーの後始末では、元の例外を残す
             }
         }
+    }
+
+    private sealed class PlannedCopyFile
+    {
+        internal PlannedCopyFile(string sourcePath, string destinationPath)
+        {
+            SourcePath = sourcePath;
+            DestinationPath = destinationPath;
+        }
+
+        internal string SourcePath { get; }
+
+        internal string DestinationPath { get; }
     }
 
     private sealed class DirectoryCopyProgress : IProgress<TransferProgress>

@@ -631,18 +631,9 @@ internal sealed partial class Transaction
             ?? WorkPath.StagingFilePath(targetPath, _transactionId);
         string? backupPath = null;
         JournalOperation? staged = null;
+        bool journalUpdated = false;
         try
         {
-            if (previous?.StagingPath is not null
-                && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase)
-                && File.Exists(stagingPath))
-            {
-                backupPath = stagingPath + ".prev";
-                await StagingFile.CopyAsync(stagingPath, backupPath, cancellationToken).ConfigureAwait(false);
-            }
-
-            await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
-
             staged = new JournalOperation(recordedKind, targetPath, stagingPath);
             if (existingIndex >= 0)
             {
@@ -654,6 +645,16 @@ internal sealed partial class Transaction
             }
 
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journalUpdated = true;
+            if (previous?.StagingPath is not null
+                && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase)
+                && File.Exists(stagingPath))
+            {
+                backupPath = stagingPath + ".prev";
+                await StagingFile.CopyAsync(stagingPath, backupPath, cancellationToken).ConfigureAwait(false);
+            }
+
+            await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -687,6 +688,11 @@ internal sealed partial class Transaction
                 || !string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase))
             {
                 StagingFile.TryDelete(stagingPath);
+            }
+
+            if (journalUpdated)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
             }
 
             throw;

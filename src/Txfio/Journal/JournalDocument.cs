@@ -14,17 +14,20 @@ internal sealed class JournalDocument
     /// <param name="transactionId">対象トランザクションの ID</param>
     /// <param name="committing">コミットの適用中なら <see langword="true"/></param>
     /// <param name="operations">未確定の操作一覧</param>
+    /// <param name="createdDirectories">このトランザクションが作るディレクトリ。操作には含めない</param>
     [JsonConstructor]
     public JournalDocument(
         int version,
         Guid transactionId,
         bool committing,
-        IReadOnlyList<JournalOperation>? operations = null)
+        IReadOnlyList<JournalOperation>? operations = null,
+        IReadOnlyList<string>? createdDirectories = null)
     {
         Version = version;
         TransactionId = transactionId;
         Committing = committing;
         Operations = operations ?? Array.Empty<JournalOperation>();
+        CreatedDirectories = createdDirectories ?? Array.Empty<string>();
     }
 
     /// <summary>
@@ -46,4 +49,9 @@ internal sealed class JournalDocument
     /// 未確定の操作一覧
     /// </summary>
     public IReadOnlyList<JournalOperation> Operations { get; }
+
+    /// <summary>
+    /// このトランザクションが作るディレクトリ。操作には含めない
+    /// </summary>
+    public IReadOnlyList<string> CreatedDirectories { get; }
 }
