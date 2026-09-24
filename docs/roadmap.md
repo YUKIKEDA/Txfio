@@ -15,7 +15,7 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 2 並行性・ロック | 完了 |
 | Phase 3 拡張と公開 | 進行中（次は CreateDirectory 配下の設計 Issue #71） |
 
-Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、#67）と利用者向け README（Issue #41、#54）、設計（Issue #43、#53、#65）は main にある。次は CreateDirectory 配下の設計（Issue #71）。公開（nuget.org）はその後。
+Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、#67）と利用者向け README（Issue #41、#54、#69）、設計（Issue #43、#53、#65）は main にある。次は CreateDirectory 配下の設計（Issue #71）。公開（nuget.org）はその後。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -66,6 +66,7 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #57: 文字列と JSON の拡張メソッド
 - [x] Issue #65: 設計: `CreateDirectory`（空ディレクトリをすぐ作り、破棄ではその木を消す。実装は含めない）
 - [x] Issue #67: `CreateDirectoryAsync`（空ディレクトリをすぐ作り、破棄ではその木を消す）
+- [x] Issue #69: README に操作ごとの分岐を書く
 - Issue #71: 設計: `CreateDirectory` の配下で通常の操作を許す（実装は含めない）
 
 ## 公開（Phase 3 完了後）
