@@ -308,6 +308,30 @@ public sealed class PathLockTests
     }
 
     /// <summary>
+    /// CreateDirectory は他のトランザクションの変更を止める
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 別ファイル a.txt がある</para>
+    /// <para>手順: CreateDirectory してから、別トランザクションが a.txt を Delete する</para>
+    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateDirectoryAsync_ワークフォルダで他の変更を止めること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.CreateDirectoryAsync("drop");
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.DeleteAsync("a.txt"));
+
+        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(PendingChangeKind.CreateDirectory, Assert.Single(first.GetPendingChanges()).Kind);
+    }
+
+    /// <summary>
     /// 反対方向の Move を同時に呼んでも止まらない
     /// </summary>
     /// <remarks>

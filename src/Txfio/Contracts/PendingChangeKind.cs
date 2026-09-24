@@ -34,4 +34,9 @@ public enum PendingChangeKind
     /// ディレクトリとその配下すべての削除予約
     /// </summary>
     DeleteTree = 5,
+
+    /// <summary>
+    /// 空ディレクトリを作り、中身は素のファイル API で書く
+    /// </summary>
+    CreateDirectory = 6,
 }
