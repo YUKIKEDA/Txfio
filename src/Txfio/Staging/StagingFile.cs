@@ -187,7 +187,16 @@ internal static class StagingFile
         }
     }
 
-    private static async Task CopyAsync(
+    /// <summary>
+    /// ストリームを別のストリームへコピーし、書き終えたバイト数を通知する
+    /// </summary>
+    /// <param name="source">コピー元（Dispose しない）</param>
+    /// <param name="destination">コピー先（Dispose しない）</param>
+    /// <param name="totalBytes">通知に載せる全体のバイト数（分からなければ null）</param>
+    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>コピーの完了</returns>
+    internal static async Task CopyAsync(
         Stream source,
         Stream destination,
         long? totalBytes,

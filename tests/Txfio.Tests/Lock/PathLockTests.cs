@@ -415,4 +415,31 @@ public sealed class PathLockTests
         Assert.Equal(work.Path, contention.Path);
         Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
     }
+
+    /// <summary>
+    /// ディレクトリからの ZIP 作成は他のトランザクションの変更を止める
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 子ファイルがあるディレクトリと、別のファイルがある</para>
+    /// <para>手順: ディレクトリから ZIP を作ってから、別トランザクションがそのファイルを Delete する</para>
+    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateArchiveAsync_ディレクトリはワークフォルダで他の変更を止めること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "src");
+        Directory.CreateDirectory(source);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.CreateArchiveAsync("src", "src.zip");
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.DeleteAsync("a.txt"));
+
+        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
+    }
 }
