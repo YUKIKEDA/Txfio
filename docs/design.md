@@ -49,7 +49,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 ## API設計
 
-**変更検出方式**: 操作ログ方式。ライブラリのAPI（Add/Update/Delete/DeleteTree/Move/Copy/CreateDirectory）を明示的に呼んだ操作のみを追跡する。ワークフォルダ全体をスキャンして差分を自動検出する方式（スナップショット比較）は、ネットワークファイルシステム上での全件スキャンコストが非機能要件と衝突するため採用しない。ディレクトリのコピーと Import だけは、コピー対象の木を読むために走査する。
+**変更検出方式**: 操作ログ方式。ライブラリのAPI（Add/Update/Delete/DeleteTree/Move/Copy/CreateDirectory）を明示的に呼んだ操作のみを追跡する。ワークフォルダ全体をスキャンして差分を自動検出する方式（スナップショット比較）は、ネットワークファイルシステム上での全件スキャンコストが非機能要件と衝突するため採用しない。ディレクトリのコピーと Import、ディレクトリからの ZIP の作成と Export だけは、対象の木を読むために走査する。
 
 **主なAPI**
 
@@ -64,6 +64,17 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - `ReadAsync(path, CancellationToken)`: そのパスの未確定操作に `.txnew` があればそれを、無ければ本物のファイルを、位置 0 の読み取りストリームで返す。破棄は呼び出し側。全体はメモリにコピーしない。ロックは取らず、ジャーナルにも書かない。Delete と Move の移動元は本物を読む。`.txnew` も本物も無いときは `ExternalConflictException`。ディレクトリは未対応。開き方は `FileShare.Read | FileShare.Delete` なので、ストリームを閉じる前でもコミットの rename は進む。同じパスの再ステージは、ストリームを閉じるまで失敗しうる。取り消しは呼び出し開始時だけ有効
 - `tx.GetPendingChanges()`: 現在のジャーナル内容（Add/Update/Delete/DeleteTree/Move/CreateDirectory 一覧）を返す。ディレクトリのコピーは各ファイルの Add として見える。`CreateDirectory` の配下で予約した操作は、その操作として見える。素のファイル API で書いたファイルは出ない。実装コストはほぼゼロ（ジャーナルをそのまま返すだけ）で、git status に相当するデバッグや UI 表示に使う
 
+**ZIP アーカイブ**
+
+`System.IO.Compression.ZipArchive` を包んだ `ITransaction` のメソッドである。拡張メソッドにはしない。失敗時の後始末、哨兵、ロックに内部の仕組みが要るからである。ZIP 全体をメモリや一時ファイルに作らず、`.txnew` や外部の ZIP へ直接書く。扱うのは ZIP だけで、tar、GZip 単体、Brotli は対象外である。内と外の区別は `CopyAsync` / `ImportAsync` / `ExportAsync` と同じで、反対側のパスを渡すと `ArgumentException` になる。`compressionLevel` は省略時 `Optimal`、`includeBaseDirectory` は省略時 false（含めない）、`entryNameEncoding` と `progress` は省略時 null である。
+
+- `CreateArchiveAsync(source, archivePath, CompressionLevel compressionLevel, bool includeBaseDirectory, IProgress<TransferProgress>? progress, CancellationToken)`: ワークフォルダ内のファイルまたはディレクトリを、ワークフォルダ内の ZIP にする。ZIP は `.txnew` へ書いて Add の 1 件として残す。入力の読み方は `CopyAsync` と同じで、ディスク上の姿を歩く。このトランザクションの `.txnew` は除外し、未コミットの Add は含まれない。ジャンクションとシンボリックリンクは辿らず、ZIP にも入れない。空のサブディレクトリはディレクトリエントリとして入れる。ファイルのときはファイル名のエントリ 1 つで、`includeBaseDirectory` は見ない。エントリ名の区切りは `/` で、エンコーディングは .NET の既定（ASCII 以外を含む名前は UTF-8）に固定する。エントリの日時は読んだファイルの最終更新日時である。ZIP のパスにファイルかディレクトリがある、または親が無いときは `ExternalConflictException`。上書きしない。ZIP のパスが入力ディレクトリの配下、入力の配下か ZIP のパスにこのトランザクションの操作がある、そのパス自身が既に操作済み、予定された `DeleteTree` の配下への作成は `InvalidOperationException`。ロックは `CopyAsync` と同じで、ディレクトリなら排他の哨兵のあとに入力と ZIP のパス、ファイルなら共有の哨兵に加えて入力と ZIP のパスをロックする。失敗か取り消しでは、書きかけの `.txnew` を消す
+- `ExportArchiveAsync(source, externalArchivePath, CompressionLevel compressionLevel, bool includeBaseDirectory, IProgress<TransferProgress>? progress, CancellationToken)`: ワークフォルダ内のファイルまたはディレクトリを、ワークフォルダの外の ZIP にする。入力の読み方は `ExportAsync` と同じで、ファイルは `ReadAsync` と同じバイトを、ディレクトリは配下の各ファイルを `ReadAsync` と同じバイトで読む。ジャーナルには残さず、ワークフォルダのファイルは変えず、ロックもしない。エントリの作り方と引数は `CreateArchiveAsync` と同じである。ZIP のパスがワークフォルダの中なら `ArgumentException`。外にファイルかディレクトリがある、または親が無いときは `ExternalConflictException`。上書きも、親の自動作成もしない。作りかけの ZIP は失敗か取り消しで消し、成功した ZIP は Dispose しても残る
+- `ExtractArchiveAsync(archivePath, destinationDir, Encoding? entryNameEncoding, IProgress<TransferProgress>? progress, CancellationToken)`: ワークフォルダ内の ZIP を、ワークフォルダ内の新しいディレクトリへ展開する。ZIP は `ReadAsync` と同じバイトで読むので、同じトランザクションで作った未コミットの ZIP も展開できる。各ファイルは `.txnew` へ書いてファイルごとの Add として残す。展開先のディレクトリ自身と、エントリにあるディレクトリは `CopyAsync` と同じくこの操作が作り、空ディレクトリの種別は足さない。展開したファイルの最終更新日時はエントリの日時にし、それを設定した `.txnew` から Add の After を取る。`entryNameEncoding` は UTF-8 フラグの無いエントリ名（Shift_JIS など）の読み方で、省略時は .NET の既定。展開先にファイルかディレクトリがある、または親が無いときは `ExternalConflictException`。混ぜず、上書きしない。展開先の配下にこのトランザクションの操作がある、そのパス自身が既に操作済み、予定された `DeleteTree` の配下への展開は `InvalidOperationException`。排他の哨兵のあとに展開先をロックする。失敗か取り消しでは、書きかけの `.txnew`、この操作で足した Add、この操作が作ったディレクトリを消す
+- `ImportArchiveAsync(externalArchivePath, destinationDir, Encoding? entryNameEncoding, IProgress<TransferProgress>? progress, CancellationToken)`: ワークフォルダの外の ZIP を、`ExtractArchiveAsync` と同じ規則でワークフォルダ内の新しいディレクトリへ展開する。ZIP は消さない。ZIP のパスがワークフォルダの中なら `ArgumentException`。外の ZIP が無いときは `ExternalConflictException`
+- 展開（`ExtractArchiveAsync` / `ImportArchiveAsync`）は、書き始める前にセントラルディレクトリのエントリ名を全部検証する。1 つでも次に当たれば何もステージせず、展開先も作らずに `InvalidDataException` で失敗する。展開先の外へ出る名前（`..`、絶対パス、ドライブ指定）、Windows のパスに使えない名前、`.txnew` で終わる名前、名前の重複（`ToUpperInvariant` で畳んで比べるので、大文字と小文字の違いだけのものも重複）、同じ名前がファイルとディレクトリの両方で出るもの。ZIP 自体が壊れている、暗号化されているなど .NET が読めないときは、`System.IO.Compression` の例外のまま外に出す
+- `GetPendingChanges` には、作成は ZIP の Add の 1 件、展開は各ファイルの Add として見える。`ExportArchiveAsync` は出ない
+
 **文字列と JSON（拡張メソッド）**
 
 `ITransaction` には足さない。名前空間 `Txfio` の拡張メソッドで、同期版は無い。`IProgress` も付けない。中身はいったんメモリに載せて、既存の `ReadAsync` / `AddAsync` / `UpdateAsync` を呼ぶ。大きいバイト列は `Stream` の API を使う。
@@ -77,8 +88,8 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 - 全ての書き込み系APIは非同期（`Task`ベース）で統一する。文字列と JSON の拡張も同じで、同期版は置かない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
 - `CancellationToken` を受け付けるが、有効なのはコミット開始前（検証フェーズまで）に限る。物理的な適用（rename/削除の実行）が始まったら`CancellationToken`は無視し、最後まで完了させる。これにより「意図的な中断」と「クラッシュによる中断」を明確に区別できる（前者はコミット中には起こり得ず、後者だけが`RecoverAsync()`の対象になる）。コミット開始前にキャンセルされた場合は`DisposeAsync()`内で通常の非同期ロールバック（`.txnew`削除、コピーが作ったディレクトリの削除、`CreateDirectory` の再帰削除、ロック解放、ジャーナル削除）を行いクリーンに終了する
-- `AddAsync` と `UpdateAsync`、`CopyAsync`、および Import の `.txnew` へのコピーと Export の外部へのコピーは、`IProgress<TransferProgress>?` を `CancellationToken` の直前に受け取る。null のときは通知しない。`TransferProgress` は書き終えたバイト数と、開始時点の残りバイト数（シークでき長さを読めるとき。残りが 0 未満なら null）である。81920 バイトを書き終えるたびに通知し、空の内容は最後に 1 回だけ通知する。ストリームは巻き戻さない。ディレクトリのコピーでは全体サイズを事前に測らず、`TotalBytes` は null、書き終えたバイトの合計を通知する。空のディレクトリは最後に 1 回、0 バイトを通知する。Add / Update が通知するのは呼び出し側の内容を `.txnew` へ書くコピーだけで、再ステージの退避とジャーナル書き込みは含めない。`Delete` / `DeleteTree` / `Move` / `CreateDirectory` / `Commit` と、コミット件数の進捗は対象外である
-- エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある、コピー先が塞がっている）。未対応（ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move、ディレクトリの `ReadAsync`）は `UnsupportedOperationException`。使い方の誤りは `InvalidOperationException` と `ArgumentException` のまま。他のトランザクションがパスまたはワークフォルダを押さえているときは `LockContentionException`（失敗したパスを 1 つ持つ。内部例外は持たない）。コミットの成否は例外にせず `CommitResult` で返す
+- `AddAsync` と `UpdateAsync`、`CopyAsync`、Import の `.txnew` へのコピー、Export の外部へのコピー、および ZIP の 4 メソッドは、`IProgress<TransferProgress>?` を `CancellationToken` の直前に受け取る。null のときは通知しない。`TransferProgress` は書き終えたバイト数と、開始時点の残りバイト数（シークでき長さを読めるとき。残りが 0 未満なら null）である。81920 バイトを書き終えるたびに通知し、空の内容は最後に 1 回だけ通知する。ストリームは巻き戻さない。ディレクトリのコピーでは全体サイズを事前に測らず、`TotalBytes` は null、書き終えたバイトの合計を通知する。空のディレクトリは最後に 1 回、0 バイトを通知する。Add / Update が通知するのは呼び出し側の内容を `.txnew` へ書くコピーだけで、再ステージの退避とジャーナル書き込みは含めない。ZIP の作成と Export は、読み込んだ元ファイルのバイト数（圧縮前）の合計を通知し、`TotalBytes` は null である。展開と Import は、`.txnew` へ書いた展開後のバイト数の合計を通知し、`TotalBytes` はセントラルディレクトリの `Length` の合計である。どれも空なら最後に 1 回、0 バイトを通知する。`Delete` / `DeleteTree` / `Move` / `CreateDirectory` / `Commit` と、コミット件数の進捗は対象外である
+- エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある、コピー先が塞がっている）。未対応（ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move、ディレクトリの `ReadAsync`）は `UnsupportedOperationException`。使い方の誤りは `InvalidOperationException` と `ArgumentException` のまま。ZIP の展開で危険なエントリ名があるときは `InvalidDataException`、ZIP 自体が読めないときは `System.IO.Compression` の例外のまま。他のトランザクションがパスまたはワークフォルダを押さえているときは `LockContentionException`（失敗したパスを 1 つ持つ。内部例外は持たない）。コミットの成否は例外にせず `CommitResult` で返す
 
 **トランザクションのライフサイクル**
 
@@ -91,7 +102,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - 配下すべての削除は `DeleteTreeAsync` で明示する。ステージでは木を走査せず、ジャーナルは `DeleteTree` の 1 件、コミットで再帰削除する。実行中は哨兵を排他で持つ。このトランザクションの操作が配下にあるときは拒否する
 - 直下スキャンではこのトランザクションの `.txnew` を除外する。別トランザクションの残骸サイドカーや、それ以外のエントリは未追跡としてエラー
 - ワークフォルダ自身は削除対象外。メタデータフォルダ（`.txfio`）とその配下は、すべての書き込み系 API で操作対象外（エラー）
-- 親ディレクトリが存在しないパスを指定した場合、自動作成はせずエラーにする。例外は `CopyAsync` とディレクトリの `ImportAsync` / `ExportAsync` が、コピー先のディレクトリ自身とその空のサブディレクトリを、その操作の一部として作ること。コピー先の親が無いときはエラーのまま。`CreateDirectoryAsync` は対象の空ディレクトリだけを作り、親は作らない
+- 親ディレクトリが存在しないパスを指定した場合、自動作成はせずエラーにする。例外は `CopyAsync` とディレクトリの `ImportAsync` / `ExportAsync` が、コピー先のディレクトリ自身とその空のサブディレクトリを、その操作の一部として作ること。`ExtractArchiveAsync` / `ImportArchiveAsync` も、展開先のディレクトリ自身とエントリにあるディレクトリを同じく作る。コピー先の親が無いときはエラーのまま。`CreateDirectoryAsync` は対象の空ディレクトリだけを作り、親は作らない
 - `CreateDirectoryAsync` は、空ディレクトリを本物のパスにすぐ作る。中身は素のファイル API で書く。同じプロセスでも別プロセスでもよい。配下では、親が最初からあるディレクトリと同じ操作ができる。ジャーナルの `CreateDirectory` は 1 件で、配下は走査しない。配下の操作はそれぞれのジャーナルエントリになる。破棄と、適用開始前に落ちたあとの `RecoverAsync` は、そのディレクトリを中身ごと消す。コミットではディレクトリを残し、配下の操作を適用する。詳細は主な API の `CreateDirectoryAsync`
 - ディレクトリの Move は `MoveAsync` で予約する。コミット時にディレクトリを 1 回だけ rename し、中身はそれに付いていく。子はジャーナルに書かず、木は走査しない。検証は存在だけ。自分自身の配下へは移せない。移動元と移動先の配下への操作は拒否する。ディレクトリ自身の連続 Move と、そのあとの Delete はファイル Move と同じ畳み込みで、Delete は直下の規則のまま。実行中はそのトランザクションがワークフォルダの哨兵を排他で持ち、他の変更操作を止める。落ちたトランザクションの `.txnew` が中にあっても走査しないので、呼び側は先に `RecoverAsync` する
 
@@ -99,11 +110,11 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **サポート範囲**: 単一プロセス内での複数トランザクション並行実行、および複数プロセス（別exe/別マシン）からの同時アクセスの両方をサポートする。ただしこのロックはTxfio利用者間の協調ロックであり、通常のFile API（Txfioを経由しない直接操作）による変更までは防げない
 
-**ロック粒度**: 操作が名指ししたパスだけをロックする。ファイルでもディレクトリでも、そのパスの `.txfio/locks/{16進}.lock` を作る。ハッシュする文字列はワークフォルダからの相対パスで、区切りは `\`、`ToUpperInvariant` で畳んだ UTF-8 の SHA-256 である。加えて、`Add` / `Update` / `Delete` / `DeleteTree` / `Move` / `Import` / `Copy` / `CreateDirectory` はパスロックの前にワークフォルダの哨兵（相対パス `.`）を共有で取り、トランザクションが終わるまで持つ。`Read` と `Export` はディレクトリでも取らない。ディレクトリの Delete はそのディレクトリだけで、子はロックしない。異なるパスを触るトランザクション同士は、哨兵を共有しているあいだ並行実行できる。ディレクトリ Move、`DeleteTree`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectory` は哨兵を排他で取る。`CreateDirectory` はそのディレクトリもロックする。配下の操作は、それぞれの通常のパスロックも取る。ファイルの `CopyAsync` は共有哨兵に加え、コピー元とコピー先をロックする。ディレクトリの `CopyAsync` は、排他の哨兵のあとにコピー元とコピー先をロックし、子はロックしない。ディレクトリの Import は、排他の哨兵のあとにコピー先をロックする
+**ロック粒度**: 操作が名指ししたパスだけをロックする。ファイルでもディレクトリでも、そのパスの `.txfio/locks/{16進}.lock` を作る。ハッシュする文字列はワークフォルダからの相対パスで、区切りは `\`、`ToUpperInvariant` で畳んだ UTF-8 の SHA-256 である。加えて、`Add` / `Update` / `Delete` / `DeleteTree` / `Move` / `Import` / `Copy` / `CreateDirectory` / `CreateArchive` / `ExtractArchive` / `ImportArchive` はパスロックの前にワークフォルダの哨兵（相対パス `.`）を共有で取り、トランザクションが終わるまで持つ。`Read` と `Export` と `ExportArchive` はディレクトリでも取らない。ディレクトリの Delete はそのディレクトリだけで、子はロックしない。異なるパスを触るトランザクション同士は、哨兵を共有しているあいだ並行実行できる。ディレクトリ Move、`DeleteTree`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectory`、ディレクトリからの `CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` は哨兵を排他で取る。`CreateDirectory` はそのディレクトリもロックする。配下の操作は、それぞれの通常のパスロックも取る。ファイルの `CopyAsync` は共有哨兵に加え、コピー元とコピー先をロックする。ディレクトリの `CopyAsync` は、排他の哨兵のあとにコピー元とコピー先をロックし、子はロックしない。ディレクトリの Import は、排他の哨兵のあとにコピー先をロックする。`CreateArchiveAsync` は `CopyAsync` と同じく入力と ZIP のパスをロックする。`ExtractArchiveAsync` と `ImportArchiveAsync` は、排他の哨兵のあとに展開先をロックし、展開元の ZIP と子はロックしない
 
 **競合検知のタイミング**: Pessimistic。使い方の誤り（パスの解決、メタデータ配下、未対応、二重ステージ）を先に返し、そのあとでロックを取る。取れなければ待たずに `LockContentionException` を返す。ロックのあとでディスク上の前提が崩れた場合や、`.txnew` とジャーナルの書き込みに失敗した場合は、そのトランザクションが終わるまで持ち続ける。同じトランザクションが同じパスを再び触るときは開き直さない。IO が遅いファイルサーバー環境では、せっかく進めた作業がコミット直前に無駄になる Optimistic 方式のリスクが大きいため、Pessimistic を採る。
 
-**Move操作時のロック**: 旧パス・新パスの両方に対してロックを取得する（他のトランザクションが移動先パスに書き込もうとする競合を防ぐため）。取得順序は、哨兵が先で、そのあと大文字化した絶対パスの辞書順とする（`Move(A→B)`と`Move(B→A)`が同時に走ってもデッドロックしない）。2本目が取れなくても、1本目は持ち続ける。同じパスへの Move はロックしない。ディレクトリ Move、`DeleteTree`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectory` は哨兵を排他で取る。既に共有を持っていればいったん閉じて排他を開く。排他を開けなかったときも共有に戻す。開けたあと、自分以外の `.lock` を `FileShare.None` で開き、使用中があればその操作は積まず共有に戻して `LockContentionException`（`Path` はワークフォルダ）にする。共有を開き直せないときは握りつぶさない。共有違反なら同じ例外のまま、哨兵を失ったことを覚えて次のロック取得で開き直す。共有違反以外の失敗はその例外のまま返す。確認したハンドルはすぐ閉じ、`.lock` は消さない。通ったあとに移動元と移動先をロックする
+**Move操作時のロック**: 旧パス・新パスの両方に対してロックを取得する（他のトランザクションが移動先パスに書き込もうとする競合を防ぐため）。取得順序は、哨兵が先で、そのあと大文字化した絶対パスの辞書順とする（`Move(A→B)`と`Move(B→A)`が同時に走ってもデッドロックしない）。2本目が取れなくても、1本目は持ち続ける。同じパスへの Move はロックしない。ディレクトリ Move、`DeleteTree`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectory`、ディレクトリからの `CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` は哨兵を排他で取る。既に共有を持っていればいったん閉じて排他を開く。排他を開けなかったときも共有に戻す。開けたあと、自分以外の `.lock` を `FileShare.None` で開き、使用中があればその操作は積まず共有に戻して `LockContentionException`（`Path` はワークフォルダ）にする。共有を開き直せないときは握りつぶさない。共有違反なら同じ例外のまま、哨兵を失ったことを覚えて次のロック取得で開き直す。共有違反以外の失敗はその例外のまま返す。確認したハンドルはすぐ閉じ、`.lock` は消さない。通ったあとに移動元と移動先をロックする
 
 **ロック機構とデッドプロセスの検知**: `.lock`ファイルは、作成するだけでなく`FileShare.None`で開いたままハンドルを保持し続けるOSファイル共有ロックとして実装する。プロセスがクラッシュ・強制終了すると、OS/SMBサーバーが自動的にハンドルを解放する。テストがコミットを途中で止めたときも、ハンドルだけ閉じる。リース・ハートビート・stale判定・奪取の競合処理は不要である。他のトランザクションはロック取得を試みて共有違反（Sharing Violation）が起きれば「使用中」、開ければ「デッドプロセスの残骸」と判定できる。ただし、クライアント切断からSMBサーバー側がハンドルを解放するまでの遅延はSMBサーバー実装（Windows Server SMB共有、各種NAS製品等）に依存し標準化された保証があるわけではないため、実際のファイルサーバー環境での検証を前提とする
 
@@ -138,7 +149,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 ## スコープと非対応範囲
 
-**対象操作**: ファイル・ディレクトリの Create/Update/Delete/DeleteTree/Rename・Move、ワークフォルダ内の Copy、ディレクトリの Import / Export、`CreateDirectory`。ディレクトリの `ReadAsync` は未対応
+**対象操作**: ファイル・ディレクトリの Create/Update/Delete/DeleteTree/Rename・Move、ワークフォルダ内の Copy、ディレクトリの Import / Export、`CreateDirectory`、ZIP アーカイブの作成・Export・展開・Import。ディレクトリの `ReadAsync` と、ZIP 以外のアーカイブ形式（tar、GZip 単体、Brotli）は未対応
 
 **Moveの制約**: 同一ボリューム内の移動のみサポート。別ボリューム（別ドライブ、別のファイルサーバー共有）への移動はエラーとする。ボリューム跨ぎのrenameはOSレベルでアトミックに保証されず、コピー＋削除相当の重い処理になる。この重い処理をライブラリが暗黙に実行してしまうと、ユーザーが気づかないうちに高コストな操作を実行することになるため、跨ぎたい場合は明示的な `ImportAsync`/`ExportAsync` を使わせる
 
