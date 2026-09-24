@@ -40,6 +40,17 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
+    /// 他のハンドルが開いているために失敗したかを返す
+    /// </summary>
+    /// <param name="exception">オープンで起きた例外</param>
+    /// <returns>共有違反またはロック違反なら <see langword="true"/></returns>
+    internal static bool IsSharingViolation(IOException exception)
+    {
+        int code = exception.HResult & 0xFFFF;
+        return code == SharingViolation || code == LockViolation;
+    }
+
+    /// <summary>
     /// 次に同じ共有モードで開くとき、指定した例外を投げる。テスト用
     /// </summary>
     /// <param name="share">失敗させる共有モード</param>
@@ -246,12 +257,6 @@ internal sealed class PathLockSet
             right.ToUpperInvariant(),
             StringComparison.Ordinal));
         return unique;
-    }
-
-    private static bool IsSharingViolation(IOException exception)
-    {
-        int code = exception.HResult & 0xFFFF;
-        return code == SharingViolation || code == LockViolation;
     }
 
     private static LockContentionException Contention(string workFolder)

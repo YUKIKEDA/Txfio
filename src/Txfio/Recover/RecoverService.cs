@@ -34,34 +34,55 @@ internal static class RecoverService
         foreach (string journalPath in journals)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            JournalDocument? document = await JournalStore.TryReadAsync(journalPath, cancellationToken)
-                .ConfigureAwait(false);
 
-            if (document is { Committing: true })
+            // 開けなければ持ち主が生きているので、ジャーナルにも残骸にも触れない
+            FileStream? liveness = LivenessLock.TryOpenStale(MetadataNames.LivenessLockPath(journalPath));
+            if (liveness is null)
             {
-                bool appliedAll = StagingApplier.TryApplyAll(document.Operations);
-                if (!appliedAll)
-                {
-                    conflictDetected = true;
-                    continue;
-                }
-
-                await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
-                rolledForward = true;
                 continue;
             }
 
-            if (document is not null)
+            try
             {
-                StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
-                foreach (JournalOperation operation in document.Operations)
+                // 一覧のあと持ち主が正常に終わっていれば、何もしない
+                if (!File.Exists(journalPath))
                 {
-                    StagingFile.TryDelete(operation.StagingPath);
+                    continue;
                 }
-            }
 
-            await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
-            rolledBack = true;
+                JournalDocument? document = await JournalStore.TryReadAsync(journalPath, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (document is { Committing: true })
+                {
+                    bool appliedAll = StagingApplier.TryApplyAll(document.Operations);
+                    if (!appliedAll)
+                    {
+                        conflictDetected = true;
+                        continue;
+                    }
+
+                    await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
+                    rolledForward = true;
+                    continue;
+                }
+
+                if (document is not null)
+                {
+                    StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
+                    foreach (JournalOperation operation in document.Operations)
+                    {
+                        StagingFile.TryDelete(operation.StagingPath);
+                    }
+                }
+
+                await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
+                rolledBack = true;
+            }
+            finally
+            {
+                await liveness.DisposeAsync().ConfigureAwait(false);
+            }
         }
 
         if (conflictDetected)
