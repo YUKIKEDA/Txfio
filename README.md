@@ -269,7 +269,7 @@ CommitResult result = await tx.CommitAsync();
 
 変更系（Add、Update、Delete、DeleteTree、Move、Attach、Copy、Import）は、パスを押さえる前にワークフォルダの哨兵を取り、トランザクションが終わるまで持ちます。ふだんの哨兵は共有なので、別のパスを触るトランザクションは並行できます。
 
-ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync` のあいだだけ、哨兵は排他です。そのあいだ、同じワークフォルダのほかの変更は `LockContentionException` になります。待たずに失敗します。`Path` には、押さえられていたパスが 1 つ入っています。ワークフォルダ全体を押さえているときは、そのパスがワークフォルダです。どの操作がどのロックを取るかは、次の節の表です。
+ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync` のあいだだけ、哨兵は排他です。そのあいだ、同じワークフォルダのほかの変更は `LockContentionException` になります。待たずに失敗します。`Path` には、押さえられていたパスが 1 つ入っています。ワークフォルダ全体を押さえているときは、そのパスがワークフォルダです。どの操作がどのロックを取るかは、次の節の図です。
 
 `ReadAsync` と `ExportAsync` はロックしません。
 
@@ -277,7 +277,7 @@ CommitResult result = await tx.CommitAsync();
 
 ## 操作ごとの分岐
 
-呼んだ操作がディスクに何を残すか、どこで失敗するか、ロック、再ステージ、復旧はここを見ます。例外の型の一覧は次の節です。
+呼んだ操作がディスクに何を残すかは表です。どこで失敗するか、ロック、再ステージ、復旧は図です。例外の型の一覧は次の節です。
 
 ### ディスク
 
@@ -300,66 +300,200 @@ CommitResult result = await tx.CommitAsync();
 
 ### 主な失敗
 
-| 操作 | 失敗 |
-| --- | --- |
-| `AddAsync` | 既にある、親が無い → `ExternalConflictException` |
-| `UpdateAsync` | 無い、親が無い → `ExternalConflictException` |
-| `DeleteAsync`（ファイル） | 無い → `ExternalConflictException` |
-| `DeleteAsync`（ディレクトリ） | 直下に未予約の子 → `ExternalConflictException`。ファイルへすり替わるとコミットは `Failed` |
-| `DeleteTreeAsync` | ファイル → `UnsupportedOperationException`。配下にこのトランザクションの操作 → `InvalidOperationException` |
-| `MoveAsync` | 別ボリューム → `UnsupportedOperationException`。元が無い、先がある → `ExternalConflictException`。配下や自分自身の配下 → `InvalidOperationException` |
-| `AttachAsync`（ファイル） | 無い → `ExternalConflictException`。サイズか最終更新日時が変わるとコミットは `Failed` |
-| `AttachAsync`（ディレクトリ） | 無い、またはファイルだとコミットは `Failed` |
-| `CreateDirectoryAsync` | 既にある、親が無い → `ExternalConflictException`。そのパス自身の変更系 → `InvalidOperationException`。コミット時に無い、またはファイル → `Failed` |
-| `CopyAsync` / `ImportAsync` | 先が塞がっている、親が無い → `ExternalConflictException`。シンボリックリンク、同一パス、配下 → `InvalidOperationException`。Import の元がワークフォルダの中 → `ArgumentException` |
-| `ExportAsync` | 先がワークフォルダの中 → `ArgumentException`。先が塞がっている、親が無い、元が無い → `ExternalConflictException` |
-| `ReadAsync` | ディレクトリ → `UnsupportedOperationException`。`.txnew` も本物も無い → `ExternalConflictException` |
-| 共通 | `.txfio` 配下 → `InvalidOperationException`。ワークフォルダの外 → `ArgumentException`。ほかの Txfio が押さえている → `LockContentionException` |
+変更系は、先にここを通ります。`ReadAsync` と `ExportAsync` はロックを取りません。
+
+```mermaid
+flowchart TD
+  call["操作を呼ぶ"] --> outside{"ワークフォルダの外?"}
+  outside -->|はい| arg["ArgumentException"]
+  outside -->|いいえ| meta{".txfio 配下?"}
+  meta -->|はい| inv["InvalidOperationException"]
+  meta -->|いいえ| read{"Read または Export?"}
+  read -->|はい| next["その操作の図"]
+  read -->|いいえ| held{"ほかの Txfio が押さえている?"}
+  held -->|はい| lock["LockContentionException"]
+  held -->|いいえ| next
+```
 
 ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 
+```mermaid
+flowchart TD
+  add["AddAsync"] --> exists{"ディスク上にファイルがある?"}
+  exists -->|ある| ext["ExternalConflictException"]
+  exists -->|無い| parent{"親ディレクトリがある?"}
+  parent -->|無い| ext
+  parent -->|ある| ok[".txnew に書く"]
+```
+
+```mermaid
+flowchart TD
+  upd["UpdateAsync"] --> exists{"ディスク上にファイルがある?"}
+  exists -->|無い| ext["ExternalConflictException"]
+  exists -->|ある| parent{"親ディレクトリがある?"}
+  parent -->|無い| ext
+  parent -->|ある| ok[".txnew に書く。本物は旧のまま"]
+```
+
+`WriteAllTextAsync`、`WriteAllLinesAsync`、`WriteAsJsonAsync` は、ディスク上にファイルが無ければ Add、あれば Update の図へ入ります。
+
+```mermaid
+flowchart TD
+  del["DeleteAsync"] --> self{"ワークフォルダ自身?"}
+  self -->|はい| arg["ArgumentException"]
+  self -->|いいえ| kind{"ファイル?"}
+  kind -->|はい| file{"ファイルがある?"}
+  file -->|無い| ext["ExternalConflictException"]
+  file -->|ある| reserve["削除を予約する"]
+  kind -->|いいえ| child{"直下に未予約の子がある?"}
+  child -->|ある| ext
+  child -->|無い| dreserve["直下の削除を予約する"]
+  dreserve --> swap{"コミット時にファイルへすり替わった?"}
+  swap -->|はい| failed["Failed"]
+  swap -->|いいえ| gone["直下だけを消す"]
+```
+
+```mermaid
+flowchart TD
+  tree["DeleteTreeAsync"] --> self{"ワークフォルダ自身?"}
+  self -->|はい| arg["ArgumentException"]
+  self -->|いいえ| file{"ファイル?"}
+  file -->|はい| uns["UnsupportedOperationException"]
+  file -->|いいえ| under{"配下にこのトランザクションの操作がある?"}
+  under -->|ある| inv["InvalidOperationException"]
+  under -->|無い| ok["全削除を予約する"]
+```
+
+```mermaid
+flowchart TD
+  move["MoveAsync"] --> vol{"別ボリューム?"}
+  vol -->|はい| uns["UnsupportedOperationException"]
+  vol -->|いいえ| place{"元が無い、または先がある?"}
+  place -->|はい| ext["ExternalConflictException"]
+  place -->|いいえ| under{"配下、または自分自身の配下?"}
+  under -->|はい| inv["InvalidOperationException"]
+  under -->|いいえ| ok["移動を予約する"]
+```
+
+```mermaid
+flowchart TD
+  att["AttachAsync"] --> kind{"ファイル?"}
+  kind -->|はい| missing{"無い?"}
+  missing -->|はい| ext["ExternalConflictException"]
+  missing -->|いいえ| changed{"コミットまでにサイズか日時が変わった?"}
+  changed -->|はい| failed["Failed"]
+  changed -->|いいえ| stay["残す"]
+  kind -->|いいえ| dir{"コミット時に無い、またはファイル?"}
+  dir -->|はい| failed
+  dir -->|いいえ| stay
+```
+
+```mermaid
+flowchart TD
+  mk["CreateDirectoryAsync"] --> self{"ワークフォルダ自身?"}
+  self -->|はい| arg["ArgumentException"]
+  self -->|いいえ| again{"このトランザクションがすでにそのパスを作っている?"}
+  again -->|はい| inv["InvalidOperationException"]
+  again -->|いいえ| blocked{"既にある、または親が無い?"}
+  blocked -->|はい| ext["ExternalConflictException"]
+  blocked -->|いいえ| made["空ディレクトリをその場で作る"]
+  made --> commit{"コミット時に無い、またはファイル?"}
+  commit -->|はい| failed["Failed"]
+  commit -->|いいえ| keep["その場所に残す"]
+```
+
+```mermaid
+flowchart TD
+  copy["コピー"] --> which{"どれ?"}
+  which -->|Import の元が中| arg["ArgumentException"]
+  which -->|Export の先が中| arg
+  which -->|Copy または Import| blocked{"先が塞がっている、または親が無い?"}
+  blocked -->|はい| ext["ExternalConflictException"]
+  blocked -->|いいえ| bad{"シンボリックリンク、同一パス、または配下?"}
+  bad -->|はい| inv["InvalidOperationException"]
+  bad -->|いいえ| add["各ファイルを Add。元は残る"]
+  which -->|Export| missing{"先が塞がっている、親が無い、または元が無い?"}
+  missing -->|はい| ext
+  missing -->|いいえ| out["外へコピー。ジャーナルには残さない"]
+```
+
+```mermaid
+flowchart TD
+  read["ReadAsync"] --> dir{"ディレクトリ?"}
+  dir -->|はい| uns["UnsupportedOperationException"]
+  dir -->|いいえ| bytes{".txnew も本物も無い?"}
+  bytes -->|はい| ext["ExternalConflictException"]
+  bytes -->|いいえ| ok[".txnew があればそれ、無ければ本物"]
+```
+
 ### ロック
 
-| 操作 | 哨兵 | パス |
-| --- | --- | --- |
-| Add、Update、ファイルの Delete、ファイルの Move、ファイルの Attach、ファイルの Copy、ファイルの Import | 共有。別パスは並行できる | 名指ししたパス。Move とファイルの Copy は元と先。ファイルの Import は先だけ |
-| ディレクトリの Delete、ディレクトリの Attach | 共有 | そのディレクトリだけ。子はロックしない |
-| `DeleteTreeAsync`、ディレクトリの Move、ディレクトリの Copy、ディレクトリの Import、`CreateDirectoryAsync` | 排他。ほかの変更は `LockContentionException` | 対象。Move は元と先。ディレクトリの Copy は元と先で、子はロックしない。ディレクトリの Import は先だけ。`CreateDirectoryAsync` はそのディレクトリ。配下の操作はそれぞれの行 |
-| `ReadAsync`、`ExportAsync` | 取らない | 取らない |
+```mermaid
+flowchart TD
+  op["変更を呼ぶ"] --> kind{"どれ?"}
+  kind -->|Read / Export| none["ロックしない"]
+  kind -->|ファイルの Add / Update / Delete / Attach| one["共有哨兵と、そのファイル"]
+  kind -->|ファイルの Move / Copy| both["共有哨兵と、元と先"]
+  kind -->|ファイルの Import| dest["共有哨兵と、先だけ"]
+  kind -->|ディレクトリの Delete / Attach| folder["共有哨兵と、そのディレクトリ。子はロックしない"]
+  kind -->|DeleteTree / ディレクトリ Move / ディレクトリ Copy / ディレクトリ Import / CreateDirectory| ex["排他哨兵。ほかの変更は LockContentionException"]
+```
+
+排他のとき、Move は元と先、ディレクトリの Copy は元と先で子はロックしません。ディレクトリの Import は先だけ、`CreateDirectoryAsync` はそのディレクトリです。配下の操作は、上のそれぞれの枝でロックします。
 
 ### 再ステージ
 
-同じパスへ続けて呼んだとき、予約は次のように畳みます。畳めない組み合わせは `InvalidOperationException` で、メッセージは「このパスは既に別の操作でステージングされています」です。
+同じパスへ続けて呼んだとき、予約は次のように畳みます。図に無い組み合わせは `InvalidOperationException` で、メッセージは「このパスは既に別の操作でステージングされています」です。
 
-| すでに予約がある | 続けて呼ぶ | 残る予約 |
-| --- | --- | --- |
-| Add | 同じパスへ書く、または Update | Add のまま。内容だけ置き換わる |
-| Update | 同じパスへ書く、または Update | Update |
-| Delete | 書く、Add、Update | Update |
-| ファイルの Attach | 書く、または Update | Update |
-| ディレクトリの Attach | `DeleteAsync` | 直下の Delete |
-| ディレクトリの Attach | `DeleteTreeAsync` | DeleteTree |
-| ディレクトリの Attach | `MoveAsync` | ディレクトリの Move |
-| Move | 先へ Update | 先の Add と、元の Delete |
-| Move | 元または先の Delete | 元の Delete。ディレクトリの Delete は直下の規則のまま |
-| Move | 続けて Move | 最初の元から最後の先への Move |
-| ディレクトリの Move | 元または先そのものの `DeleteTreeAsync` | Move を消し、元ディレクトリの DeleteTree |
-| `CreateDirectory` | そのパス自身の Delete、DeleteTree、Move、Attach、Update、もう一度の `CreateDirectory` | 畳まない |
+```mermaid
+flowchart TD
+  again["同じパスへ続けて呼ぶ"] --> kind{"すでに予約がある"}
+  kind -->|Add| add["書く、または Update → Add のまま"]
+  kind -->|Update| upd["書く、または Update → Update"]
+  kind -->|Delete| del["書く、Add、または Update → Update"]
+  kind -->|ファイルの Attach| fatt["書く、または Update → Update"]
+  kind -->|ディレクトリの Attach へ Delete| ddel["直下の Delete"]
+  kind -->|ディレクトリの Attach へ DeleteTree| dt["DeleteTree"]
+  kind -->|ディレクトリの Attach へ Move| dmove["ディレクトリの Move"]
+  kind -->|Move の先へ Update| fold["先の Add と、元の Delete"]
+  kind -->|Move の元または先へ Delete| back["元の Delete。ディレクトリは直下の規則"]
+  kind -->|Move のあとに Move| chain["最初の元から最後の先"]
+  kind -->|ディレクトリ Move の元または先そのものへ DeleteTree| tree["Move を消し、元の DeleteTree"]
+  kind -->|CreateDirectory のパス自身| stop["畳まない。InvalidOperationException"]
+```
 
-`DeleteTreeAsync` の配下への操作、ディレクトリ Move の移動元と移動先の配下への操作も、同じ例外です。`CreateDirectory` の配下は、各行の規則に従います。
+`DeleteTreeAsync` の配下への操作、ディレクトリ Move の移動元と移動先の配下への操作も、同じ例外です。`CreateDirectory` の配下は、この図の各枝に従います。
 
 ### 復旧
 
 「落ちると」の図は、ジャーナル全体の分岐です。操作ごとに戻すものと進めるものは違います。
 
-| 操作 | 印が無い | 印があり、進める | 競合 |
-| --- | --- | --- | --- |
-| Add、Update | `.txnew` を消す。本物は触らない | After と一致すればスキップ。Before と一致すれば再実行 | どちらでもない |
-| Delete、DeleteTree | 予約だけなのでディスクは変えない | 残っていれば再実行。消えていれば適用済み。ファイルなら競合 | Before にも After にも一致しない |
-| Move | 予約だけなのでディスクは変えない | After と一致すればスキップ。Before と一致すれば再実行 | どちらでもない |
-| Attach | 消さない | After と一致すればスキップ | サイズ、日時、存在が一致しない。ディレクトリがファイルでも競合 |
-| `CreateDirectory` | ディレクトリを中身ごと消す。無ければ何もしない | ディレクトリがあれば残して進める。作り直さない | 無い、またはファイル |
-| `ExportAsync` | ジャーナルに無い。成功した外のコピーは残る | 復旧の対象外 | 復旧の対象外 |
+```mermaid
+flowchart TD
+  rec["RecoverAsync"] --> mark{"適用開始の印?"}
+  mark -->|無い| back{"操作"}
+  back -->|Add / Update| b1[".txnew を消す。本物は触らない"]
+  back -->|Delete / DeleteTree / Move| b2["予約だけなのでディスクは変えない"]
+  back -->|Attach| b3["消さない"]
+  back -->|CreateDirectory| b4["ディレクトリを中身ごと消す。無ければ何もしない"]
+  back -->|Export| b5["対象外。成功した外のコピーは残る"]
+  mark -->|ある| fwd{"操作"}
+  fwd -->|Add / Update / Move| match{"After と一致?"}
+  match -->|はい| skip["スキップ"]
+  match -->|いいえ| before{"Before と一致?"}
+  before -->|はい| redo["再実行"]
+  before -->|いいえ| conflict["ConflictDetected"]
+  fwd -->|Delete / DeleteTree| left{"まだある?"}
+  left -->|ディレクトリのまま| redo
+  left -->|消えている| done["適用済み"]
+  left -->|ファイル| conflict
+  fwd -->|Attach| att{"After と一致?"}
+  att -->|はい| skip
+  att -->|いいえ| conflict
+  fwd -->|CreateDirectory| dir{"ディレクトリがある?"}
+  dir -->|はい| keep["残して進める。作り直さない"]
+  dir -->|無い、またはファイル| conflict
+```
 
 削除に失敗した例外は呼び出し側へ届きます。ジャーナルが残っていれば、次の `RecoverAsync` が同じ削除をします。
 
