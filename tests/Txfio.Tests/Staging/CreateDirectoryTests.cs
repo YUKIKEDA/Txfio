@@ -29,10 +29,10 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 未コミットの破棄は、外部が書いた中身ごと消す
+    /// 未コミットの破棄は、素のファイル API で書いた中身ごと消す
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、外部が子ファイルを書いている</para>
+    /// <para>前提: CreateDirectory のあと、素のファイル API で子ファイルを書いている</para>
     /// <para>手順: Commit せず破棄する</para>
     /// <para>期待: ディレクトリと子ファイルが無い</para>
     /// </remarks>
@@ -181,12 +181,12 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 外部が書いたファイルは ReadAsync で読める
+    /// 素のファイル API で書いたファイルは ReadAsync で読める
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、外部が a.txt を書いている</para>
+    /// <para>前提: CreateDirectory のあと、素のファイル API で a.txt を書いている</para>
     /// <para>手順: ReadAllTextAsync する</para>
-    /// <para>期待: 外部が書いた内容が返り、pending は CreateDirectory の 1 件のまま</para>
+    /// <para>期待: 書いた内容が返り、pending は CreateDirectory の 1 件のまま</para>
     /// </remarks>
     [Fact]
     public async Task ReadAllTextAsync_配下のファイルを読めること()
@@ -206,7 +206,7 @@ public sealed class CreateDirectoryTests
     /// 配下のファイルは外へ Export できる
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、外部が a.txt を書いている</para>
+    /// <para>前提: CreateDirectory のあと、素のファイル API で a.txt を書いている</para>
     /// <para>手順: ワークフォルダの外へ ExportAsync する</para>
     /// <para>期待: 外に同じ内容があり、pending は CreateDirectory の 1 件のまま</para>
     /// </remarks>

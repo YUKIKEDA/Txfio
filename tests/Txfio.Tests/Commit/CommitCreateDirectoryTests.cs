@@ -5,10 +5,10 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitCreateDirectoryTests
 {
     /// <summary>
-    /// コミットはディレクトリと、外部が書いた中身を残す
+    /// コミットはディレクトリと、素のファイル API で書いた中身を残す
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、外部が子ファイルを書いている</para>
+    /// <para>前提: CreateDirectory のあと、素のファイル API で子ファイルを書いている</para>
     /// <para>手順: CommitAsync する</para>
     /// <para>期待: Succeeded でディレクトリと子が残り、journal は無い</para>
     /// </remarks>
@@ -32,7 +32,7 @@ public sealed class CommitCreateDirectoryTests
     /// コミット前にディレクトリがファイルへ変わると Failed で、そのファイルは残る
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、外部が同じパスをファイルにしている</para>
+    /// <para>前提: CreateDirectory のあと、同じパスをファイルにしている</para>
     /// <para>手順: CommitAsync してから破棄する</para>
     /// <para>期待: Failed で、そのファイルは残る</para>
     /// </remarks>

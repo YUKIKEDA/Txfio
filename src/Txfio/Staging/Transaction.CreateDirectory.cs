@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// 外部プロセスが中へ書く空ディレクトリの作成
+/// 空ディレクトリをすぐ作り、破棄ではその木を消す
 /// </content>
 internal sealed partial class Transaction
 {
