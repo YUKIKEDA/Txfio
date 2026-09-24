@@ -52,7 +52,6 @@ CommitResult result = await tx.CommitAsync();
 | `DeleteAsync`                              | ファイル、または直下だけのディレクトリの削除予約。実削除はコミット時                                                                               |
 | `DeleteTreeAsync`                          | ディレクトリとその配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除する                                                         |
 | `MoveAsync`                                | 同一ボリューム内のファイルまたはディレクトリの移動予約。ディレクトリはコミット時に 1 回 rename し、中身は付いていく                                |
-| `AttachAsync`                              | 外部が作ったファイルまたはディレクトリを、コピーも rename もせず取り込む。ファイルはサイズと最終更新日時を記録し、ディレクトリは存在だけを記録する |
 | `CreateDirectoryAsync`                     | 空ディレクトリを呼んだ時点で作る。配下は通常の操作ができる。破棄ではそのディレクトリを中身ごと消す                                                 |
 | `CopyAsync`                                | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ                        |
 | `ImportAsync`                              | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない                                           |
@@ -116,7 +115,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 適用の順は、呼んだ順ではありません。
 
-1. Add、Move、Attach、CreateDirectory
+1. Add、Move、CreateDirectory
 2. Update
 3. Delete と DeleteTree。Delete はパスが深い方から
 
@@ -126,7 +125,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 ### コミットせず破棄すると
 
-`await using` を抜ける、または `DisposeAsync` すると、未コミットの `.txnew`、コピーが作ったディレクトリ、`CreateDirectoryAsync` のディレクトリ、ジャーナルが消えます。`CreateDirectoryAsync` の中へ素のファイル API で書いたもの、およびその中へ Attach したものも、そのディレクトリごと消えます。それ以外の、このトランザクションが触れていないファイルは残ります。木の外へ Attach したファイルとディレクトリは消しません。
+`await using` を抜ける、または `DisposeAsync` すると、未コミットの `.txnew`、コピーが作ったディレクトリ、`CreateDirectoryAsync` のディレクトリ、ジャーナルが消えます。`CreateDirectoryAsync` の中へ素のファイル API で書いたものも、そのディレクトリごと消えます。それ以外の、このトランザクションが触れていないファイルは残ります。
 
 コミット開始前にキャンセルしたときも、破棄のときに同じ片付けをします。
 
@@ -221,7 +220,7 @@ flowchart TD
 
 ## ReadAsync
 
-`ReadAsync` は、位置 0 の読み取りストリームを返します。破棄は呼び出し側です。`.txnew` があればそれを、無ければ本物を読みます。Delete の予約、Attach、Move の移動元は、新しいバイトが無いので本物を読みます。ロックは取りません。ジャーナルにも残りません。
+`ReadAsync` は、位置 0 の読み取りストリームを返します。破棄は呼び出し側です。`.txnew` があればそれを、無ければ本物を読みます。Delete の予約と Move の移動元は、新しいバイトが無いので本物を読みます。ロックは取りません。ジャーナルにも残りません。
 
 ストリームを閉じる前でも、コミットの rename は進みます。同じパスを、ストリームを開いたまま書き直すと失敗することがあります。`ReadAllTextAsync` と `ReadAllLinesAsync` は、この読み取りと同じバイトを文字列、または行の配列にします。
 
@@ -310,41 +309,13 @@ flowchart TD
   under -->|いいえ| ok["移動を予約する"]
 ```
 
-## AttachAsync
-
-別プログラムがすでにワークフォルダへ置いたファイルを、自分のコミットの条件に加えたいときに使います。コピーはしません。呼んだ時点のサイズと最終更新日時を記録し、コミットまでに変わっていれば `Failed` です。破棄しても、そのファイルは残します。`AddAsync` のように `.txnew` を消す対象ではないからです。
-
-たとえば、スキャナが `scan.pdf` を置いたあとに、メモだけを Txfio で足します。コミットできれば両方が残ります。破棄するとメモの `.txnew` だけ消え、`scan.pdf` は残ります。`scan.pdf` のサイズがコミット前に変わっていれば、メモも確定しません。
-
-```csharp
-await tx.AttachAsync("scan.pdf");
-await tx.WriteAllTextAsync("scan.pdf.note", "ok");
-```
-
-ディレクトリは、まだそこにあることだけを条件にします。中のファイルの追加、変更、削除は見ません。破棄してもディレクトリは消しません。`CreateDirectoryAsync` で作ったディレクトリの中へ Attach したものは、そのディレクトリの破棄で一緒に消えます。
-
-ファイルでは、ワークフォルダ全体を共有で押さえ、そのファイルをロックします。ディレクトリでは、ワークフォルダ全体を共有で押さえ、そのディレクトリだけをロックします。子はロックしません。そのディレクトリ自身の `DeleteAsync` は直下削除に、`DeleteTreeAsync` は全削除に、`MoveAsync` はディレクトリ Move に畳みます。
-
-```mermaid
-flowchart TD
-  att["AttachAsync"] --> kind{"ファイル?"}
-  kind -->|はい| missing{"無い?"}
-  missing -->|はい| ext["ExternalConflictException"]
-  missing -->|いいえ| changed{"コミットまでにサイズか日時が変わった?"}
-  changed -->|はい| failed["Failed"]
-  changed -->|いいえ| stay["残す"]
-  kind -->|いいえ| dir{"コミット時に無い、またはファイル?"}
-  dir -->|はい| failed
-  dir -->|いいえ| stay
-```
-
 ## CreateDirectoryAsync
 
 `CreateDirectoryAsync` だけは、呼んだ時点で本物のパスに空ディレクトリを作ります。中身は素のファイル API で書きます。同じプロセスでも別プロセスでもよいです。配下では、親が最初からあるディレクトリと同じ操作ができます。ジャーナルの `CreateDirectory` はディレクトリ 1 件で、素のファイルは走査しません。`GetPendingChanges` には、配下で予約した操作が出ます。
 
-コミットが `Succeeded` なら、ディレクトリはその場所に残り、rename はしません。破棄すると、中の `.txnew`、素のファイル API で書いたもの、配下へ Attach したものも、ディレクトリごと消えます。印が無ければ同じ削除をし、無ければ何もしません。印のあとでは、ディレクトリがあれば残して進め、無い、またはファイルなら `ConflictDetected` です。
+コミットが `Succeeded` なら、ディレクトリはその場所に残り、rename はしません。破棄すると、中の `.txnew` と、素のファイル API で書いたものも、ディレクトリごと消えます。印が無ければ同じ削除をし、無ければ何もしません。印のあとでは、ディレクトリがあれば残して進め、無い、またはファイルなら `ConflictDetected` です。
 
-ワークフォルダ全体は排他で押さえ、そのディレクトリもロックします。配下の操作は、それぞれの操作のロックも取ります。そのパス自身への Delete、DeleteTree、Move、Attach、Update、もう一度の `CreateDirectoryAsync` は畳みません。配下にこのトランザクションの操作が無いときだけ、そのディレクトリをコピー元にできます。
+ワークフォルダ全体は排他で押さえ、そのディレクトリもロックします。配下の操作は、それぞれの操作のロックも取ります。そのパス自身への Delete、DeleteTree、Move、Update、もう一度の `CreateDirectoryAsync` は畳みません。配下にこのトランザクションの操作が無いときだけ、そのディレクトリをコピー元にできます。
 
 ```csharp
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
@@ -437,10 +408,6 @@ flowchart TD
   kind -->|Add| add["書く、または Update → Add のまま"]
   kind -->|Update| upd["書く、または Update → Update"]
   kind -->|Delete| del["書く、Add、または Update → Update"]
-  kind -->|ファイルの Attach| fatt["書く、または Update → Update"]
-  kind -->|ディレクトリの Attach へ Delete| ddel["直下の Delete"]
-  kind -->|ディレクトリの Attach へ DeleteTree| dt["DeleteTree"]
-  kind -->|ディレクトリの Attach へ Move| dmove["ディレクトリの Move"]
   kind -->|Move の先へ Update| fold["先の Add と、元の Delete"]
   kind -->|Move の元または先へ Delete| back["元の Delete。ディレクトリは直下の規則"]
   kind -->|Move のあとに Move| chain["最初の元から最後の先"]
@@ -488,7 +455,6 @@ SQL の INSERT とファイル作成を、落ちても両方戻る 1 つのト�
 | クラッシュ                | ジャーナルが残る。`RecoverAsync` が戻すか進める                                                                                       | 復旧は揮発。落ちると途中のファイル操作が残る                                     | DB はジャーナルまたは WAL で復旧する。DB の外のファイルは含まない |
 | 複数対象の揃い            | コミット中は一部だけ新しい。`Failed` は本物を変えない                                                                                 | 変更は即時に見える。複数ファイルの Move のロールバックが途中で止まった報告がある | DB 内の変更は 1 つのコミットに揃う                                |
 | ディレクトリ全削除        | `DeleteTreeAsync`。ステージでは走査せず、コミット時に再帰削除。`DeleteAsync` は直下だけ                                               | `DeleteDirectory`。実行時点で temp へ退避する                                    | パスを表す行を SQL で消す。ファイルツリーの削除ではない           |
-| ディレクトリの取り込み    | `AttachAsync` は存在だけ。子の変化は見ない。ロールバックでも消さない                                                                  | ディレクトリを「作ったことにしない」専用 API は無い                              | 行として入れるならアプリが書く                                    |
 | ディレクトリの移動        | 同一ボリュームで 1 回の rename。ボリューム跨ぎはエラー                                                                                | `MoveDirectory`。即時。temp が別ボリュームだとコピーと削除になる                 | パス列の更新                                                      |
 | 一時置き場                | 使わない。`.txnew` は同じディレクトリ                                                                                                 | 既定は `Path.GetTempPath()`                                                      | データベースファイル自身                                          |
 | SMB 上の共有              | 対象。サーバーキャッシュの永続化は保証外                                                                                              | 設計の主対象ではない                                                             | ネットワーク共有に置く使い方はサポート外                          |

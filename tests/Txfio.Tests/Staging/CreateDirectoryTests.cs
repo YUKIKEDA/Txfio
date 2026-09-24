@@ -173,7 +173,7 @@ public sealed class CreateDirectoryTests
     /// </summary>
     /// <remarks>
     /// <para>前提: drop を CreateDirectory している</para>
-    /// <para>手順: そのパスへ Delete、DeleteTree、Move の元と先、Attach、Update、もう一度の CreateDirectory を呼ぶ</para>
+    /// <para>手順: そのパスへ Delete、DeleteTree、Move の元と先、Update、もう一度 CreateDirectory を呼ぶ</para>
     /// <para>期待: どれも InvalidOperationException で、pending は 1 件のまま</para>
     /// </remarks>
     [Fact]
@@ -190,7 +190,6 @@ public sealed class CreateDirectoryTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteTreeAsync("drop"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("drop", "other"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("src.txt", "drop"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AttachAsync("drop"));
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("no");
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.UpdateAsync("drop", content));
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CreateDirectoryAsync("drop"));
@@ -277,15 +276,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 破棄は、配下へ Add したサイドカーと Attach したファイルも消す
+    /// 破棄は、配下へ Add したサイドカーと、素のファイル API で置いたファイルも消す
     /// </summary>
     /// <remarks>
-    /// <para>前提: 開始前のファイルを drop へ動かして Attach し、drop/new.txt を Add している</para>
+    /// <para>前提: 開始前のファイルを drop へ動かし、drop/new.txt を Add している</para>
     /// <para>手順: Commit せず破棄する</para>
-    /// <para>期待: drop も、動かしたファイルも、Add も無い</para>
+    /// <para>期待: drop も、動かしたファイルも、Add したファイルも無い</para>
     /// </remarks>
     [Fact]
-    public async Task DisposeAsync_配下のAddとAttachも消えること()
+    public async Task DisposeAsync_配下のAddと素のファイルも消えること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string moved = System.IO.Path.Combine(work.Path, "drop", "keep.txt");
@@ -295,7 +294,6 @@ public sealed class CreateDirectoryTests
         {
             await tx.CreateDirectoryAsync("drop");
             File.Move(System.IO.Path.Combine(work.Path, "keep.txt"), moved);
-            await tx.AttachAsync("drop/keep.txt");
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
             await tx.AddAsync("drop/new.txt", content);
         }

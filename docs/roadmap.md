@@ -13,9 +13,9 @@ Phase の切り方と順序は **仮** である。実装順・境界は Grill �
 | Phase 0 リポジトリ基盤 | 完了 |
 | Phase 1 MVP | 完了 |
 | Phase 2 並行性・ロック | 完了 |
-| Phase 3 拡張と公開 | 進行中（次は Attach を外す設計 Issue #77） |
+| Phase 3 拡張と公開 | 進行中（次は Attach を外す実装 Issue #79） |
 
-Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、#67、#73）と利用者向け README（Issue #41、#54、#69、#75）、設計（Issue #43、#53、#65、#71）は main にある。次は Attach を外す設計（Issue #77）。公開（nuget.org）はその後。
+Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、#67、#73）と利用者向け README（Issue #41、#54、#69、#75）、設計（Issue #43、#53、#65、#71、#77）は main にある。次は Attach を外す実装（Issue #79）。公開（nuget.org）はその後。
 
 ## Phase 0 — リポジトリ基盤
 
@@ -70,7 +70,8 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #71: 設計: `CreateDirectory` の配下で通常の操作を許す（実装は含めない）
 - [x] Issue #73: `CreateDirectory` の配下で通常の操作を許す
 - [x] Issue #75: README の操作ごとの条件分岐を図にする
-- Issue #77: 設計: `AttachAsync` を外す（実装は含めない）
+- [x] Issue #77: 設計: `AttachAsync` を外す（実装は含めない）
+- Issue #79: `AttachAsync` を外す
 
 ## 公開（Phase 3 完了後）
 

@@ -64,11 +64,6 @@ internal static class OperationOutcomes
             return TryProjectMove(operation, projected, out stamped);
         }
 
-        if (operation.Kind == PendingChangeKind.Attach)
-        {
-            return TryProjectAttach(operation, projected, out stamped);
-        }
-
         if (operation.Kind == PendingChangeKind.CreateDirectory)
         {
             return TryProjectCreateDirectory(operation, projected, out stamped);
@@ -155,46 +150,6 @@ internal static class OperationOutcomes
         projected[operation.Path] = PathState.Absent;
         projected[operation.NewPath] = before;
         stamped = operation.WithOutcome(before, PathState.Absent, PathState.Absent, before);
-        return true;
-    }
-
-    private static bool TryProjectAttach(
-        JournalOperation operation,
-        Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
-    {
-        stamped = operation;
-        if (operation.IsDirectory)
-        {
-            if (operation.Before is null || !operation.Before.IsDirectory)
-            {
-                return false;
-            }
-
-            PathState directory = Current(projected, operation.Path);
-            if (!directory.IsDirectory)
-            {
-                return false;
-            }
-
-            projected[operation.Path] = operation.Before;
-            stamped = operation.WithOutcome(operation.Before, operation.Before);
-            return true;
-        }
-
-        if (operation.Before is null || !operation.Before.IsFile)
-        {
-            return false;
-        }
-
-        PathState actual = Current(projected, operation.Path);
-        if (!operation.Before.SameAs(actual))
-        {
-            return false;
-        }
-
-        projected[operation.Path] = operation.Before;
-        stamped = operation.WithOutcome(operation.Before, operation.Before);
         return true;
     }
 

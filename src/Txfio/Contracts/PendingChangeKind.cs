@@ -26,17 +26,12 @@ public enum PendingChangeKind
     Move = 3,
 
     /// <summary>
-    /// 外部が作った既存ファイルの取り込み
-    /// </summary>
-    Attach = 4,
-
-    /// <summary>
     /// ディレクトリとその配下すべての削除予約
     /// </summary>
-    DeleteTree = 5,
+    DeleteTree = 4,
 
     /// <summary>
     /// 空ディレクトリを呼び出した時点で作る。配下の操作は別のエントリになる
     /// </summary>
-    CreateDirectory = 6,
+    CreateDirectory = 5,
 }

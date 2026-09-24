@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// Add / Update / Delete / Move / Attach の前提チェックと同一パスの正規化
+/// Add / Update / Delete / Move / CreateDirectory / DeleteTree の前提チェックと同一パスへの再ステージの正規化
 /// </summary>
 internal static class StagingRules
 {
@@ -25,11 +25,6 @@ internal static class StagingRules
 
         if (existingKind == PendingChangeKind.Delete
             && (requestedKind == PendingChangeKind.Add || requestedKind == PendingChangeKind.Update))
-        {
-            return PendingChangeKind.Update;
-        }
-
-        if (existingKind == PendingChangeKind.Attach && requestedKind == PendingChangeKind.Update)
         {
             return PendingChangeKind.Update;
         }
@@ -109,18 +104,6 @@ internal static class StagingRules
             || !string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase))
         {
             throw new UnsupportedOperationException("ボリュームをまたぐ移動はできません: " + sourcePath + " -> " + destPath);
-        }
-    }
-
-    /// <summary>
-    /// 取り込み対象が既存ファイルであることを検証する
-    /// </summary>
-    /// <param name="targetPath">対象パス</param>
-    internal static void EnsureAttachTarget(string targetPath)
-    {
-        if (!File.Exists(targetPath))
-        {
-            throw new ExternalConflictException("取り込み対象のファイルが存在しません: " + targetPath, targetPath);
         }
     }
 
@@ -325,7 +308,6 @@ internal static class StagingRules
             {
                 if (operation.Kind == PendingChangeKind.Add
                     || operation.Kind == PendingChangeKind.Update
-                    || operation.Kind == PendingChangeKind.Attach
                     || operation.Kind == PendingChangeKind.CreateDirectory)
                 {
                     return false;
