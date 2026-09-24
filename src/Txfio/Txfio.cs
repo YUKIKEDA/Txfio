@@ -26,8 +26,20 @@ public static class Txfio
 
         Guid transactionId = Guid.NewGuid();
         string journalPath = MetadataNames.JournalPath(workFolder, transactionId);
-        await JournalStore.WriteNewAsync(journalPath, transactionId, cancellationToken).ConfigureAwait(false);
-        return new Transaction(workFolder, transactionId, journalPath);
+
+        // Recover が生きているトランザクションのジャーナルを見つけたとき、必ず共有違反になるよう先に開く
+        FileStream liveness = LivenessLock.Create(MetadataNames.LivenessLockPath(journalPath));
+        try
+        {
+            await JournalStore.WriteNewAsync(journalPath, transactionId, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await liveness.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        return new Transaction(workFolder, transactionId, journalPath, liveness);
     }
 
     /// <summary>

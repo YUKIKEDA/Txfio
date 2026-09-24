@@ -11,6 +11,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly List<JournalOperation> _operations = new List<JournalOperation>();
     private readonly List<string> _createdDirectories = new List<string>();
     private readonly PathLockSet _locks = new PathLockSet();
+    private FileStream? _liveness;
     private bool _committed;
     private bool _disposed;
 
@@ -20,11 +21,13 @@ internal sealed partial class Transaction : ITransaction
     /// <param name="workFolder">対象のワークフォルダ</param>
     /// <param name="transactionId">このトランザクションの ID</param>
     /// <param name="journalPath">このトランザクションのジャーナルファイル</param>
-    internal Transaction(string workFolder, Guid transactionId, string journalPath)
+    /// <param name="liveness">トランザクションが終わるまで持つ生存ロック</param>
+    internal Transaction(string workFolder, Guid transactionId, string journalPath, FileStream liveness)
     {
         _workFolder = workFolder;
         _transactionId = transactionId;
         _journalPath = journalPath;
+        _liveness = liveness;
     }
 
     /// <inheritdoc />
@@ -53,11 +56,13 @@ internal sealed partial class Transaction : ITransaction
         if (CrashInjector.ShouldSkipRollback)
         {
             _locks.Release();
+            ReleaseLiveness();
             return;
         }
 
         if (_committed)
         {
+            ReleaseLiveness();
             return;
         }
 
@@ -75,6 +80,7 @@ internal sealed partial class Transaction : ITransaction
         finally
         {
             _locks.Release();
+            ReleaseLiveness();
         }
     }
 
@@ -113,6 +119,13 @@ internal sealed partial class Transaction : ITransaction
         }
 
         return -1;
+    }
+
+    // ジャーナルを消したあとで呼ぶ。先に閉じると、Recover が生きているトランザクションを巻き戻しうる
+    private void ReleaseLiveness()
+    {
+        _liveness?.Dispose();
+        _liveness = null;
     }
 
     private Task PersistAsync(bool committing, CancellationToken cancellationToken)

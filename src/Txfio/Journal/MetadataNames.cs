@@ -52,4 +52,14 @@ internal static class MetadataNames
             FolderPath(workFolder),
             "tx-" + transactionId.ToString("D") + ".journal");
     }
+
+    /// <summary>
+    /// ジャーナルと組になる生存ロックのパスを返す
+    /// </summary>
+    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
+    /// <returns>`.txfio/tx-{guid}.lock` のパス</returns>
+    internal static string LivenessLockPath(string journalPath)
+    {
+        return System.IO.Path.ChangeExtension(journalPath, ".lock");
+    }
 }
