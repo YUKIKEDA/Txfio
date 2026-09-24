@@ -205,6 +205,24 @@ internal static class StagingRules
     }
 
     /// <summary>
+    /// ZIP の出力先が入力そのもの、または入力ディレクトリの配下なら拒否する
+    /// </summary>
+    /// <param name="sourcePath">入力</param>
+    /// <param name="archivePath">ZIP の出力先</param>
+    internal static void ThrowIfArchiveInsideSource(string sourcePath, string archivePath)
+    {
+        if (string.Equals(sourcePath, archivePath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("入力と同じパスへは ZIP を作れません: " + sourcePath);
+        }
+
+        if (IsInsideDirectory(sourcePath, archivePath))
+        {
+            throw new InvalidOperationException("入力ディレクトリの配下へは ZIP を作れません: " + sourcePath);
+        }
+    }
+
+    /// <summary>
     /// 削除予約済みディレクトリへの後続操作を拒否する
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>

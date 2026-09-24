@@ -1,3 +1,5 @@
+using System.IO.Compression;
+
 namespace Txfio;
 
 /// <summary>
@@ -142,6 +144,49 @@ public interface ITransaction : IAsyncDisposable
     Task ExportAsync(
         string path,
         string externalPath,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// ワークフォルダ内のファイルまたはディレクトリから ZIP を作り、ワークフォルダ内に Add する
+    /// </summary>
+    /// <param name="source">入力（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="archivePath">作る ZIP のパス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="compressionLevel">圧縮レベル</param>
+    /// <param name="includeBaseDirectory">入力がディレクトリのとき、その名前をエントリのルートに含めるか</param>
+    /// <param name="progress">読み込んだ圧縮前のバイト数（null のときは通知しない）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが既にある、または親ディレクトリが無い</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが入力、ZIP のパス、またはワークフォルダを押さえている</exception>
+    /// <exception cref="InvalidOperationException">別操作でステージング済み、入力の配下に操作がある、ZIP のパスが入力の配下、シンボリックリンク、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task CreateArchiveAsync(
+        string source,
+        string archivePath,
+        CompressionLevel compressionLevel = CompressionLevel.Optimal,
+        bool includeBaseDirectory = false,
+        IProgress<TransferProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// ワークフォルダ内のファイルまたはディレクトリから、ワークフォルダの外に ZIP を作る
+    /// </summary>
+    /// <param name="source">入力（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="externalArchivePath">ワークフォルダの外に作る ZIP のパス</param>
+    /// <param name="compressionLevel">圧縮レベル</param>
+    /// <param name="includeBaseDirectory">入力がディレクトリのとき、その名前をエントリのルートに含めるか</param>
+    /// <param name="progress">読み込んだ圧縮前のバイト数（null のときは通知しない）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>書き出しの完了</returns>
+    /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="InvalidOperationException">シンボリックリンク、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">入力がワークフォルダの外、または ZIP のパスがワークフォルダの中である</exception>
+    Task ExportArchiveAsync(
+        string source,
+        string externalArchivePath,
+        CompressionLevel compressionLevel = CompressionLevel.Optimal,
+        bool includeBaseDirectory = false,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
