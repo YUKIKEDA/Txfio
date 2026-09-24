@@ -20,6 +20,9 @@ internal sealed partial class Transaction
             return CommitResult.Succeeded;
         }
 
+        // 開始後に落ちたトランザクションの残骸でも、確定したデータは消さない
+        StaleJournals.ThrowIfAny(_workFolder);
+
         if (!OperationOutcomes.TryStamp(_operations, _transactionId, out JournalOperation[] stamped))
         {
             return CommitResult.Failed;
@@ -32,10 +35,13 @@ internal sealed partial class Transaction
 
         bool conflict = !StagingApplier.TryApplyAll(_operations);
 
-        if (!conflict)
+        // 衝突しても残さない。残すと、あとの Recover が他のトランザクションの確定したパスを対象にやり直す
+        if (conflict)
         {
-            await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+            StagingApplier.DeleteStagingFiles(_operations);
         }
+
+        await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
 
         _locks.Release();
         ReleaseLiveness();

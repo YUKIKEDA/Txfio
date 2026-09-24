@@ -51,12 +51,12 @@ public sealed class RecoverDirectoryDeleteTests
     }
 
     /// <summary>
-    /// Committing で直下が空でなければ journal を残す
+    /// Committing で直下が空でなければディレクトリを残し、journal は消す
     /// </summary>
     /// <remarks>
     /// <para>前提: Committing のディレクトリ Delete journal があり、直下にファイルがある</para>
     /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: ConflictDetected で journal とディレクトリは残る</para>
+    /// <para>期待: ConflictDetected でディレクトリは残り、journal は消える</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_Committingのディレクトリに子があるとConflictDetectedになること()
@@ -70,7 +70,7 @@ public sealed class RecoverDirectoryDeleteTests
 
         RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.ConflictDetected, result);
-        Assert.True(File.Exists(leftover.JournalPath));
+        Assert.False(File.Exists(leftover.JournalPath));
         Assert.True(Directory.Exists(leftover.TargetPath));
     }
 }

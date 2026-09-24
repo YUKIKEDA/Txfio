@@ -144,6 +144,18 @@ internal static class StagingApplier
     }
 
     /// <summary>
+    /// 操作ごとの `.txnew` を消す。無いものは飛ばす
+    /// </summary>
+    /// <param name="operations">操作一覧</param>
+    internal static void DeleteStagingFiles(IReadOnlyList<JournalOperation> operations)
+    {
+        foreach (JournalOperation operation in operations)
+        {
+            StagingFile.TryDelete(operation.StagingPath);
+        }
+    }
+
+    /// <summary>
     /// CreateDirectory が作ったディレクトリを、中身ごと消す
     /// </summary>
     /// <param name="operations">操作一覧</param>

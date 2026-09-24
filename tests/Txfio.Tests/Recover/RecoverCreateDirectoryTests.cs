@@ -73,7 +73,7 @@ public sealed class RecoverCreateDirectoryTests
     /// <remarks>
     /// <para>前提: Committing の CreateDirectory journal があり、ディレクトリは無い</para>
     /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: ConflictDetected で journal は残る</para>
+    /// <para>期待: ConflictDetected で journal は消える</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_Committingで無いとConflictDetectedになること()
@@ -84,7 +84,7 @@ public sealed class RecoverCreateDirectoryTests
         RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.ConflictDetected, result);
-        Assert.NotEmpty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
     /// <summary>
@@ -93,7 +93,7 @@ public sealed class RecoverCreateDirectoryTests
     /// <remarks>
     /// <para>前提: Committing の CreateDirectory journal があり、同じパスがファイルである</para>
     /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: ConflictDetected でファイルと journal は残る</para>
+    /// <para>期待: ConflictDetected でファイルは残り、journal は消える</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_ファイルにすり替わるとConflictDetectedになること()
@@ -107,7 +107,7 @@ public sealed class RecoverCreateDirectoryTests
 
         Assert.Equal(RecoverResult.ConflictDetected, result);
         Assert.Equal("file", await File.ReadAllTextAsync(target));
-        Assert.NotEmpty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
     private static async Task<string> WriteCreateDirectoryAsync(

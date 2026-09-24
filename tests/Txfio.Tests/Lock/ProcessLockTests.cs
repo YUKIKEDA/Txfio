@@ -57,12 +57,12 @@ public sealed class ProcessLockTests
     }
 
     /// <summary>
-    /// Dispose せず終了した別プロセスのロックは取り直せる
+    /// Dispose せず終了した別プロセスのロックは、Recover のあとで取り直せる
     /// </summary>
     /// <remarks>
     /// <para>前提: 子プロセスが a.txt を Add してロックを持っている</para>
-    /// <para>手順: 子プロセスを Dispose せず終了し、親プロセスが同じパスを Add する</para>
-    /// <para>期待: Add でき、ロックファイルは残る</para>
+    /// <para>手順: 子プロセスを Dispose せず終了し、親プロセスが BeginAsync する。RecoverAsync してから同じパスを Add する</para>
+    /// <para>期待: Recover 前の BeginAsync は RecoveryRequiredException で、Recover のあとは Add でき、ロックファイルは残る</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_別プロセスがDisposeせず終了したあとは同じパスを押さえられること()
@@ -75,6 +75,11 @@ public sealed class ProcessLockTests
         await child.WaitUntilReadyAsync(ready);
         Assert.True(File.Exists(lockFile));
         await child.KillAsync();
+
+        RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
+            () => global::Txfio.Txfio.BeginAsync(work.Path));
+        Assert.Equal(work.Path, required.Path);
+        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
 
         await using ITransaction parent = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");

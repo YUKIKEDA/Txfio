@@ -19,15 +19,26 @@ internal static class RecoverService
             return RecoverResult.NoPendingTransactions;
         }
 
-        string[] journals = Directory.GetFiles(
-            metadataFolder,
-            MetadataNames.JournalSearchPattern,
-            SearchOption.TopDirectoryOnly);
-        if (journals.Length == 0)
+        // 処理中に別のトランザクションが確定したデータを、ロールフォワードやロールバックで消さない
+        PathLockSet sentinel = new PathLockSet();
+        try
         {
-            return RecoverResult.NoPendingTransactions;
+            sentinel.AcquireExclusive(workFolder);
+            sentinel.RejectForeignLocks(workFolder);
+            string[] journals = Directory.GetFiles(
+                metadataFolder,
+                MetadataNames.JournalSearchPattern,
+                SearchOption.TopDirectoryOnly);
+            return await RecoverJournalsAsync(journals, cancellationToken).ConfigureAwait(false);
         }
+        finally
+        {
+            sentinel.Release();
+        }
+    }
 
+    private static async Task<RecoverResult> RecoverJournalsAsync(string[] journals, CancellationToken cancellationToken)
+    {
         bool rolledBack = false;
         bool rolledForward = false;
         bool conflictDetected = false;
@@ -58,22 +69,20 @@ internal static class RecoverService
                     bool appliedAll = StagingApplier.TryApplyAll(document.Operations);
                     if (!appliedAll)
                     {
+                        // 結果は 1 回だけ返し、次の Recover でやり直さない
+                        StagingApplier.DeleteStagingFiles(document.Operations);
                         conflictDetected = true;
-                        continue;
                     }
 
                     await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
-                    rolledForward = true;
+                    rolledForward |= appliedAll;
                     continue;
                 }
 
                 if (document is not null)
                 {
                     StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
-                    foreach (JournalOperation operation in document.Operations)
-                    {
-                        StagingFile.TryDelete(operation.StagingPath);
-                    }
+                    StagingApplier.DeleteStagingFiles(document.Operations);
                 }
 
                 await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
