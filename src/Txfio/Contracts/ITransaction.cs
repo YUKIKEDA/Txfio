@@ -79,7 +79,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ExternalConflictException">移動元が無い、移動先が塞がっている、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動である</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">同じパスへの移動（大文字小文字だけの違いを含む）、別操作でステージング済み、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 

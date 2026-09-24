@@ -501,6 +501,77 @@ public sealed class MoveTests
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
 
+    /// <summary>
+    /// 大文字小文字だけが違う Move は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt がある</para>
+    /// <para>手順: A.txt へ Move する</para>
+    /// <para>期待: InvalidOperationException で、pending は空、ロックは無く、a.txt が残り内容も変わらない</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_大文字小文字だけが違うとInvalidOperationExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(source, "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", "A.txt"));
+
+        Assert.Contains("同じパスへは移動できません", ex.Message, StringComparison.Ordinal);
+        Assert.Empty(tx.GetPendingChanges());
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, ".txfio", "locks")));
+        Assert.Equal("keep", await File.ReadAllTextAsync(source));
+        Assert.Equal("a.txt", System.IO.Path.GetFileName(Assert.Single(Directory.GetFiles(work.Path, "a.txt"))));
+    }
+
+    /// <summary>
+    /// 完全に同じパスへの Move は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt がある</para>
+    /// <para>手順: a.txt から a.txt へ Move する</para>
+    /// <para>期待: InvalidOperationException で、pending は空である</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_同じパスだとInvalidOperationExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", "a.txt"));
+
+        Assert.Contains("同じパスへは移動できません", ex.Message, StringComparison.Ordinal);
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
+    /// <summary>
+    /// 別パスへの Move を表記だけ変えてもう一度呼んでも、元の予約のまま残る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を b.txt へ Move してある</para>
+    /// <para>手順: a.txt を B.txt へ Move する</para>
+    /// <para>期待: 例外にならず、pending は a.txt から b.txt の 1 件のままである</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_同じ移動先を表記だけ変えても予約は変わらないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(source, "keep");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+
+        await tx.MoveAsync("a.txt", "B.txt");
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Move, pending.Kind);
+        Assert.Equal("a.txt", System.IO.Path.GetFileName(pending.Path), StringComparer.Ordinal);
+        Assert.Equal("b.txt", System.IO.Path.GetFileName(pending.NewPath), StringComparer.Ordinal);
+    }
+
     private static FileStream LockJournal(string workFolder)
     {
         string journal = Assert.Single(

@@ -302,7 +302,7 @@ flowchart TD
 
 `MoveAsync` は、同一ボリューム内のファイルまたはディレクトリの移動を予約します。対象はコミットまで元の場所に残り、コミット時に 1 回 rename します。ディレクトリの中身はジャーナルに書かず、rename に付いていきます。破棄しても何も消えません。印が無ければディスクは変えず、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
 
-ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリのあいだはワークフォルダ全体を排他で押さえ、元と先をロックします。別ボリュームはコピーと削除には切り替えません。
+ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリのあいだはワークフォルダ全体を排他で押さえ、元と先をロックします。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。ジャーナルには載せず、ロックも取りません。
 
 ```csharp
 await tx.MoveAsync("tree", "archive");
@@ -310,7 +310,9 @@ await tx.MoveAsync("tree", "archive");
 
 ```mermaid
 flowchart TD
-  move["MoveAsync"] --> vol{"別ボリューム?"}
+  move["MoveAsync"] --> same{"同じパス?"}
+  same -->|はい| invSame["InvalidOperationException"]
+  same -->|いいえ| vol{"別ボリューム?"}
   vol -->|はい| uns["UnsupportedOperationException"]
   vol -->|いいえ| place{"元が無い、または先がある?"}
   place -->|はい| ext["ExternalConflictException"]

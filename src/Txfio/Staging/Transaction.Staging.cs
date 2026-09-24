@@ -193,7 +193,7 @@ internal sealed partial class Transaction
         string destPath = WorkPath.ResolveInWorkFolder(_workFolder, newPath);
         if (string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            throw new InvalidOperationException("同じパスへは移動できません: " + sourcePath);
         }
 
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);

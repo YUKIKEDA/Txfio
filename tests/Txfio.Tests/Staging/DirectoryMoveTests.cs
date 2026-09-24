@@ -91,6 +91,34 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
+    /// 大文字小文字だけが違うディレクトリ Move は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 空の sub がある</para>
+    /// <para>手順: Sub へ Move し、続けて sub から sub へ Move する</para>
+    /// <para>期待: どちらも InvalidOperationException で、pending は空、ロックは無く、sub が残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_ディレクトリの大文字小文字だけが違うとInvalidOperationExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "sub");
+        Directory.CreateDirectory(source);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        InvalidOperationException differentCase = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => tx.MoveAsync("sub", "Sub"));
+        InvalidOperationException same = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => tx.MoveAsync("sub", "sub"));
+
+        Assert.Contains("同じパスへは移動できません", differentCase.Message, StringComparison.Ordinal);
+        Assert.Contains("同じパスへは移動できません", same.Message, StringComparison.Ordinal);
+        Assert.Empty(tx.GetPendingChanges());
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, ".txfio", "locks")));
+        Assert.True(Directory.Exists(source));
+    }
+
+    /// <summary>
     /// 自分自身の配下へは移せず、配下に操作があると失敗する
     /// </summary>
     /// <remarks>
