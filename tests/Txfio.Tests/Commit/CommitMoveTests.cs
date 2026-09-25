@@ -258,4 +258,88 @@ public sealed class CommitMoveTests
         Assert.Equal("external", await File.ReadAllTextAsync(dest));
         Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
+
+    /// <summary>
+    /// Update のあと Move した元へ Add しても、移動先の内容は変わらない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: sub/a.txt を Update し、a.txt へ Move している</para>
+    /// <para>手順: sub/a.txt へ AddAsync し、a.txt を ReadAsync して CommitAsync する</para>
+    /// <para>期待: 読めるのは Update の内容で、Succeeded のあと a.txt は Update の内容、sub/a.txt は Add の内容である</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_UpdateのあとMoveした元へAddしても移動先の内容が変わらないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        string source = System.IO.Path.Combine(work.Path, "sub", "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(source, "init");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream updated = LeftoverAddFiles.Utf8Stream("updated");
+        await tx.UpdateAsync("sub/a.txt", updated);
+        await tx.MoveAsync("sub/a.txt", "a.txt");
+        await using MemoryStream added = LeftoverAddFiles.Utf8Stream("added");
+        await tx.AddAsync("sub/a.txt", added);
+
+        Assert.Equal("updated", await tx.ReadAllTextAsync("a.txt"));
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal("updated", await File.ReadAllTextAsync(dest));
+        Assert.Equal("added", await File.ReadAllTextAsync(source));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew", SearchOption.AllDirectories));
+    }
+
+    /// <summary>
+    /// Add のあと Move した元へもう一度 Add しても、移動先の内容は変わらない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を Add し、b.txt へ Move している</para>
+    /// <para>手順: a.txt へ AddAsync して CommitAsync する</para>
+    /// <para>期待: Succeeded で、b.txt は最初の Add の内容、a.txt は 2 回目の Add の内容である</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_AddのあとMoveした元へAddしても移動先の内容が変わらないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
+        await tx.AddAsync("a.txt", first);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
+        await tx.AddAsync("a.txt", second);
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal("first", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
+        Assert.Equal("second", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
+
+    /// <summary>
+    /// Add を Move で出したパスへ別のファイルを Move して Update しても、先に出した内容は変わらない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: d.txt を Add して e.txt へ Move し、既存の a.txt を d.txt へ Move している</para>
+    /// <para>手順: d.txt へ UpdateAsync して CommitAsync する</para>
+    /// <para>期待: Succeeded で、e.txt は Add の内容、d.txt は Update の内容で、a.txt は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_Addを出したパスへMoveしてUpdateしても先に出した内容が変わらないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream added = LeftoverAddFiles.Utf8Stream("added");
+        await tx.AddAsync("d.txt", added);
+        await tx.MoveAsync("d.txt", "e.txt");
+        await tx.MoveAsync("a.txt", "d.txt");
+        await using MemoryStream updated = LeftoverAddFiles.Utf8Stream("updated");
+        await tx.UpdateAsync("d.txt", updated);
+
+        CommitResult result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal("added", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "e.txt")));
+        Assert.Equal("updated", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "d.txt")));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
 }

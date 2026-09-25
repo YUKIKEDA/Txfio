@@ -134,7 +134,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 同じパスを Add している</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: pending は Add（移動先）1 件で、.txnew は元の場所に残る</para>
+    /// <para>期待: pending は Add（移動先）1 件で、.txnew は移動先の名前で移動先のディレクトリにある</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_Addのあとだと移動先のAddになること()
@@ -152,20 +152,20 @@ public sealed class MoveTests
             System.IO.Path.Combine(work.Path, "sub", "b.txt"),
             pending.Path,
             StringComparer.OrdinalIgnoreCase);
-        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
-        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
     }
 
     /// <summary>
-    /// Add を付け替えたあと移動先を Update しても .txnew は元の場所のままである
+    /// Add を付け替えたあと移動先を Update すると、移動先の .txnew を書き直す
     /// </summary>
     /// <remarks>
     /// <para>前提: Add のあと別ディレクトリへ Move している</para>
     /// <para>手順: 移動先へ UpdateAsync する</para>
-    /// <para>期待: pending は Add（移動先）1 件で、.txnew は元の場所に 1 件だけある</para>
+    /// <para>期待: pending は Add（移動先）1 件で、.txnew は移動先のディレクトリに 1 件だけあり、新しい内容である</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_Addを付け替えた先でもtxnewは元の場所のままであること()
+    public async Task UpdateAsync_Addを付け替えた先のtxnewを書き直すこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -182,19 +182,19 @@ public sealed class MoveTests
             System.IO.Path.Combine(work.Path, "sub", "b.txt"),
             pending.Path,
             StringComparer.OrdinalIgnoreCase);
-        string[] sidecars = Directory.GetFiles(work.Path, "*.txnew");
+        string[] sidecars = Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew");
         Assert.Single(sidecars);
         Assert.Equal("second", await File.ReadAllTextAsync(sidecars[0]));
-        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
 
     /// <summary>
-    /// Add を付け替えた先の Update で journal 書き込みに失敗しても .txnew は元の場所のままである
+    /// Add を付け替えた先の Update で journal 書き込みに失敗しても、移動先の .txnew は前の内容のままである
     /// </summary>
     /// <remarks>
     /// <para>前提: Add のあと Move し、journal を排他ロックしている</para>
     /// <para>手順: 移動先へ UpdateAsync する</para>
-    /// <para>期待: 例外は IOException で、pending は Add のまま、.txnew は元の場所に 1 件である</para>
+    /// <para>期待: 例外は IOException で、pending は Add のまま、.txnew は移動先のディレクトリに 1 件で前の内容である</para>
     /// </remarks>
     [Fact]
     public async Task UpdateAsync_Addを付け替えた先でjournal書き込みに失敗するとtxnewは元のままであること()
@@ -217,8 +217,11 @@ public sealed class MoveTests
             System.IO.Path.Combine(work.Path, "sub", "b.txt"),
             pending.Path,
             StringComparer.OrdinalIgnoreCase);
-        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
-        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+        Assert.Equal(
+            "first",
+            await File.ReadAllTextAsync(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew")[0]));
     }
 
     /// <summary>
@@ -227,7 +230,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: 既存ファイルを Update している</para>
     /// <para>手順: MoveAsync する</para>
-    /// <para>期待: pending は Add と Delete で、.txnew は元の場所に残り、元ファイルは残る</para>
+    /// <para>期待: pending は Add と Delete で、.txnew は移動先のディレクトリへ移り、元ファイルは残る</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_UpdateのあとだとAddとDeleteになること()
@@ -246,8 +249,8 @@ public sealed class MoveTests
         Assert.Equal(PendingChangeKind.Add, pending[0].Kind);
         Assert.Equal(PendingChangeKind.Delete, pending[1].Kind);
         Assert.Equal("old", await File.ReadAllTextAsync(source));
-        Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
-        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, "sub"), "*.txnew"));
     }
 
     /// <summary>

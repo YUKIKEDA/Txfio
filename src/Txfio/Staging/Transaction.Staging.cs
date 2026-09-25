@@ -515,22 +515,38 @@ internal sealed partial class Transaction
     {
         JournalOperation existing = _operations[sourceIndex];
         JournalOperation[] previous = _operations.ToArray();
+
+        // .txnew は移動先の名前に付け替える。元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする
+        string? stagingPath = existing.StagingPath is null
+            ? null
+            : WorkPath.StagingFilePath(destPath, _transactionId);
+        bool journalUpdated = false;
         try
         {
             string sourcePath = existing.Path;
             _operations.RemoveAt(sourceIndex);
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, existing.StagingPath));
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
             if (deleteSource)
             {
                 _operations.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
             }
 
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journalUpdated = true;
+            if (existing.StagingPath is not null)
+            {
+                File.Move(existing.StagingPath, stagingPath!);
+            }
         }
         catch
         {
             _operations.Clear();
             _operations.AddRange(previous);
+            if (journalUpdated)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
             throw;
         }
     }
