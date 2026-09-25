@@ -106,7 +106,7 @@ public static class Txfio
     /// </summary>
     /// <param name="path">既存のワークフォルダ</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
+    /// <returns>全体の結果と、処理したジャーナル（パスの大文字小文字を無視した辞書順であり、JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
     /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="LockContentionException">他のトランザクションがワークフォルダを押さえている</exception>
@@ -122,7 +122,7 @@ public static class Txfio
     /// <param name="path">既存のワークフォルダ</param>
     /// <param name="lockWait">ワークフォルダ全体のロックが取れないとき、この呼び出しで待つ上限（ゼロは待たない）</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
+    /// <returns>全体の結果と、処理したジャーナル（パスの大文字小文字を無視した辞書順であり、JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
     /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>

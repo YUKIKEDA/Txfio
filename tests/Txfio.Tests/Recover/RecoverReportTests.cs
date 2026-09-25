@@ -119,6 +119,41 @@ public sealed class RecoverReportTests
     }
 
     /// <summary>
+    /// 複数の残骸ジャーナルはパスの大文字小文字を無視した辞書順で載る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 生きているトランザクションがあり、未コミットの Add 残骸を辞書順の逆に 2 件書いてある</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: Journals はパスの大文字小文字を無視した辞書順であり、どちらも RolledBack であり、生きているトランザクションは一覧に無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_複数ジャーナルはパスの大文字小文字を無視した辞書順で載ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
+        string metadata = System.IO.Path.Combine(work.Path, ".txfio");
+        string liveJournal = Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
+        Assert.True(MetadataNames.TryGetTransactionId(liveJournal, out Guid liveId));
+        Guid later = Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        Guid earlier = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        await LeftoverAddFiles.WriteAddAsync(work.Path, committing: false, "z.txt", "z", later);
+        await LeftoverAddFiles.WriteAddAsync(work.Path, committing: false, "a.txt", "a", earlier);
+
+        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.RolledBack, report.Result);
+        Assert.Equal(2, report.Journals.Count);
+        Assert.Equal(earlier, report.Journals[0].TransactionId);
+        Assert.Equal(RecoverResult.RolledBack, report.Journals[0].Result);
+        Assert.Equal(later, report.Journals[1].TransactionId);
+        Assert.Equal(RecoverResult.RolledBack, report.Journals[1].Result);
+        Assert.DoesNotContain(report.Journals, journal => journal.TransactionId == liveId);
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "z.txt")));
+        Assert.Empty(live.GetPendingChanges());
+    }
+
+    /// <summary>
     /// ファイル名から ID を取れない、読めないジャーナルは、空の ID で一覧に入れない
     /// </summary>
     /// <remarks>
