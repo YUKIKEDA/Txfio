@@ -368,7 +368,7 @@ internal sealed partial class Transaction
     /// ファイル Move を外し、移動元の元のファイルをコミットで消す形に畳む
     /// </summary>
     /// <remarks>
-    /// 移動元へ Add し直していれば、元を消して書くのと同じなので、その Add を Update にする。
+    /// 移動元へ Add し直していれば、元を消して書くのと同じなので、その Add を Update にする
     /// 移動元へ別の Move で入ってくる予定があるときは、適用順（Move が先、Delete が後）で表せないので受け付けない
     /// </remarks>
     /// <param name="operations">畳む操作一覧（書き換える）</param>
@@ -652,7 +652,7 @@ internal sealed partial class Transaction
         JournalOperation existing = _operations[sourceIndex];
         JournalOperation[] previous = _operations.ToArray();
 
-        // .txnew は移動先の名前に付け替える。元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする
+        // .txnew は移動先の名前に付け替える（元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする）
         string? stagingPath = existing.StagingPath is null
             ? null
             : WorkPath.StagingFilePath(destPath, _transactionId);
@@ -728,9 +728,9 @@ internal sealed partial class Transaction
     }
 
     /// <summary>
-    /// 畳んだ操作一覧をジャーナルに書く。失敗したら元の一覧に戻す
+    /// 畳んだ操作一覧をジャーナルに書く（失敗したら元の一覧に戻す）
     /// </summary>
-    /// <param name="fold">操作一覧の写しを畳む処理。使い方の誤りなら書く前に例外を投げる</param>
+    /// <param name="fold">操作一覧の写しを畳む処理（使い方の誤りなら書く前に例外を投げる）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ジャーナル書き込みの完了</returns>
     private async Task PersistFoldedAsync(

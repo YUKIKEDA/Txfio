@@ -21,7 +21,7 @@ internal static class StaleJournals
     }
 
     /// <summary>
-    /// 生存ロックを開けて、開けたあともジャーナルが残っているものがあるかを返す。ジャーナルは読まない
+    /// 生存ロックを開けて、開けたあともジャーナルが残っているものがあるかどうかを返す（ジャーナルは読まない）
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <returns>残骸ジャーナルがあれば <see langword="true"/></returns>
@@ -38,7 +38,7 @@ internal static class StaleJournals
             MetadataNames.JournalSearchPattern,
             SearchOption.TopDirectoryOnly))
         {
-            // 共有違反なら持ち主が生きている。自分のジャーナルも自分が持つので必ずここで飛ぶ
+            // 共有違反なら持ち主が生きている（自分のジャーナルも自分が持つので必ずここで飛ぶ）
             using FileStream? liveness = LivenessLock.TryOpenStale(MetadataNames.LivenessLockPath(journalPath));
             if (liveness is not null && File.Exists(journalPath))
             {

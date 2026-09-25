@@ -12,7 +12,7 @@ internal sealed class PathLockSet
 
     private const int LockViolation = 33;
 
-    // Linux の EAGAIN（EWOULDBLOCK）。.NET は Unix では errno をそのまま HResult に入れる
+    // Linux の EAGAIN（EWOULDBLOCK）では、.NET は Unix の errno をそのまま HResult に入れる
     private const int LinuxWouldBlock = 11;
 
     private const int RetryIntervalMilliseconds = 100;
@@ -79,7 +79,7 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 次に同じ共有モードで開くとき、指定した例外を投げる。テスト用
+    /// 次に同じ共有モードで開くとき、指定した例外を投げる（テスト用）
     /// </summary>
     /// <param name="share">失敗させる共有モード</param>
     /// <param name="exception">投げる例外</param>
@@ -308,7 +308,7 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 持っているハンドルを閉じる。ロックファイルは残す
+    /// 持っているハンドルを閉じる（ロックファイルは残す）
     /// </summary>
     internal void Release()
     {

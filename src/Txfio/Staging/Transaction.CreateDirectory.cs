@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// 空ディレクトリを呼び出した時点で作る。配下の操作は通常どおりで、破棄ではそのディレクトリを中身ごと消す
+/// 空ディレクトリを呼び出した時点で作る（配下の操作は通常どおりであり、破棄ではそのディレクトリを中身ごと消す）
 /// </content>
 internal sealed partial class Transaction
 {

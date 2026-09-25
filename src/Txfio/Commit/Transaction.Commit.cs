@@ -43,10 +43,10 @@ internal sealed partial class Transaction
         _committingWritten = true;
         CrashInjector.CheckPoint(CrashInjector.AfterCommitting);
 
-        // 適用中の例外は再送出する。Dispose はロールバックしない
+        // 適用中の例外は再送出する（Dispose はロールバックしない）
         bool conflict = !StagingApplier.TryApplyAll(_operations, out OperationReport[] skipped);
 
-        // 衝突しても残さない。残すと、あとの Recover が他のトランザクションの確定したパスを対象にやり直す
+        // 衝突しても残さない（残すと、あとの Recover が他のトランザクションの確定したパスを対象にやり直す）
         if (conflict)
         {
             StagingApplier.DeleteStagingFiles(_operations);

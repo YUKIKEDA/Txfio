@@ -88,18 +88,18 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **コミット後の姿**: `ReadAsync`、`ExistsAsync`、文字列と JSON の読み書きは、このトランザクションの予約をコミットしたあとの姿で扱う。ワークフォルダ全体は走査しない。問い合わせたパスと操作一覧だけを見る。`Add` / `Update` はその `.txnew`。ファイル `Move` の移動先は移動元のバイトで、移動元は無い。移動元へ `Add` したときはその `.txnew`。同じパスが `Move` の移動元でも移動先でもあるときは、連鎖を空いている端から適用したあとのバイトを読む。`Delete` の対象は無い。`DeleteTree` の対象とその配下は無い。ディレクトリ `Move` の移動元とその配下は無い。移動先の配下は、移動元の対応するパス。同じディレクトリが連鎖で移動元でも移動先でもあるときは、空いている端から適用したあとの木。`CreateDirectory` の配下は、各操作の既存の規則と、素のファイル API で書いたファイルのまま。どれにも当たらなければディスク上のファイル。ディレクトリそのものの `ReadAsync` は未対応のまま。`ExistsAsync` はディレクトリでも bool を返す
 
-**文字列と JSON（拡張メソッド）**
+**文字列と JSON**
 
-`ITransaction` には足さない。名前空間 `Txfio` の拡張メソッドで、同期版は無い。`IProgress` も付けない。中身はいったんメモリに載せて、既存の `ReadAsync` / `AddAsync` / `UpdateAsync` を呼ぶ。大きいバイト列は `Stream` の API を使う。
+`ITransaction` のメソッドである。同期版は無い。`IProgress` も付けない。ファイルがあるかを返すメソッドは足さない。Add か Update かは実装が選ぶ。中身はいったんメモリに載せて、読みは `ReadAsync` と同じバイト、書きは `AddAsync` / `UpdateAsync` と同じステージングを使う。大きいバイト列は `Stream` の API を使う。利用側のモックはこれらのメソッドを実装する。
 
 - `ReadAllTextAsync` / `ReadAllLinesAsync`: `ReadAsync` と同じバイトを文字列、または行の配列にする。行の区切りと、戻り値に改行を含めないことは `File.ReadAllLinesAsync` に合わせる。エンコーディングを省略した読みは `File` と同じ BOM 検出。エンコーディング引数のあるオーバーロードも持つ。ディレクトリ、および対象が無いときは `ReadAsync` と同じ例外
-- `WriteAllTextAsync` / `WriteAllLinesAsync`: 「コミット後の姿」でファイルが無ければ `Add`、あれば `Update`。`Move` の移動先は `Update`。ファイルなら移動先の Add と元の Delete に畳む。ファイル `Move` の移動元は `Add`。ディレクトリ `Move` の移動先も移動元も `InvalidOperationException`。同じトランザクションで続けて書くと、既存の再ステージに乗る（新規のままなら `Add`、既存なら `Update`。`Delete` のあとは、姿では無いので選ぶ時点は `Add` だが、畳み込みで記録は `Update`）。エンコーディングを省略した書きは BOM なし UTF-8。`WriteAllLinesAsync` の改行は `File.WriteAllLinesAsync` に合わせる。`WriteAllTextAsync` の内容が null なら空として書く。`WriteAllLinesAsync` の内容が null、またはエンコーディング引数が null なら `ArgumentNullException`
+- `WriteAllTextAsync` / `WriteAllLinesAsync`: 「コミット後の姿」でファイルが無ければ `Add`、あれば `Update`。`Move` の移動先は `Update`。ファイルなら移動先の Add と元の Delete に畳む。ファイル `Move` の移動元は `Add`。ディレクトリ `Move` の移動先も移動元も `InvalidOperationException`。同じトランザクションで続けて書くと、既存の再ステージに乗る（新規のままなら `Add`、既存なら `Update`。`Delete` のあとは、姿では無いので選ぶ時点は `Add` だが、畳み込みで記録は `Update`）。エンコーディングを省略した書きは BOM なし UTF-8。`WriteAllLinesAsync` の改行は `File.WriteAllLinesAsync` に合わせる。`WriteAllTextAsync` の内容が null なら空文字列として書く。`WriteAllLinesAsync` の内容が null、またはエンコーディング引数が null なら `ArgumentNullException`
 - `ReadFromJsonAsync<T>`: `ReadAsync` のバイトを `System.Text.Json` でデシリアライズする。失敗は `System.Text.Json` の例外のまま。`JsonSerializerOptions` は省略でき、省略時は既定
 - `WriteAsJsonAsync<T>`: シリアライズした JSON を、`WriteAllTextAsync` と同じ Add / Update の規則で書く。`JsonSerializerOptions` は省略でき、省略時は既定
 
 **共通方針**
 
-- 全ての書き込み系APIは非同期（`Task`ベース）で統一する。文字列と JSON の拡張も同じで、同期版は置かない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
+- 全ての書き込み系APIは非同期（`Task`ベース）で統一する。文字列と JSON の読み書きも同じで、同期版は置かない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
 - `CancellationToken` を受け付けるが、有効なのはコミット開始前（検証フェーズまで）に限る。物理的な適用（rename/削除の実行）が始まったら`CancellationToken`は無視し、最後まで完了させる。これにより「意図的な中断」と「クラッシュによる中断」を明確に区別できる（前者はコミット中には起こり得ず、後者だけが`RecoverAsync()`の対象になる）。コミット開始前にキャンセルされた場合は`DisposeAsync()`内で通常の非同期ロールバック（`.txnew`削除、コピーが作ったディレクトリの削除、`CreateDirectory` の再帰削除、ロック解放、ジャーナル削除）を行いクリーンに終了する
 - `AddAsync` と `UpdateAsync`、`CopyAsync`、Import の `.txnew` へのコピー、Export の外部へのコピー、および ZIP の 4 メソッドは、`IProgress<TransferProgress>?` を `CancellationToken` の直前に受け取る。null のときは通知しない。`TransferProgress` は書き終えたバイト数と、開始時点の残りバイト数（シークでき長さを読めるとき。残りが 0 未満なら null）である。81920 バイトを書き終えるたびに通知し、空の内容は最後に 1 回だけ通知する。ストリームは巻き戻さない。ディレクトリのコピーでは全体サイズを事前に測らず、`TotalBytes` は null、書き終えたバイトの合計を通知する。空のディレクトリは最後に 1 回、0 バイトを通知する。Add / Update が通知するのは呼び出し側の内容を `.txnew` へ書くコピーだけで、再ステージの退避とジャーナル書き込みは含めない。ZIP の作成と Export は、読み込んだ元ファイルのバイト数（圧縮前）の合計を通知し、`TotalBytes` は null である。展開と Import は、`.txnew` へ書いた展開後のバイト数の合計を通知し、`TotalBytes` はセントラルディレクトリの `Length` の合計である。どれも空なら最後に 1 回、0 バイトを通知する。`Delete` / `DeleteTree` / `Move` / `CreateDirectory` / `Commit` と、コミット件数の進捗は対象外である
 - エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある、コピー先が塞がっている）。未対応（ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move、ディレクトリの `ReadAsync`）は `UnsupportedOperationException`。使い方の誤り（同じトランザクションへの重なった呼び出しを含む）は `InvalidOperationException` と `ArgumentException` のまま。ZIP の展開で危険なエントリ名があるときは `InvalidDataException`、ZIP 自体が読めないときは `System.IO.Compression` の例外のまま。他のトランザクションがパス、祖先ディレクトリの意図ロック、またはワークフォルダを押さえているときは `LockContentionException`（失敗したパスを 1 つ持つ。内部例外は持たない。期限まで待っても同じ例外で、待ちの取り消しは `OperationCanceledException`。「競合検知のタイミング」）。持ち主のいない残骸ジャーナルが残っているあいだの `BeginAsync` と `CommitAsync` は `RecoveryRequiredException`（`Path` はワークフォルダ。内部例外は持たない）。読めるジャーナルは `RecoverAsync` で解消する。JSON として読めないジャーナルは消さないので、直すか消すまで `RecoveryRequiredException` のままである。コミットの成否は例外にせず `CommitReport` で返す。全体の結果は `CommitResult`（「結果の詳細」）
@@ -123,7 +123,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **サポート範囲**: 単一プロセス内での複数トランザクション並行実行、および複数プロセス（別exe/別マシン）からの同時アクセスの両方をサポートする。ただしこのロックはTxfio利用者間の協調ロックであり、通常のFile API（Txfioを経由しない直接操作）による変更までは防げない
 
-**同じインスタンス**: 1 つの `ITransaction` の公開メンバーは、重なって呼べない。先に入った呼び出しは最後まで行い、後から重なった呼び出しは状態を変える前に `InvalidOperationException` にする。`CommitAsync`、`DisposeAsync`、`GetPendingChanges`、`ReadAsync`、`ExistsAsync`、変更系を含む。進行中の `IProgress` から同じインスタンスを呼ぶのも同じ例外である。呼び出しが終わったあとは、また 1 つずつ呼べる。重なった側は記録しない。`ExtractArchiveAsync` がその操作の中で読むのは、公開メンバーの重なりではない。別のトランザクション同士の並行は、この節のロックのままである
+**同じインスタンス**: 1 つの `ITransaction` の公開メンバーは、重なって呼べない。先に入った呼び出しは最後まで行い、後から重なった呼び出しは状態を変える前に `InvalidOperationException` にする。`CommitAsync`、`DisposeAsync`、`GetPendingChanges`、`ReadAsync`、`ExistsAsync`、文字列と JSON の読み書き、変更系を含む。進行中の `IProgress` から同じインスタンスを呼ぶのも同じ例外である。呼び出しが終わったあとは、また 1 つずつ呼べる。重なった側は記録しない。`ExtractArchiveAsync` がその操作の中で読むのは、公開メンバーの重なりではない。別のトランザクション同士の並行は、この節のロックのままである
 
 **ロック粒度**: 操作が名指ししたパスだけをロックする。ファイルでもディレクトリでも、そのパスの `.txfio/locks/{16進}.lock` を作る。ハッシュする文字列はワークフォルダからの相対パスで、区切りは `\`、`ToUpperInvariant` で畳んだ UTF-8 の SHA-256 である。加えて、`Add` / `Update` / `Delete` / `DeleteTree` / `Move` / `Import` / `Copy` / `CreateDirectory` / `CreateArchive` / `ExtractArchive` / `ImportArchive` はパスロックの前にワークフォルダの哨兵（相対パス `.`）を共有で取り、トランザクションが終わるまで持つ。`Read` と `Exists` と `Export` と `ExportArchive` はディレクトリでも取らない。ディレクトリの Delete は、そのディレクトリのパスロックと排他の意図ロックで、子のパスはロックしない。異なるパスを触るトランザクション同士は、哨兵を共有しているあいだ並行実行できる。ディレクトリ Move、`DeleteTree`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectory`、ディレクトリからの（組ならディレクトリを含む）`CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` は、その公開メソッドの実行中だけ哨兵を排他で取る。成功、失敗、取り消しのいずれでも、メソッドを抜ける前に共有へ戻す。戻した共有はトランザクションが終わるまで持つ。配下の予約は「意図ロック」である。`CreateDirectory` はそのディレクトリもロックする。配下の操作は、それぞれの通常のパスロックも取る。ファイルの `CopyAsync` は共有哨兵に加え、コピー元とコピー先をロックする。ディレクトリの `CopyAsync` はコピー元とコピー先をロックし、子はロックしない。コピー先の意図ロックは排他である。ディレクトリの Import はコピー先をロックし、その意図ロックは排他である。`CreateArchiveAsync` は `CopyAsync` と同じく入力と ZIP のパスをロックする。組で指定する `CreateArchiveAsync` は、要素にディレクトリがあれば呼び出しのあいだ哨兵を排他にし、ファイルだけなら共有のまま、各要素と ZIP のパスをロックする。入力の意図ロックは排他にしない。`ExtractArchiveAsync` と `ImportArchiveAsync` は展開先をロックし、その意図ロックは排他である。展開元の ZIP と子はロックしない
 
@@ -256,7 +256,7 @@ true のときはファイルの `Update` だけを見る。`Add`、`Delete`、`
 
 **対象フレームワーク**: `net8.0` 単一ターゲット。.NET Standard 2.0 のような古い環境への対応は行わない。`net8.0` のパッケージは net8 / net9 / net10 のアプリから参照できる。ランタイム保証は Windows（NTFS/SMB）のみ。開発 SDK は .NET 10 でよい。`net8.0-windows` にはしない（Linux の SDK から参照できなくなるため）。`IAsyncDisposable` 前提の設計（非同期API、`await using`パターン）と整合する。
 
-**ファイルシステムアクセスの抽象化**: ライブラリ内部の実装では`System.IO.Abstractions`のような抽象化層を挟まず、`System.IO`を直接使用する。このライブラリの価値の核（rename/コピーの原子性、ネットワークファイルシステム越しの実際の挙動）は抽象化層の裏でモックしても検証できないため。ただし公開APIはインターフェース化し（`ITransaction`等）、Txfioを**利用する側**がユースケース層のテストでモックできるようにする。Txfio自身の実装テストは実ファイルに対して行い、Txfioを使う側のテストはインターフェースのモックで行うという役割分担。
+**ファイルシステムアクセスの抽象化**: ライブラリ内部の実装では`System.IO.Abstractions`のような抽象化層を挟まず、`System.IO`を直接使用する。このライブラリの価値の核（rename/コピーの原子性、ネットワークファイルシステム越しの実際の挙動）は抽象化層の裏でモックしても検証できないため。公開APIはインターフェース（`ITransaction`）である。文字列と JSON の読み書きもそのメソッドであり、利用側は具象型へダウンキャストせずモックできる。Txfio自身の実装テストは実ファイルに対して行い、Txfioを使う側のテストはインターフェースのモックで行う。
 
 **NuGetパッケージ構成**: `Txfio`単一パッケージ。テスト用ヘルパーパッケージ（`Txfio.Testing`等）への分割は行わない。nuget.org への公開は GitHub リポジトリを public にしたあと（Phase 3 完了後）に行う。
 

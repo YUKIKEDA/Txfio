@@ -98,15 +98,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// null の文字列は空として Add する
+    /// null の文字列は空文字列として Add する
     /// </summary>
     /// <remarks>
     /// <para>前提: a.txt が無い</para>
     /// <para>手順: contents に null を渡して WriteAllTextAsync する</para>
-    /// <para>期待: 空文字が読め、pending は Add</para>
+    /// <para>期待: 空文字列が読め、pending は Add</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_nullは空として書くこと()
+    public async Task WriteAllTextAsync_nullは空文字列として書くこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);

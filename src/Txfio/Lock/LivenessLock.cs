@@ -16,10 +16,10 @@ internal static class LivenessLock
     }
 
     /// <summary>
-    /// 持ち主のいないジャーナルの生存ロックを開く。ファイルが無ければ作る
+    /// 持ち主のいないジャーナルの生存ロックを開く（ファイルが無ければ作る）
     /// </summary>
     /// <param name="lockPath">生存ロックのパス</param>
-    /// <returns>開けたハンドル。持ち主が生きていれば <see langword="null"/></returns>
+    /// <returns>開けたハンドル（持ち主が生きていれば <see langword="null"/>）</returns>
     internal static FileStream? TryOpenStale(string lockPath)
     {
         try
