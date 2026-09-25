@@ -102,7 +102,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - 全ての書き込み系APIは非同期（`Task`ベース）で統一する。文字列と JSON の拡張も同じで、同期版は置かない。IOが遅い環境を主眼に置く以上、非同期ファーストが自然で、同期版の二重メンテコストの方が問題になる
 - `CancellationToken` を受け付けるが、有効なのはコミット開始前（検証フェーズまで）に限る。物理的な適用（rename/削除の実行）が始まったら`CancellationToken`は無視し、最後まで完了させる。これにより「意図的な中断」と「クラッシュによる中断」を明確に区別できる（前者はコミット中には起こり得ず、後者だけが`RecoverAsync()`の対象になる）。コミット開始前にキャンセルされた場合は`DisposeAsync()`内で通常の非同期ロールバック（`.txnew`削除、コピーが作ったディレクトリの削除、`CreateDirectory` の再帰削除、ロック解放、ジャーナル削除）を行いクリーンに終了する
 - `AddAsync` と `UpdateAsync`、`CopyAsync`、Import の `.txnew` へのコピー、Export の外部へのコピー、および ZIP の 4 メソッドは、`IProgress<TransferProgress>?` を `CancellationToken` の直前に受け取る。null のときは通知しない。`TransferProgress` は書き終えたバイト数と、開始時点の残りバイト数（シークでき長さを読めるとき。残りが 0 未満なら null）である。81920 バイトを書き終えるたびに通知し、空の内容は最後に 1 回だけ通知する。ストリームは巻き戻さない。ディレクトリのコピーでは全体サイズを事前に測らず、`TotalBytes` は null、書き終えたバイトの合計を通知する。空のディレクトリは最後に 1 回、0 バイトを通知する。Add / Update が通知するのは呼び出し側の内容を `.txnew` へ書くコピーだけで、再ステージの退避とジャーナル書き込みは含めない。ZIP の作成と Export は、読み込んだ元ファイルのバイト数（圧縮前）の合計を通知し、`TotalBytes` は null である。展開と Import は、`.txnew` へ書いた展開後のバイト数の合計を通知し、`TotalBytes` はセントラルディレクトリの `Length` の合計である。どれも空なら最後に 1 回、0 バイトを通知する。`Delete` / `DeleteTree` / `Move` / `CreateDirectory` / `Commit` と、コミット件数の進捗は対象外である
-- エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある、コピー先が塞がっている）。未対応（ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move、ディレクトリの `ReadAsync`）は `UnsupportedOperationException`。使い方の誤り（同じトランザクションへの重なった呼び出しを含む）は `InvalidOperationException` と `ArgumentException` のまま。ZIP の展開で危険なエントリ名があるときは `InvalidDataException`、ZIP 自体が読めないときは `System.IO.Compression` の例外のまま。他のトランザクションがパスまたはワークフォルダを押さえているときは `LockContentionException`（失敗したパスを 1 つ持つ。内部例外は持たない）。持ち主のいない残骸ジャーナルが残っているあいだの `BeginAsync` と `CommitAsync` は `RecoveryRequiredException`（`Path` はワークフォルダ。内部例外は持たない）。読めるジャーナルは `RecoverAsync` で解消する。JSON として読めないジャーナルは消さないので、直すか消すまで `RecoveryRequiredException` のままである。コミットの成否は例外にせず `CommitResult` で返す
+- エラーハンドリングは例外ベース。基底は `TxfioException`。ディスク上の前提が崩れたときは `ExternalConflictException`（失敗したパスを 1 つ持つ。対象が無い、既にある、移動先がディレクトリ、親やワークフォルダが無い、ディレクトリ直下に予定外の子がある、コピー先が塞がっている）。未対応（ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move、ディレクトリの `ReadAsync`）は `UnsupportedOperationException`。使い方の誤り（同じトランザクションへの重なった呼び出しを含む）は `InvalidOperationException` と `ArgumentException` のまま。ZIP の展開で危険なエントリ名があるときは `InvalidDataException`、ZIP 自体が読めないときは `System.IO.Compression` の例外のまま。他のトランザクションがパスまたはワークフォルダを押さえているときは `LockContentionException`（失敗したパスを 1 つ持つ。内部例外は持たない）。持ち主のいない残骸ジャーナルが残っているあいだの `BeginAsync` と `CommitAsync` は `RecoveryRequiredException`（`Path` はワークフォルダ。内部例外は持たない）。読めるジャーナルは `RecoverAsync` で解消する。JSON として読めないジャーナルは消さないので、直すか消すまで `RecoveryRequiredException` のままである。コミットの成否は例外にせず `CommitReport` で返す。全体の結果は `CommitResult`（「結果の詳細」）
 
 **トランザクションのライフサイクル**
 
@@ -166,16 +166,38 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **コミット時の外部干渉への対処**（ダーティリード許容の帰結として）
 
-1. `Committing`マーカーを書き込む前に、ジャーナル内の全操作について前提条件を検証し、同時に Before / After を書く。Add の対象は無く、Update の対象はファイル、Delete の対象はファイルか直下の前提を満たすディレクトリ、DeleteTree の対象はディレクトリ、Move の元はファイルかディレクトリで先は無い。ステージ後に内容だけ変わった Update はここでは失敗にせず、Before はその時点のディスクにする。`CreateDirectory` もディレクトリが存在しなければ失敗し、ファイルにすり替わっていても失敗する。中身は見ない。前提が崩れていれば、`CreateDirectory` がすでに作ったディレクトリを除き、まだ実体には触れていないので、コミット全体を安全に中止しエラーを返す。失敗時の破棄は、未コミットの Dispose と同じく、そのディレクトリを中身ごと消す
-2. 検証後・`Committing`マーカー書き込み後に適用を開始してから外部干渉が起きた場合（極めて稀）は、ロールフォワード原則により後戻りはできない。該当操作をスキップして続行し、`CommitAsync`の戻り値型`CommitResult`で明確に区別する（`Succeeded`：全操作が想定通り適用された／`PartialConflict`：一部操作で外部干渉による不整合が検出されたが確定はした。ジャーナルと、適用しなかった操作の `.txnew` を消してから返す／`Failed`：コミット前検証で失敗し実体には一切触れていない）。`PartialConflict`を明示的な列挙値にすることで、呼び出し側が戻り値を握りつぶしにくいAPI形状にする
+1. `Committing`マーカーを書き込む前に、ジャーナル内の全操作について前提条件を検証し、同時に Before / After を書く。Add の対象は無く、Update の対象はファイル、Delete の対象はファイルか直下の前提を満たすディレクトリ、DeleteTree の対象はディレクトリ、Move の元はファイルかディレクトリで先は無い。ステージ後に内容だけ変わった Update はここでは失敗にせず、Before はその時点のディスクにする。`CreateDirectory` もディレクトリが存在しなければ失敗し、ファイルにすり替わっていても失敗する。中身は見ない。前提が崩れていれば、`CreateDirectory` がすでに作ったディレクトリを除き、まだ実体には触れていないので、コミット全体を安全に中止し `Failed` を返す（「結果の詳細」）。失敗時の破棄は、未コミットの Dispose と同じく、そのディレクトリを中身ごと消す
+2. 検証後・`Committing`マーカー書き込み後に適用を開始してから外部干渉が起きた場合（極めて稀）は、ロールフォワード原則により後戻りはできない。該当操作をスキップして続行し、`CommitAsync` の `CommitReport.Result` で明確に区別する（`Succeeded`：全操作が想定通り適用された／`PartialConflict`：一部操作で外部干渉による不整合が検出されたが確定はした。ジャーナルと、適用しなかった操作の `.txnew` を消してから返す／`Failed`：コミット前検証で失敗し実体には一切触れていない）。`PartialConflict`を明示的な列挙値にすることで、呼び出し側が戻り値を握りつぶしにくいAPI形状にする。拒んだ操作と飛ばした操作のパスと理由は「結果の詳細」に載せる。`Failed` のあと、同じトランザクションでもう一度コミットできる。`PartialConflict` のあと、同じインスタンスではやり直せない。共有違反の自動再試行はしない
 
 **Recover API**: 自動では何も行わない。アプリ側がワークフォルダを開いたタイミングで明示的に `RecoverAsync()` を呼んだときのみ、`.txfio/` 内のジャーナルをスキャンし、stale と判定されたトランザクションを検出する。ジャーナルを一覧する前に、ワークフォルダの哨兵を排他で開く。手順は操作が取る排他の哨兵と同じで、自分以外の `.lock` に使用中があれば閉じて `LockContentionException`（`Path` はワークフォルダ）を返し、何も処理しない。哨兵が開けないときも同じ例外である。哨兵はすべてのジャーナルの処理が終わるまで持ち、閉じても `.lock` は消さない。`.txfio/` が無ければ哨兵を開かずに `NoPendingTransactions` を返す。stale とは、そのジャーナルの生存ロック `.txfio/tx-{guid}.lock` を `FileMode.OpenOrCreate`・`FileShare.None`・`FileOptions.DeleteOnClose` で開けることをいう。ファイルが無いとき（落ちたトランザクション、または生存ロック導入前の版が残したジャーナル）も、作って開けるので stale である。共有違反なら持ち主が生きている（同じプロセスでも別プロセスでもよい）ので、そのジャーナルは読まず、消さず、`.txnew` にも `CreateDirectory` のディレクトリにも触れずに飛ばす。共有違反以外の失敗はその例外のまま返す。開けたハンドルはそのジャーナルの処理が終わるまで持ち、ジャーナルを消したあとで閉じる。ロールフォワードで Before / After のどちらとも一致しない操作があったときも、残りの操作の適用を続け、適用しなかった操作の `.txnew` を消してからジャーナルを消す。結果は `ConflictDetected` で 1 回だけ伝え、次の `RecoverAsync` はそのジャーナルを処理し直さない。開けたあとにジャーナルが無ければ、持ち主が正常に終わったので何もせず閉じ、結果にも数えない。同じワークフォルダで `RecoverAsync` が同時に走っても、片方は共有違反で飛ばすので同じジャーナルを二重に処理しない。`Committing` マーカーの有無でロールフォワードかロールバックかをライブラリ側が判別して実行し、結果を返す。予期しないタイミングでファイルが書き換わることを避けるため、アプリが呼ぶまで動かない。一方、呼んだあとのロールフォワード／ロールバックの判断はデータ整合性上一意に決まるので、その判断自体はライブラリが自動で行う。書き込み系と同様に非同期 API とする。
 
-**読めないジャーナル**: 生存ロックを開けたジャーナルを読み、JSON として解釈できないとき（`JsonException`、または逆シリアル化の結果が null）は読めないとする。ジャーナルは消さない。`CreateDirectory` で作ったディレクトリは文書が読めないので特定できず、残す。ファイル名が `.{guid}.txnew` で終わるファイルは、ワークフォルダ配下（`.txfio` を除く）から消す。比較は大文字小文字を区別しない。`guid` はジャーナルのファイル名から取る。他の読めるジャーナルは通常どおり処理する。1 件でも読めないジャーナルがあれば、戻り値は `JournalUnreadable` を優先する。ジャーナルが残るので、次の `BeginAsync` と `CommitAsync` は `RecoveryRequiredException` のままである。人がジャーナルを直すか消すまで解消しない。直したあとの `RecoverAsync` は、読めた内容でロールフォワードまたはロールバックする。消したあとは、残った `CreateDirectory` のディレクトリは未追跡の子として残る。読み取りが `IOException` のときは、その例外を再送出する。ジャーナルも `.txnew` も消さない。`RecoverResult` は返さない。それより前に処理したジャーナルは戻さない。残りのジャーナルは処理しない。哨兵は閉じる。
+**読めないジャーナル**: 生存ロックを開けたジャーナルを読み、JSON として解釈できないとき（`JsonException`、または逆シリアル化の結果が null）は読めないとする。ジャーナルは消さない。`CreateDirectory` で作ったディレクトリは文書が読めないので特定できず、残す。ファイル名が `.{guid}.txnew` で終わるファイルは、ワークフォルダ配下（`.txfio` を除く）から消す。比較は大文字小文字を区別しない。`guid` はジャーナルのファイル名から取る。他の読めるジャーナルは通常どおり処理する。1 件でも読めないジャーナルがあれば、戻り値は `JournalUnreadable` を優先する。ジャーナルが残るので、次の `BeginAsync` と `CommitAsync` は `RecoveryRequiredException` のままである。人がジャーナルを直すか消すまで解消しない。直したあとの `RecoverAsync` は、読めた内容でロールフォワードまたはロールバックする。消したあとは、残った `CreateDirectory` のディレクトリは未追跡の子として残る。読み取りが `IOException` のときは、その例外を再送出する。ジャーナルも `.txnew` も消さない。`RecoverReport` は返さない。それより前に処理したジャーナルは戻さない。残りのジャーナルは処理しない。哨兵は閉じる。
 
 **ジャーナル存在に関する不変条件**: `.txfio/tx-{guid}.journal` が存在しないことは、そのトランザクションがコミット済み（またはそもそも開始されていない）であることを意味する。ジャーナル削除完了後・ロック解放前にクラッシュしても、OSが保持していたファイルロックは自動的に解放されるため安全（Recoverの対象外として扱ってよい）
 
-**`RecoverResult`型**: `RecoverAsync()`の戻り値は`CommitAsync`の`CommitResult`とは別の型として定義する。値は `NoPendingTransactions` = 0、`RolledBack` = 1、`RolledForward` = 2、`ConflictDetected` = 3、`JournalUnreadable` = 4 である。欠番は置かない。`ConflictDetected` は、外部干渉により Before / After のどちらとも一致しない操作が見つかり、そのジャーナルは消えていることを表す。`JournalUnreadable` は、JSON として読めないジャーナルが 1 件でもあったことを表す。そのジャーナルは残っている。複数の結果が重なるときは `JournalUnreadable`、`ConflictDetected`、`RolledForward`、`RolledBack` の順で 1 つだけ返す。`CommitAsync`はプロセスが生きたまま返す結果、`RecoverAsync()`は次回起動時に別プロセスが返す結果であり、意味的に異なるため型を分ける。生きているトランザクションのジャーナルは stale ではないので結果に数えない。飛ばしたジャーナルしか無ければ `NoPendingTransactions` を返す。飛ばしたことを表す値は足さない
+**`RecoverResult`型**: `RecoverResult` は `CommitResult` とは別の列挙型である。`RecoverAsync()` の戻り値は `RecoverReport` で、この列挙値は `Result` に載せる（「結果の詳細」）。値は `NoPendingTransactions` = 0、`RolledBack` = 1、`RolledForward` = 2、`ConflictDetected` = 3、`JournalUnreadable` = 4 である。欠番は置かない。`ConflictDetected` は、外部干渉により Before / After のどちらとも一致しない操作が見つかり、そのジャーナルは消えていることを表す。`JournalUnreadable` は、JSON として読めないジャーナルが 1 件でもあったことを表す。そのジャーナルは残っている。複数の結果が重なるときは `JournalUnreadable`、`ConflictDetected`、`RolledForward`、`RolledBack` の順で 1 つだけ返す。`CommitAsync`はプロセスが生きたまま返す結果、`RecoverAsync()`は次回起動時に別プロセスが返す結果であり、意味的に異なるため型を分ける。生きているトランザクションのジャーナルは stale ではないので結果に数えない。飛ばしたジャーナルしか無ければ `NoPendingTransactions` を返す。飛ばしたことを表す値は足さない
+
+**結果の詳細**: `CommitResult` と `RecoverResult` の列挙値は残す。`CommitAsync` の戻り値は `CommitReport`、`RecoverAsync` の戻り値は `RecoverReport` である。公開前なので、以前の列挙値そのものを返す形との互換は持たない。
+
+`CommitReport` は `Result`（`CommitResult`）と `Operations`（`OperationReport` の一覧）を持つ。`Succeeded` のとき `Operations` は空である。`Failed` は検証で拒んだ操作だけ、`PartialConflict` は適用で飛ばした操作だけを、適用順に載せる。適用できた操作は載せない。
+
+`OperationReport` はパス、`Move` の移動先（それ以外は null）、種別 `PendingChangeKind`、成り行き、理由を持つ。成り行きは `Rejected`（検証で拒んだ）と `Skipped`（適用で飛ばした）である。
+
+理由 `OperationFailureReason` は次のとおり。欠番は置かない。
+
+- `Missing` = 0。対象が無い
+- `AlreadyExists` = 1。既にある
+- `ReplacedByFile` = 2。ファイルにすり替わった
+- `DirectoryPreconditions` = 3。ディレクトリの直下条件を満たさない
+- `BeforeAfterMismatch` = 4。Before と After のどちらとも一致しない
+- `SharingViolation` = 5。共有違反
+- `IoFailure` = 6。それ以外の IO 失敗（`UnauthorizedAccessException` を含む）
+
+検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。
+
+`Failed` は実体に触れない（`CreateDirectory` がすでに作ったディレクトリを除く。失敗時の破棄は未コミットの Dispose と同じ）。ジャーナルは残り、コミット済みにはしない。同じトランザクションで、状態を直したあと `CommitAsync` を再度呼べる。`PartialConflict` はジャーナルと、適用しなかった操作の `.txnew` を消して確定する。同じインスタンスではやり直せない。共有違反で飛ばしたパスは、新しいトランザクションでやり直せる。`BeforeAfterMismatch` は、同じ書き込みを繰り返しても意図どおりには戻らない。ライブラリは共有違反を自動では再試行しない。
+
+`RecoverReport` は `Result`（今の優先順位の `RecoverResult`）と `Journals`（`JournalReport` の一覧）を持つ。処理した順に載せる。`JournalReport` はトランザクション ID、そのジャーナルの `RecoverResult`、競合して飛ばした操作の一覧を持つ。競合が無いジャーナルと、読めないジャーナルの操作一覧は空である。生きているジャーナルは一覧に入れない。`ConflictDetected` の詳細はこの戻り値に載せ、ジャーナルは今どおり消す。次の `RecoverAsync` はそのジャーナルを処理し直さない。読み取りが `IOException` のときは、これまでどおり例外を再送出し、`RecoverReport` は返さない。
 
 ## スコープと非対応範囲
 
