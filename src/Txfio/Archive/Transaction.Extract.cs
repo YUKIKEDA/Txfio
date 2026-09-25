@@ -61,10 +61,10 @@ internal sealed partial class Transaction
     {
         string destination = WorkPath.ResolveInWorkFolder(_workFolder, destinationDir);
         StagingRules.EnsureNotMetadataFolder(_workFolder, destination);
-        StagingRules.ThrowIfInsideDeleteTree(_operations, destination);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, destination);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, destination);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, destination);
+        StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, destination);
+        StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, destination);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_paths.Rows, destination);
+        StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, destination);
         ThrowIfCopyPathIsStaged(destination);
         EnsureCopyDestinationFree(destination);
         return destination;
@@ -116,7 +116,7 @@ internal sealed partial class Transaction
             files.Add(new PlannedExtractFile(plan.Entry, path));
         }
 
-        int operationCount = _operations.Count;
+        int operationCount = _paths.Rows.Count;
         int directoryCount = _createdDirectories.Count;
         foreach (string directory in directories)
         {
@@ -126,7 +126,7 @@ internal sealed partial class Transaction
         foreach (PlannedExtractFile file in files)
         {
             string stagingPath = WorkPath.StagingFilePath(file.Path, _transactionId);
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, file.Path, stagingPath));
+            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, file.Path, stagingPath));
         }
 
         try

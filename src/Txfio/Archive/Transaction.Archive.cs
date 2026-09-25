@@ -296,17 +296,17 @@ internal sealed partial class Transaction
         {
             StagingRules.EnsureNotMetadataFolder(_workFolder, root.SourcePath);
             StagingRules.ThrowIfArchiveInsideSource(root.SourcePath, archive);
-            StagingRules.ThrowIfInsideDeleteTree(_operations, root.SourcePath);
-            StagingRules.ThrowIfInsideDirectoryMove(_operations, root.SourcePath);
-            StagingRules.ThrowIfTouchesDeletedDirectory(_operations, root.SourcePath);
-            StagingRules.ThrowIfOperationUnderDirectory(_operations, root.SourcePath);
+            StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, root.SourcePath);
+            StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, root.SourcePath);
+            StagingRules.ThrowIfTouchesDeletedDirectory(_paths.Rows, root.SourcePath);
+            StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, root.SourcePath);
             ThrowIfCopyPathIsStaged(root.SourcePath);
         }
 
-        StagingRules.ThrowIfInsideDeleteTree(_operations, archive);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, archive);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, archive);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, archive);
+        StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, archive);
+        StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, archive);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_paths.Rows, archive);
+        StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, archive);
         ThrowIfCopyPathIsStaged(archive);
         foreach (ArchiveRoot root in roots)
         {
@@ -336,7 +336,7 @@ internal sealed partial class Transaction
         }
 
         string stagingPath = WorkPath.StagingFilePath(archive, _transactionId);
-        int operationCount = _operations.Count;
+        int operationCount = _paths.Rows.Count;
         try
         {
             await using (FileStream output = new FileStream(
@@ -357,7 +357,7 @@ internal sealed partial class Transaction
                     .ConfigureAwait(false);
             }
 
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
+            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch

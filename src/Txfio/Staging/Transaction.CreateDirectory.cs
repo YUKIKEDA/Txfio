@@ -14,11 +14,11 @@ internal sealed partial class Transaction
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, targetPath);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, targetPath);
-        StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
-        StagingRules.ThrowIfCreateDirectoryPath(_operations, targetPath);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, targetPath);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_paths.Rows, targetPath);
+        StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, targetPath);
+        StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, targetPath);
+        StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, targetPath);
+        StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, targetPath);
         if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
         {
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
@@ -37,14 +37,14 @@ internal sealed partial class Transaction
             PendingChangeKind.CreateDirectory,
             targetPath,
             isDirectory: true);
-        _operations.Add(operation);
+        _paths.Rows.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _operations.Remove(operation);
+            _paths.Rows.Remove(operation);
             throw;
         }
 
@@ -77,18 +77,18 @@ internal sealed partial class Transaction
             // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
         }
 
-        _operations.Remove(operation);
+        _paths.Rows.Remove(operation);
         try
         {
             await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
         catch (IOException)
         {
-            _operations.Add(operation);
+            _paths.Rows.Add(operation);
         }
         catch (UnauthorizedAccessException)
         {
-            _operations.Add(operation);
+            _paths.Rows.Add(operation);
         }
     }
 }

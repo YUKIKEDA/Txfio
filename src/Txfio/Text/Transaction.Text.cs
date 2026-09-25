@@ -158,7 +158,7 @@ internal sealed partial class Transaction
     private bool FileExistsInCommitView(string path)
     {
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
-        CommitAppearance appearance = CommitView.Resolve(_operations, targetPath);
+        CommitAppearance appearance = CommitView.Resolve(_paths.Rows, targetPath);
         return appearance.Exists && !appearance.IsDirectory;
     }
 }

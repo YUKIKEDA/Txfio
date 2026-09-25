@@ -1,37 +1,10 @@
 namespace Txfio;
 
 /// <summary>
-/// Add / Update / Delete / Move / CreateDirectory / DeleteTree の前提チェックと同一パスへの再ステージの正規化
+/// Add / Update / Delete / Move / CreateDirectory / DeleteTree の前提チェック
 /// </summary>
 internal static class StagingRules
 {
-    /// <summary>
-    /// 同一パスへ再ステージするときの記録種別を決める
-    /// </summary>
-    /// <param name="existingKind">既に記録されている種類</param>
-    /// <param name="requestedKind">今回の操作の種類</param>
-    /// <returns>ジャーナルに残す種類</returns>
-    internal static PendingChangeKind NormalizeRestageKind(PendingChangeKind existingKind, PendingChangeKind requestedKind)
-    {
-        if (existingKind == requestedKind)
-        {
-            return existingKind;
-        }
-
-        if (existingKind == PendingChangeKind.Add && requestedKind == PendingChangeKind.Update)
-        {
-            return PendingChangeKind.Add;
-        }
-
-        if (existingKind == PendingChangeKind.Delete
-            && (requestedKind == PendingChangeKind.Add || requestedKind == PendingChangeKind.Update))
-        {
-            return PendingChangeKind.Update;
-        }
-
-        throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
-    }
-
     /// <summary>
     /// Add / Update / Delete の対象ファイルの存在有無を検証する
     /// </summary>
@@ -375,11 +348,7 @@ internal static class StagingRules
 
     private static bool IsInsideDirectory(string directoryPath, string path)
     {
-        string prefix = directoryPath.TrimEnd(
-                System.IO.Path.DirectorySeparatorChar,
-                System.IO.Path.AltDirectorySeparatorChar)
-            + System.IO.Path.DirectorySeparatorChar;
-        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        return PathTable.IsUnder(directoryPath, path);
     }
 
     private static bool IsPendingDirectoryDelete(IReadOnlyList<JournalOperation> operations, string? path)
