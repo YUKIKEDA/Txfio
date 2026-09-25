@@ -28,7 +28,7 @@ public sealed class CommitSnapshotTests
             new JournalOperation(PendingChangeKind.Move, source, newPath: dest),
         };
 
-        Assert.True(OperationOutcomes.TryStamp(operations, Guid.NewGuid(), out JournalOperation[] stamped));
+        Assert.True(OperationOutcomes.TryStamp(operations, Guid.NewGuid(), out JournalOperation[] stamped, out _));
         Assert.True(sourceState.SameAs(stamped[0].Before!));
         Assert.True(PathState.Capture(staging).SameAs(stamped[0].After!));
         Assert.True(sourceState.SameAs(stamped[1].DestAfter!));

@@ -45,7 +45,7 @@ public sealed class CommitApplyExceptionTests : IDisposable
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         await Assert.ThrowsAsync<RecoveryRequiredException>(() => global::Txfio.Txfio.BeginAsync(work.Path));
 
-        Assert.Equal(RecoverResult.RolledForward, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(tree, "*.txnew"));
         Assert.Empty(Directory.GetFiles(metadata, "tx-*.journal"));

@@ -48,7 +48,7 @@ public sealed class RecoverMoveChainTests : IDisposable
         Assert.False(File.Exists(older));
         Assert.Equal("current", await File.ReadAllTextAsync(current));
 
-        Assert.Equal(RecoverResult.RolledForward, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.Equal("older", await File.ReadAllTextAsync(oldest));
         Assert.Equal("current", await File.ReadAllTextAsync(older));
         Assert.False(File.Exists(current));

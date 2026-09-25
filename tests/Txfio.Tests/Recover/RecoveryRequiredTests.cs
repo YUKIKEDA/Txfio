@@ -38,7 +38,7 @@ public sealed class RecoveryRequiredTests : IDisposable
         Assert.True(Directory.Exists(tree));
         Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
 
-        Assert.Equal(RecoverResult.RolledForward, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.False(Directory.Exists(tree));
 
         await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -75,7 +75,7 @@ public sealed class RecoveryRequiredTests : IDisposable
         }
 
         Assert.Empty(Directory.GetFiles(tree, "*.txnew"));
-        Assert.Equal(RecoverResult.RolledForward, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.False(Directory.Exists(tree));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -105,7 +105,7 @@ public sealed class RecoveryRequiredTests : IDisposable
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.Empty(Directory.GetFiles(metadata, "tx-*.lock"));
 
-        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
         Assert.Empty(next.GetPendingChanges());
     }
@@ -130,7 +130,7 @@ public sealed class RecoveryRequiredTests : IDisposable
             transactionId,
             CancellationToken.None);
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
     }
 

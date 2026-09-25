@@ -22,8 +22,8 @@ public sealed class RecoverStagingTests
             "a.txt",
             "staged");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledBack, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.False(File.Exists(leftover.TargetPath));
@@ -47,8 +47,8 @@ public sealed class RecoverStagingTests
             "a.txt",
             "staged");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.Equal("staged", await File.ReadAllTextAsync(leftover.TargetPath));
@@ -73,11 +73,11 @@ public sealed class RecoverStagingTests
             "staged");
         await File.WriteAllTextAsync(leftover.TargetPath, "external");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.ConflictDetected, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.Equal("external", await File.ReadAllTextAsync(leftover.TargetPath));
-        Assert.Equal(RecoverResult.NoPendingTransactions, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
     }
 }

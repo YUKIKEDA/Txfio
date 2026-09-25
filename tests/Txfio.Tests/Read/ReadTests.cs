@@ -188,7 +188,7 @@ public sealed class ReadTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "disk");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ReadAsync("a.txt"));
     }
@@ -211,7 +211,7 @@ public sealed class ReadTests
         await tx.AddAsync("a.txt", content);
         await using Stream stream = await tx.ReadAsync("a.txt");
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.Equal("staged", await ReadTextAsync(stream));
     }

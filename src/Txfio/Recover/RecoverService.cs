@@ -10,14 +10,14 @@ internal static class RecoverService
     /// </summary>
     /// <param name="workFolder">既存のワークフォルダ</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>復旧結果。JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/></returns>
+    /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
-    internal static async Task<RecoverResult> RecoverAsync(string workFolder, CancellationToken cancellationToken)
+    internal static async Task<RecoverReport> RecoverAsync(string workFolder, CancellationToken cancellationToken)
     {
         string metadataFolder = MetadataNames.FolderPath(workFolder);
         if (!Directory.Exists(metadataFolder))
         {
-            return RecoverResult.NoPendingTransactions;
+            return new RecoverReport(RecoverResult.NoPendingTransactions, Array.Empty<JournalReport>());
         }
 
         // 処理中に別のトランザクションが確定したデータを、ロールフォワードやロールバックで消さない
@@ -38,7 +38,7 @@ internal static class RecoverService
         }
     }
 
-    private static async Task<RecoverResult> RecoverJournalsAsync(
+    private static async Task<RecoverReport> RecoverJournalsAsync(
         string workFolder,
         string[] journals,
         CancellationToken cancellationToken)
@@ -47,6 +47,7 @@ internal static class RecoverService
         bool rolledForward = false;
         bool conflictDetected = false;
         bool journalUnreadable = false;
+        List<JournalReport> reports = new List<JournalReport>();
         foreach (string journalPath in journals)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -73,10 +74,14 @@ internal static class RecoverService
 
                 if (document is null)
                 {
-                    // 文書が読めないので作ったディレクトリは特定できない。そのトランザクション ID の .txnew だけ消す
+                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew だけ消す
                     if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
                     {
                         StagingApplier.DeleteStagingFiles(workFolder, transactionId);
+                        reports.Add(new JournalReport(
+                            transactionId,
+                            RecoverResult.JournalUnreadable,
+                            Array.Empty<OperationReport>()));
                     }
 
                     journalUnreadable = true;
@@ -85,15 +90,20 @@ internal static class RecoverService
 
                 if (document is { Committing: true })
                 {
-                    bool appliedAll = StagingApplier.TryApplyAll(document.Operations);
+                    bool appliedAll = StagingApplier.TryApplyAll(document.Operations, out OperationReport[] skipped);
+                    IReadOnlyList<OperationReport> operations = Array.Empty<OperationReport>();
+                    RecoverResult journalResult = RecoverResult.RolledForward;
                     if (!appliedAll)
                     {
                         // 結果は 1 回だけ返し、次の Recover でやり直さない
                         StagingApplier.DeleteStagingFiles(document.Operations);
+                        operations = skipped;
+                        journalResult = RecoverResult.ConflictDetected;
                         conflictDetected = true;
                     }
 
                     await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
+                    reports.Add(new JournalReport(document.TransactionId, journalResult, operations));
                     rolledForward |= appliedAll;
                     continue;
                 }
@@ -103,6 +113,10 @@ internal static class RecoverService
                 StagingApplier.DeleteStagingBackups(workFolder, document.TransactionId);
                 StagingApplier.DeleteCreatedDirectories(document.CreatedDirectories);
                 await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
+                reports.Add(new JournalReport(
+                    document.TransactionId,
+                    RecoverResult.RolledBack,
+                    Array.Empty<OperationReport>()));
                 rolledBack = true;
             }
             finally
@@ -111,21 +125,24 @@ internal static class RecoverService
             }
         }
 
+        RecoverResult result = RecoverResult.NoPendingTransactions;
         if (journalUnreadable)
         {
-            return RecoverResult.JournalUnreadable;
+            result = RecoverResult.JournalUnreadable;
         }
-
-        if (conflictDetected)
+        else if (conflictDetected)
         {
-            return RecoverResult.ConflictDetected;
+            result = RecoverResult.ConflictDetected;
         }
-
-        if (rolledForward)
+        else if (rolledForward)
         {
-            return RecoverResult.RolledForward;
+            result = RecoverResult.RolledForward;
+        }
+        else if (rolledBack)
+        {
+            result = RecoverResult.RolledBack;
         }
 
-        return rolledBack ? RecoverResult.RolledBack : RecoverResult.NoPendingTransactions;
+        return new RecoverReport(result, reports);
     }
 }

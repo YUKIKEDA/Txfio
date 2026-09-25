@@ -23,8 +23,8 @@ public sealed class CommitDeleteTreeTests
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(Directory.Exists(dir));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -48,8 +48,8 @@ public sealed class CommitDeleteTreeTests
         string child = System.IO.Path.Combine(dir, "later.txt");
         await File.WriteAllTextAsync(child, "later");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(File.Exists(child));
         Assert.False(Directory.Exists(dir));
     }
@@ -73,8 +73,8 @@ public sealed class CommitDeleteTreeTests
         Directory.Delete(dir);
         await File.WriteAllTextAsync(dir, "file");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Failed, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Failed, result.Result);
         Assert.Equal("file", await File.ReadAllTextAsync(dir));
     }
 }

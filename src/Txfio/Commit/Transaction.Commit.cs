@@ -6,7 +6,7 @@ namespace Txfio;
 internal sealed partial class Transaction
 {
     /// <inheritdoc />
-    public async Task<CommitResult> CommitAsync(CancellationToken cancellationToken = default)
+    public async Task<CommitReport> CommitAsync(CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
@@ -18,15 +18,15 @@ internal sealed partial class Transaction
             _locks.Release();
             ReleaseLiveness();
             _committed = true;
-            return CommitResult.Succeeded;
+            return new CommitReport(CommitResult.Succeeded, Array.Empty<OperationReport>());
         }
 
         // 開始後に落ちたトランザクションの残骸でも、確定したデータは消さない
         StaleJournals.ThrowIfAny(_workFolder);
 
-        if (!OperationOutcomes.TryStamp(_operations, _transactionId, out JournalOperation[] stamped))
+        if (!OperationOutcomes.TryStamp(_operations, _transactionId, out JournalOperation[] stamped, out OperationReport[] rejections))
         {
-            return CommitResult.Failed;
+            return new CommitReport(CommitResult.Failed, rejections);
         }
 
         _operations.Clear();
@@ -36,7 +36,7 @@ internal sealed partial class Transaction
         CrashInjector.CheckPoint(CrashInjector.AfterCommitting);
 
         // 適用中の例外は再送出する。Dispose はロールバックしない
-        bool conflict = !StagingApplier.TryApplyAll(_operations);
+        bool conflict = !StagingApplier.TryApplyAll(_operations, out OperationReport[] skipped);
 
         // 衝突しても残さない。残すと、あとの Recover が他のトランザクションの確定したパスを対象にやり直す
         if (conflict)
@@ -50,6 +50,8 @@ internal sealed partial class Transaction
         ReleaseLiveness();
         _committed = true;
         _operations.Clear();
-        return conflict ? CommitResult.PartialConflict : CommitResult.Succeeded;
+        CommitResult result = conflict ? CommitResult.PartialConflict : CommitResult.Succeeded;
+        IReadOnlyList<OperationReport> operations = conflict ? skipped : Array.Empty<OperationReport>();
+        return new CommitReport(result, operations);
     }
 }

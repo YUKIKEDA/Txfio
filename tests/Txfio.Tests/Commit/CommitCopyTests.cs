@@ -22,9 +22,9 @@ public sealed class CommitCopyTests
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.CopyAsync("a.txt", "b.txt");
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("copied", await File.ReadAllTextAsync(source));
         Assert.Equal("copied", await File.ReadAllTextAsync(destination));
     }
@@ -48,9 +48,9 @@ public sealed class CommitCopyTests
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.CopyAsync("src", "dest");
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("copied", await File.ReadAllTextAsync(System.IO.Path.Combine(source, "a.txt")));
         Assert.Equal("copied", await File.ReadAllTextAsync(System.IO.Path.Combine(destination, "a.txt")));
         Assert.True(Directory.Exists(System.IO.Path.Combine(destination, "empty")));

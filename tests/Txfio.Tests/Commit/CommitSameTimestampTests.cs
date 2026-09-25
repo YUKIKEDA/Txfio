@@ -34,9 +34,9 @@ public sealed class CommitSameTimestampTests : IDisposable
         string staging = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
         File.SetLastWriteTimeUtc(staging, File.GetLastWriteTimeUtc(target));
 
-        CommitResult result = await transaction.CommitAsync();
+        CommitReport result = await transaction.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
@@ -68,7 +68,7 @@ public sealed class CommitSameTimestampTests : IDisposable
         Assert.Equal("old", await File.ReadAllTextAsync(target));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
 
-        Assert.Equal(RecoverResult.RolledForward, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }

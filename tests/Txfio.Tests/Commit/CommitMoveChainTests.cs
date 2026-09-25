@@ -22,9 +22,9 @@ public sealed class CommitMoveChainTests
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("a.txt", content);
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.bak")));
         Assert.Equal("new", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
     }
@@ -49,9 +49,9 @@ public sealed class CommitMoveChainTests
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("fresh");
         await tx.AddAsync("log.txt", content);
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("older", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "log.2")));
         Assert.Equal("current", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "log.1")));
         Assert.Equal("fresh", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "log.txt")));
@@ -79,9 +79,9 @@ public sealed class CommitMoveChainTests
         await tx.MoveAsync("mid", "next");
         await tx.MoveAsync("old", "mid");
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(Directory.Exists(oldDir));
         Assert.Equal("from-old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "mid", "a.txt")));
         Assert.Equal("from-mid", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "next", "b.txt")));
@@ -112,7 +112,7 @@ public sealed class CommitMoveChainTests
         Assert.Equal(middle, ordered[0].Path, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(free, ordered[0].NewPath, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(source, ordered[1].Path, StringComparer.OrdinalIgnoreCase);
-        Assert.True(OperationOutcomes.TryStamp(new[] { occupiedFirst, freeEnd }, Guid.NewGuid(), out _));
+        Assert.True(OperationOutcomes.TryStamp(new[] { occupiedFirst, freeEnd }, Guid.NewGuid(), out _, out _));
     }
 
     /// <summary>
@@ -137,6 +137,6 @@ public sealed class CommitMoveChainTests
             new JournalOperation(PendingChangeKind.Move, right, newPath: left),
         };
 
-        Assert.False(OperationOutcomes.TryStamp(cycle, Guid.NewGuid(), out _));
+        Assert.False(OperationOutcomes.TryStamp(cycle, Guid.NewGuid(), out _, out _));
     }
 }

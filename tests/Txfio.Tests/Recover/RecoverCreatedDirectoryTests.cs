@@ -44,7 +44,7 @@ public sealed class RecoverCreatedDirectoryTests : IDisposable
         Assert.True(Directory.Exists(System.IO.Path.Combine(destination, "sub")));
         Assert.NotEmpty(Directory.GetFiles(System.IO.Path.Combine(destination, "sub"), "*.txnew"));
 
-        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.False(Directory.Exists(destination));
         Assert.Equal("hello", await File.ReadAllTextAsync(System.IO.Path.Combine(nested, "a.txt")));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew", SearchOption.AllDirectories));
@@ -73,7 +73,7 @@ public sealed class RecoverCreatedDirectoryTests : IDisposable
 
         string destination = System.IO.Path.Combine(work.Path, "dst");
         Assert.True(Directory.Exists(destination));
-        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.False(Directory.Exists(destination));
     }
 
@@ -97,7 +97,7 @@ public sealed class RecoverCreatedDirectoryTests : IDisposable
         string backup = leftover.StagingPath + ".prev";
         await File.WriteAllTextAsync(backup, "old");
 
-        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.False(File.Exists(backup));
         Assert.False(File.Exists(leftover.StagingPath));
     }
@@ -128,7 +128,7 @@ public sealed class RecoverCreatedDirectoryTests : IDisposable
             StringComparison.Ordinal);
         await File.WriteAllTextAsync(leftover.JournalPath, json);
 
-        Assert.Equal(RecoverResult.RolledForward, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(leftover.TargetPath));
         Assert.True(Directory.Exists(made));
     }

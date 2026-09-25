@@ -21,8 +21,8 @@ public sealed class CommitDirectoryDeleteTests
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.DeleteAsync("sub");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(Directory.Exists(dir));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -47,8 +47,8 @@ public sealed class CommitDirectoryDeleteTests
         await tx.DeleteAsync("sub/a.txt");
         await tx.DeleteAsync("sub");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(File.Exists(child));
         Assert.False(Directory.Exists(dir));
     }
@@ -72,8 +72,8 @@ public sealed class CommitDirectoryDeleteTests
         await tx.MoveAsync("sub/a.txt", "b.txt");
         await tx.DeleteAsync("sub");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(Directory.Exists(dir));
         Assert.Equal("moved", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
     }
@@ -96,8 +96,8 @@ public sealed class CommitDirectoryDeleteTests
         await tx.DeleteAsync("sub");
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "external.txt"), "no");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Failed, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Failed, result.Result);
         Assert.True(Directory.Exists(dir));
         Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }

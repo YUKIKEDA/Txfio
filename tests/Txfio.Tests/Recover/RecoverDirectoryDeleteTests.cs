@@ -21,8 +21,8 @@ public sealed class RecoverDirectoryDeleteTests
             committing: false,
             "sub");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledBack, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.True(Directory.Exists(leftover.TargetPath));
     }
@@ -44,8 +44,8 @@ public sealed class RecoverDirectoryDeleteTests
             committing: true,
             "sub");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(Directory.Exists(leftover.TargetPath));
     }
@@ -68,8 +68,8 @@ public sealed class RecoverDirectoryDeleteTests
             "sub");
         await File.WriteAllTextAsync(System.IO.Path.Combine(leftover.TargetPath, "external.txt"), "no");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.ConflictDetected, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.True(Directory.Exists(leftover.TargetPath));
     }

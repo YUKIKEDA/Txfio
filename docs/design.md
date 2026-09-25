@@ -187,17 +187,17 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 - `Missing` = 0。対象が無い
 - `AlreadyExists` = 1。既にある
-- `ReplacedByFile` = 2。ファイルにすり替わった
+- `ReplacedByFile` = 2。ファイルかディレクトリにすり替わった
 - `DirectoryPreconditions` = 3。ディレクトリの直下条件を満たさない
 - `BeforeAfterMismatch` = 4。Before と After のどちらとも一致しない
 - `SharingViolation` = 5。共有違反
 - `IoFailure` = 6。それ以外の IO 失敗（`UnauthorizedAccessException` を含む）
 
-検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。
+検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`。`.txnew` をファイルとして読めないときは、検証でも `IoFailure` にする。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。適用中に移動先が既にあるときは `AlreadyExists`、移動元が無く移動先も無いときは `Missing`、ファイルとディレクトリが入れ替わったときは `ReplacedByFile` にする。`.txnew` が無く Before だけ一致するときは `IoFailure` にする。`UnauthorizedAccessException` は `IoFailure` にする。
 
 `Failed` は実体に触れない（`CreateDirectory` がすでに作ったディレクトリを除く。失敗時の破棄は未コミットの Dispose と同じ）。ジャーナルは残り、コミット済みにはしない。同じトランザクションで、状態を直したあと `CommitAsync` を再度呼べる。`PartialConflict` はジャーナルと、適用しなかった操作の `.txnew` を消して確定する。同じインスタンスではやり直せない。共有違反で飛ばしたパスは、新しいトランザクションでやり直せる。`BeforeAfterMismatch` は、同じ書き込みを繰り返しても意図どおりには戻らない。ライブラリは共有違反を自動では再試行しない。
 
-`RecoverReport` は `Result`（今の優先順位の `RecoverResult`）と `Journals`（`JournalReport` の一覧）を持つ。処理した順に載せる。`JournalReport` はトランザクション ID、そのジャーナルの `RecoverResult`、競合して飛ばした操作の一覧を持つ。競合が無いジャーナルと、読めないジャーナルの操作一覧は空である。生きているジャーナルは一覧に入れない。`ConflictDetected` の詳細はこの戻り値に載せ、ジャーナルは今どおり消す。次の `RecoverAsync` はそのジャーナルを処理し直さない。読み取りが `IOException` のときは、これまでどおり例外を再送出し、`RecoverReport` は返さない。
+`RecoverReport` は `Result`（今の優先順位の `RecoverResult`）と `Journals`（`JournalReport` の一覧）を持つ。処理した順に載せる。`JournalReport` はトランザクション ID、そのジャーナルの `RecoverResult`、競合して飛ばした操作の一覧を持つ。競合が無いジャーナルと、読めないジャーナルの操作一覧は空である。ファイル名からトランザクション ID を取れない読めないジャーナルは、全体を `JournalUnreadable` にし、一覧には入れない。生きているジャーナルは一覧に入れない。`ConflictDetected` の詳細はこの戻り値に載せ、ジャーナルは今どおり消す。次の `RecoverAsync` はそのジャーナルを処理し直さない。読み取りが `IOException` のときは、これまでどおり例外を再送出し、`RecoverReport` は返さない。
 
 ## スコープと非対応範囲
 

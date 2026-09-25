@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// <see cref="Txfio.RecoverAsync"/> の結果
+/// <see cref="RecoverReport.Result"/> の値
 /// </summary>
 public enum RecoverResult
 {

@@ -17,12 +17,12 @@ await Txfio.RecoverAsync(@"D:\share\work");
 
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
 await tx.WriteAllTextAsync("a.txt", "hello");
-CommitResult result = await tx.CommitAsync();
+CommitReport report = await tx.CommitAsync();
 ```
 
 `CommitAsync` を呼ぶまでは、新しい内容を同じディレクトリの `.txnew` に置きます。本物のパスは変えません。確定は rename です。`CommitAsync` を呼ばずに破棄すると、その `.txnew` とジャーナルは消えます。
 
-`CommitResult` は例外ではありません。
+`CommitReport.Result` は例外ではありません。成功のとき `Operations` は空です。`Failed` は検証で拒んだ操作、`PartialConflict` は適用で飛ばした操作を、パスと理由つきで載せます。
 
 | 値                | 意味                                                 |
 | ----------------- | ---------------------------------------------------- |
@@ -30,7 +30,7 @@ CommitResult result = await tx.CommitAsync();
 | `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
 | `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
 
-落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。結果は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、結果にも数えません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。JSON として読めないジャーナルは消さないので、直すか消すまで同じ例外のままです。
+落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。処理したジャーナルは `Journals` に載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。JSON として読めないジャーナルは消さないので、直すか消すまで同じ例外のままです。
 
 ## できないこと
 
@@ -67,8 +67,8 @@ CommitResult result = await tx.CommitAsync();
 | `WriteAllTextAsync` / `WriteAllLinesAsync` | コミット後の姿でファイルが無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                        |
 | `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                                  |
 | `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                                   |
-| `CommitAsync`                              | 検証してから rename と削除を適用する                                                                                                               |
-| `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める。JSON として読めなければ `JournalUnreadable`                                                      |
+| `CommitAsync`                              | 検証してから rename と削除を適用する。結果は `CommitReport`                                                                                        |
+| `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める。結果は `RecoverReport`                                                                          |
 
 親ディレクトリの自動作成はしません。`CopyAsync` と、ディレクトリの `ImportAsync` / `ExportAsync` だけ、コピー先のディレクトリ自身とその空のサブディレクトリを作ります。`ExtractArchiveAsync` / `ImportArchiveAsync` も、展開先のディレクトリ自身とエントリにあるディレクトリを作ります。`CreateDirectoryAsync` は、対象の空ディレクトリだけを作り、親は作りません。メタデータフォルダ `.txfio` とその配下は操作できません。
 
@@ -127,7 +127,9 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 全部終わるとジャーナルを消します。`.txnew` は本物の名前へ rename されているので、残りません。
 
-適用の途中で、ほかのプロセスがファイルを変えていたときは `PartialConflict` です。戻り値は例外ではありません。確定は進んでいます。適用しなかった操作の `.txnew` とジャーナルは消えます。`Succeeded` と見比べて扱ってください。
+適用の途中で、ほかのプロセスがファイルを変えていたときや、ファイルを開けなかったときは `PartialConflict` です。戻り値は例外ではありません。確定は進んでいます。適用しなかった操作の `.txnew` とジャーナルは消えます。飛ばした操作は `Operations` に載ります。理由は、Before と After のどちらとも一致しない、対象が無い、移動先が既にある、ファイルかディレクトリにすり替わった、共有違反、それ以外の IO 失敗、です。共有違反は自動では再試行しません。同じインスタンスではやり直せません。`Succeeded` と見比べて扱ってください。
+
+検証で失敗したときは `Failed` です。拒んだ操作は `Operations` に載ります。理由は、対象が無い、既にある、ファイルかディレクトリにすり替わった、ディレクトリの直下条件を満たさない、です。本物のパスはまだ変えていません。状態を直したあと、同じトランザクションでもう一度 `CommitAsync` できます。
 
 ### コミットせず破棄すると
 
@@ -150,7 +152,7 @@ flowchart TD
   match -->|どちらでもない| conflict["ConflictDetected"]
 ```
 
-`ConflictDetected` は、落ちたあとにだれかがファイルを変えていて、戻すことも進めることも安全にできないときです。その操作は飛ばし、ほかの操作は進めて、`.txnew` とジャーナルを消します。次の `RecoverAsync` はやり直しません。
+`ConflictDetected` は、落ちたあとにだれかがファイルを変えていて、戻すことも進めることも安全にできないときです。その操作は飛ばし、ほかの操作は進めて、`.txnew` とジャーナルを消します。飛ばした操作は、そのときの `Journals` に載ります。次の `RecoverAsync` はやり直しません。
 
 `JournalUnreadable` は、ジャーナルが JSON として読めないときです。ジャーナルは残し、ファイル名から分かる `.txnew` だけ消します。`CreateDirectoryAsync` で作ったディレクトリは特定できないので残します。直すか消すまで、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` のままです。1 件でも読めなければ、ほかを処理したあともこの結果を返します。
 
@@ -343,7 +345,7 @@ await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
 await tx.CreateDirectoryAsync("drop");
 await File.WriteAllTextAsync(@"D:\share\work\drop\a.txt", "from-api");
 await tx.WriteAllTextAsync(@"drop\b.txt", "from-txfio");
-CommitResult result = await tx.CommitAsync();
+CommitReport report = await tx.CommitAsync();
 ```
 
 ```mermaid
@@ -490,7 +492,7 @@ flowchart TD
 
 ## 例外の見分け
 
-コミットの成否は例外にしません。`CommitResult` を見てください。それ以外の失敗は例外です。基底は `TxfioException` です。
+コミットの成否は例外にしません。`CommitReport.Result` を見てください。拒んだ操作と飛ばした操作は `Operations` に載ります。それ以外の失敗は例外です。基底は `TxfioException` です。
 
 | 状況                                                                                  | 型                              |
 | ------------------------------------------------------------------------------------- | ------------------------------- |

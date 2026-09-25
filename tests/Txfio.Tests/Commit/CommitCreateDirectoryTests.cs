@@ -21,9 +21,9 @@ public sealed class CommitCreateDirectoryTests
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(child, "keep");
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("keep", await File.ReadAllTextAsync(child));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -47,9 +47,9 @@ public sealed class CommitCreateDirectoryTests
             Directory.Delete(dir);
             await File.WriteAllTextAsync(dir, "file");
 
-            CommitResult result = await tx.CommitAsync();
+            CommitReport result = await tx.CommitAsync();
 
-            Assert.Equal(CommitResult.Failed, result);
+            Assert.Equal(CommitResult.Failed, result.Result);
         }
 
         Assert.Equal("file", await File.ReadAllTextAsync(dir));
@@ -78,9 +78,9 @@ public sealed class CommitCreateDirectoryTests
             await tx.UpdateAsync("a.txt", content);
             File.Delete(updated);
 
-            CommitResult result = await tx.CommitAsync();
+            CommitReport result = await tx.CommitAsync();
 
-            Assert.Equal(CommitResult.Failed, result);
+            Assert.Equal(CommitResult.Failed, result.Result);
         }
 
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "drop")));
@@ -104,9 +104,9 @@ public sealed class CommitCreateDirectoryTests
         await tx.CreateDirectoryAsync("drop");
         await tx.WriteAllTextAsync("drop/a.txt", "staged");
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(child));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, "drop"), "*.txnew"));
     }

@@ -49,7 +49,7 @@ public sealed class TextExtensionTests
         Assert.Equal(PendingChangeKind.Update, Assert.Single(tx.GetPendingChanges()).Kind);
         Assert.Equal("new", await tx.ReadAllTextAsync("a.txt"));
         Assert.Equal("old", await File.ReadAllTextAsync(target));
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
     }
 
@@ -133,7 +133,7 @@ public sealed class TextExtensionTests
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", "hello");
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
 
         byte[] bytes = await File.ReadAllBytesAsync(target);
         Assert.Equal((byte)'h', bytes[0]);
@@ -180,7 +180,7 @@ public sealed class TextExtensionTests
 
         Assert.Equal("hello", await tx.ReadAllTextAsync("a.txt"));
         Assert.Equal("hello", await tx.ReadAllTextAsync("a.txt", Encoding.Unicode));
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         byte[] bytes = await File.ReadAllBytesAsync(target);
         Assert.Equal(0xFF, bytes[0]);
         Assert.Equal(0xFE, bytes[1]);

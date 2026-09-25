@@ -20,8 +20,8 @@ public sealed class CommitApplyTests
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("こんにちは");
         await tx.AddAsync("a.txt", content);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
 
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         Assert.Equal("こんにちは", await File.ReadAllTextAsync(target));
@@ -47,8 +47,8 @@ public sealed class CommitApplyTests
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("a.txt", content);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
@@ -72,8 +72,8 @@ public sealed class CommitApplyTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "external");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Failed, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Failed, result.Result);
         Assert.Equal("external", await File.ReadAllTextAsync(target));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
     }
@@ -97,8 +97,8 @@ public sealed class CommitApplyTests
         await tx.UpdateAsync("a.txt", content);
         File.Delete(target);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Failed, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Failed, result.Result);
         Assert.False(File.Exists(target));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
     }
@@ -122,8 +122,8 @@ public sealed class CommitApplyTests
         await tx.UpdateAsync("a.txt", content);
         await File.WriteAllTextAsync(target, "external");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
@@ -146,8 +146,8 @@ public sealed class CommitApplyTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         Directory.CreateDirectory(target);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Failed, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Failed, result.Result);
         Assert.True(Directory.Exists(target));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
         string journal = Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
@@ -177,8 +177,8 @@ public sealed class CommitApplyTests
         await tx.AddAsync("b.txt", addContent);
         await tx.DeleteAsync("gone.txt");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(updated));
         Assert.Equal("added", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
         Assert.False(File.Exists(deleted));
@@ -204,8 +204,8 @@ public sealed class CommitApplyTests
         await tx.UpdateAsync("a.txt", content);
         await using FileStream locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.PartialConflict, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.PartialConflict, result.Result);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Equal("old", await File.ReadAllTextAsync(target));

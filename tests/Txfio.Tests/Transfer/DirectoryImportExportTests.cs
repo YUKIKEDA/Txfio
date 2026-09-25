@@ -30,7 +30,7 @@ public sealed class DirectoryImportExportTests
         Assert.Equal(PendingChangeKind.Add, pending.Kind);
         Assert.Equal(System.IO.Path.Combine(destination, "a.txt"), pending.Path);
         Assert.True(Directory.Exists(System.IO.Path.Combine(destination, "empty")));
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("imported", await File.ReadAllTextAsync(System.IO.Path.Combine(source, "a.txt")));
         Assert.Equal("imported", await File.ReadAllTextAsync(System.IO.Path.Combine(destination, "a.txt")));
         Assert.True(Directory.Exists(System.IO.Path.Combine(destination, "empty")));
