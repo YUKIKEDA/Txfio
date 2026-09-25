@@ -265,7 +265,7 @@ public sealed class StagingApplierTests
         string dest,
         out OperationFailureReason reason)
     {
-        System.Reflection.MethodInfo method = typeof(StagingApplier).GetMethod(
+        System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
             methodName,
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         object?[] args = { source, dest, null };
@@ -276,7 +276,7 @@ public sealed class StagingApplierTests
 
     private static bool InvokePath(string methodName, string path, out OperationFailureReason reason)
     {
-        System.Reflection.MethodInfo method = typeof(StagingApplier).GetMethod(
+        System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
             methodName,
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         object?[] args = { path, null };
@@ -287,7 +287,7 @@ public sealed class StagingApplierTests
 
     private static bool InvokeStaged(JournalOperation operation, out OperationFailureReason reason)
     {
-        System.Reflection.MethodInfo method = typeof(StagingApplier).GetMethod(
+        System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
             "TryApplyStagedFile",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         object?[] args = { operation, null };
