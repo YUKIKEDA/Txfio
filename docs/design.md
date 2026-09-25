@@ -1,6 +1,6 @@
 # Txfio 設計ドキュメント
 
-2026-09-25
+2026-09-26
 
 実装の順序は [`roadmap.md`](roadmap.md) を見ること。Phase 境界は仮であり、変えてよい。
 
@@ -63,7 +63,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - `CopyAsync(source, dest, IProgress<TransferProgress>? progress, CancellationToken)`: ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。同じボリュームでもバイトをコピーする。ファイルは Add をジャーナルに書いてから `.txnew` を書き、Add として残す。ディレクトリはディスク上の姿を歩き、各ファイルをコピー先の `.txnew` にし、空のサブディレクトリも作る。ジャーナルに残るのは各ファイルの Add で、空ディレクトリの種別は足さない。作るディレクトリと Add は実体より先にジャーナルへ書く（「作成ディレクトリ」）。このトランザクションの `.txnew` は除外する。未コミットの Add は本物の名前でディスクに無いので含まれない。ジャンクションとシンボリックリンクは辿らず、そのエントリもコピーしない。ディレクトリコピーのあいだは哨兵を排他で持ち、メソッドを抜けるときに共有へ戻す。コピー先の意図ロックは排他で終わりまで持ち、コピー元は持たない。ファイルコピーは共有哨兵に加え、コピー元とコピー先をロックする。祖先の意図ロックは共有である。コピー先にファイルかディレクトリがあれば失敗し、混ぜない。コピー先自身とその空のサブディレクトリはこの操作が作り、親が無いときは失敗する。同一パス、コピー先がコピー元の配下、コピー元かコピー先の配下にこのトランザクションの操作があるとき、そのパス自身が既に操作済みのとき、予定された `DeleteTree` の配下へのコピーは `InvalidOperationException`。失敗か取り消しでは、作りかけの `.txnew` と、この操作が作ったディレクトリを消す。`progress` は省略でき、null のときは通知しない
 - `ImportAsync(externalPath, targetPath, IProgress<TransferProgress>? progress, CancellationToken)`: ワークフォルダの外にあるファイルまたはディレクトリを、`CopyAsync` と同じ規則で `.txnew` へコピーし、Add として残す。コピー元は消さない。同じボリュームでもコピーする。コピー元がワークフォルダの中なら `ArgumentException`。ディレクトリのあいだは哨兵を排他で持ち、メソッドを抜けるときに共有へ戻す。取り込み先の意図ロックは排他で終わりまで持つ。ファイルはロックがコピー先だけで、哨兵は共有である。祖先の意図ロックは共有である。失敗か取り消しでは書きかけの `.txnew` と、この操作が作ったディレクトリを消す。ディレクトリを作る順は `CopyAsync` と同じ（「作成ディレクトリ」）。`progress` は省略でき、null のときは通知しない
 - `ExportAsync(path, externalPath, IProgress<TransferProgress>? progress, CancellationToken)`: ファイルは `ReadAsync` と同じバイトを、ディレクトリは配下の各ファイルを `ReadAsync` と同じバイトで、ワークフォルダの外へコピーする。ジャーナルには残さず、ワークフォルダのファイルは変えず、ロックもしない。ディレクトリでもロックしない。コピー先がワークフォルダの中なら `ArgumentException`。外にファイルかディレクトリがある、または親が無いときは `ExternalConflictException`。上書きも、コピー先の親の自動作成もしない。コピー先のディレクトリ自身とその空のサブディレクトリは、この操作が作る。ジャンクションとシンボリックリンクは辿らず、そのエントリもコピーしない。作りかけは失敗か取り消しで消し、成功したファイルとディレクトリは Dispose しても残る。`progress` は省略でき、null のときは通知しない
-- `ReadAsync(path, CancellationToken)`: 「コミット後の姿」のファイルを、位置 0 の読み取りストリームで返す。破棄は呼び出し側。全体はメモリにコピーしない。ロックは取らず、ジャーナルにも書かない。姿でファイルが無いときは `ExternalConflictException`。ディレクトリは未対応。開き方は `FileShare.Read | FileShare.Delete` なので、ストリームを閉じる前でもコミットの rename は進む。同じパスの再ステージは、ストリームを閉じるまで失敗しうる。取り消しは呼び出し開始時だけ有効
+- `ReadAsync(path, CancellationToken)`: 「コミット後の姿」のファイルを、位置 0 の読み取りストリームで返す。破棄は呼び出し側。全体はメモリにコピーしない。ロックは取らず、ジャーナルにも書かない。姿でファイルが無いときは `ExternalConflictException`。ディレクトリは未対応。開き方は `FileShare.Read | FileShare.Delete` なので、ストリームを閉じる前でもコミットの rename は進む。同じパスの再ステージは、ストリームを閉じるまで失敗しうる。取り消しは呼び出し開始時だけ有効。`detectExternalChanges` が true のときは、開いた実ファイルのサイズと最終更新日時（UTC）をトランザクションのメモリに記録する（「ステージ後の外部変更」）。このトランザクションの `.txnew` を読んだときは、その記録を更新しない
 - `ExistsAsync(path, CancellationToken)`: 「コミット後の姿」でファイルかディレクトリがあるなら true、無ければ false。無いことは例外にしない。ディレクトリだからという理由では失敗しない。ロックは取らず、ジャーナルにも書かない。パスがワークフォルダの外なら `ArgumentException`。メタデータ配下、および呼び出しが重なっているときは `InvalidOperationException`。取り消しは呼び出し開始時だけ有効
 - `tx.GetPendingChanges()`: 現在のジャーナル内容（Add/Update/Delete/DeleteTree/Move/CreateDirectory 一覧）を返す。ディレクトリのコピーは各ファイルの Add として見える。作成ディレクトリの一覧は出さない。`CreateDirectory` の配下で予約した操作は、その操作として見える。素のファイル API で書いたファイルは出ない。実装コストはほぼゼロ（ジャーナルをそのまま返すだけ）で、git status に相当するデバッグや UI 表示に使う
 
@@ -196,8 +196,16 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **コミット時の外部干渉への対処**（ダーティリード許容の帰結として）
 
-1. `Committing`マーカーを書き込む前に、ジャーナル内の全操作について前提条件を検証し、同時に Before / After を書く。Add の対象は無く、Update の対象はファイル、Delete の対象はファイルか直下の前提を満たすディレクトリ、DeleteTree の対象はディレクトリ、Move の元はファイルかディレクトリで先は無い。ステージ後に内容だけ変わった Update はここでは失敗にせず、Before はその時点のディスクにする。`CreateDirectory` もディレクトリが存在しなければ失敗し、ファイルにすり替わっていても失敗する。中身は見ない。前提が崩れていれば、`CreateDirectory` がすでに作ったディレクトリを除き、まだ実体には触れていないので、コミット全体を安全に中止し `Failed` を返す（「結果の詳細」）。失敗時の破棄は、未コミットの Dispose と同じく、そのディレクトリを中身ごと消す
+1. `Committing`マーカーを書き込む前に、ジャーナル内の全操作について前提条件を検証し、同時に Before / After を書く。Add の対象は無く、Update の対象はファイル、Delete の対象はファイルか直下の前提を満たすディレクトリ、DeleteTree の対象はディレクトリ、Move の元はファイルかディレクトリで先は無い。`detectExternalChanges` が false のとき、ステージ後に内容だけ変わった Update はここでは失敗にせず、Before はその時点のディスクにする。true のときは「ステージ後の外部変更」に従い、記録と違う Update は `Failed` で `ExternalChange` にする。`CreateDirectory` もディレクトリが存在しなければ失敗し、ファイルにすり替わっていても失敗する。中身は見ない。前提が崩れていれば、`CreateDirectory` がすでに作ったディレクトリを除き、まだ実体には触れていないので、コミット全体を安全に中止し `Failed` を返す（「結果の詳細」）。失敗時の破棄は、未コミットの Dispose と同じく、そのディレクトリを中身ごと消す
 2. 検証後・`Committing`マーカー書き込み後に適用を開始してから外部干渉が起きた場合（極めて稀）は、ロールフォワード原則により後戻りはできない。該当操作をスキップして続行し、`CommitAsync` の `CommitReport.Result` で明確に区別する（`Succeeded`：全操作が想定通り適用された／`PartialConflict`：一部操作で外部干渉による不整合が検出されたが確定はした。ジャーナルと、適用しなかった操作の `.txnew` を消してから返す／`Failed`：コミット前検証で失敗し実体には一切触れていない）。`PartialConflict`を明示的な列挙値にすることで、呼び出し側が戻り値を握りつぶしにくいAPI形状にする。拒んだ操作と飛ばした操作のパスと理由は「結果の詳細」に載せる。`Failed` のあと、同じトランザクションでもう一度コミットできる。`PartialConflict` のあと、同じインスタンスではやり直せない。共有違反の自動再試行はしない
+
+**ステージ後の外部変更**: `BeginAsync(path, bool detectExternalChanges, CancellationToken)` と `BeginAsync(path, TimeSpan lockWait, bool detectExternalChanges, CancellationToken)` を足す。既存の `BeginAsync` は `detectExternalChanges` が false である。false のときは、ステージ後に内容だけ変わった Update を失敗にしない。
+
+true のときはファイルの `Update` だけを見る。`Add`、`Delete`、`Move`、ディレクトリは比べない。記録はサイズと最終更新日時（UTC）で、トランザクションのメモリにだけ持つ。ジャーナルには書かない。破棄してもコミットしても、`RecoverAsync` はこの記録を見ない。
+
+実ファイルを `ReadAsync` するたびに、その時点へ更新する。コミット後の姿がこのトランザクションの `.txnew` であるときは更新せず、姿の元になっている実ファイルがまだ記録されていなければ、その実ファイルを記録する。ファイル `Move` の移動先を読むときは、移動元の実ファイルである。実ファイルが無いときは記録しない。`Read` の記録があるパスは、再ステージしても更新しない。`Read` していない `Update` は、ステージ時点の実ファイルを記録し、再ステージのたびに更新する。ディスク上に実ファイルが無いパスは記録しない。文字列と JSON の書き込みは `Update` なので同じである。畳み込みで `Update` が `Add` と `Delete` になっても、記録があればその実ファイルを比べる。
+
+コミット前の検証で、記録した実ファイルがまだファイルとしてあり、サイズか最終更新日時のどちらかが違うときは、`Committing` を書く前に全体を `Failed` にする。実体には触れない。理由は `ExternalChange` で、パスはそのファイルである。違った `Update` はすべて `Operations` に載せる。畳み込みで種別が変わって残っている操作も載せる。ファイルが無いときは `Missing`、ディレクトリに変わっているときは `ReplacedByFile` のままである。同じサイズで同じ最終更新日時の書き換えは見逃す。
 
 **Recover API**: 自動では何も行わない。アプリ側がワークフォルダを開いたタイミングで明示的に `RecoverAsync()` を呼んだときのみ、`.txfio/` 内のジャーナルをスキャンし、stale と判定されたトランザクションを検出する。ジャーナルを一覧する前に、ワークフォルダの哨兵を排他で開く。手順と待ちは操作が取る排他の哨兵と同じで（「競合検知のタイミング」）、`RecoverAsync` に渡した `lockWait` を使う。渡さないときは `TimeSpan.Zero` である。自分以外の `.lock` が期限までに空かない、または哨兵が期限までに開けないときは、閉じて `LockContentionException`（`Path` はワークフォルダ）を返し、何も処理しない。待ちの途中でキャンセルされたときも閉じ、何も処理せず `OperationCanceledException` を返す。哨兵はすべてのジャーナルの処理が終わるまで持ち、閉じても `.lock` は消さない。`.txfio/` が無ければ哨兵を開かずに `NoPendingTransactions` を返す。stale とは、そのジャーナルの生存ロック `.txfio/tx-{guid}.lock` を `FileMode.OpenOrCreate`・`FileShare.None`・`FileOptions.DeleteOnClose` で開けることをいう。ファイルが無いとき（落ちたトランザクション、または生存ロック導入前の版が残したジャーナル）も、作って開けるので stale である。共有違反なら持ち主が生きている（同じプロセスでも別プロセスでもよい）ので、そのジャーナルは読まず、消さず、`.txnew` にも `CreateDirectory` のディレクトリにも触れずに飛ばす。共有違反以外の失敗はその例外のまま返す。開けたハンドルはそのジャーナルの処理が終わるまで持ち、ジャーナルを消したあとで閉じる。ロールフォワードで Before / After のどちらとも一致しない操作があったときも、残りの操作の適用を続け、適用しなかった操作の `.txnew` を消してからジャーナルを消す。結果は `ConflictDetected` で 1 回だけ伝え、次の `RecoverAsync` はそのジャーナルを処理し直さない。開けたあとにジャーナルが無ければ、持ち主が正常に終わったので何もせず閉じ、結果にも数えない。同じワークフォルダで `RecoverAsync` が同時に走っても、片方は共有違反で飛ばすので同じジャーナルを二重に処理しない。`Committing` マーカーの有無でロールフォワードかロールバックかをライブラリ側が判別して実行し、結果を返す。予期しないタイミングでファイルが書き換わることを避けるため、アプリが呼ぶまで動かない。一方、呼んだあとのロールフォワード／ロールバックの判断はデータ整合性上一意に決まるので、その判断自体はライブラリが自動で行う。書き込み系と同様に非同期 API とする。
 
@@ -222,8 +230,9 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - `BeforeAfterMismatch` = 4。Before と After のどちらとも一致しない
 - `SharingViolation` = 5。共有違反
 - `IoFailure` = 6。それ以外の IO 失敗（`UnauthorizedAccessException` を含む）
+- `ExternalChange` = 7。`detectExternalChanges` が true のとき、記録した実ファイルのサイズか最終更新日時が違う
 
-検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`。`.txnew` をファイルとして読めないときは、検証でも `IoFailure` にする。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。適用中に移動先が既にあるときは `AlreadyExists`、移動元が無く移動先も無いときは `Missing`、ファイルとディレクトリが入れ替わったときは `ReplacedByFile` にする。`.txnew` が無く Before だけ一致するときは `IoFailure` にする。`UnauthorizedAccessException` は `IoFailure` にする。
+検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`、`ExternalChange`。`.txnew` をファイルとして読めないときは、検証でも `IoFailure` にする。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。適用中に移動先が既にあるときは `AlreadyExists`、移動元が無く移動先も無いときは `Missing`、ファイルとディレクトリが入れ替わったときは `ReplacedByFile` にする。`.txnew` が無く Before だけ一致するときは `IoFailure` にする。`UnauthorizedAccessException` は `IoFailure` にする。
 
 `Failed` は実体に触れない（`CreateDirectory` がすでに作ったディレクトリを除く。失敗時の破棄は未コミットの Dispose と同じ）。ジャーナルは残り、コミット済みにはしない。同じトランザクションで、状態を直したあと `CommitAsync` を再度呼べる。`PartialConflict` はジャーナルと、適用しなかった操作の `.txnew` を消して確定する。同じインスタンスではやり直せない。共有違反で飛ばしたパスは、新しいトランザクションでやり直せる。`BeforeAfterMismatch` は、同じ書き込みを繰り返しても意図どおりには戻らない。ライブラリは共有違反を自動では再試行しない。
 
