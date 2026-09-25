@@ -397,6 +397,12 @@ internal static class StagingApplier
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (!Directory.Exists(sourcePath))
         {
+            if (File.Exists(sourcePath))
+            {
+                reason = OperationFailureReason.ReplacedByFile;
+                return false;
+            }
+
             return Directory.Exists(destPath);
         }
 
@@ -428,10 +434,16 @@ internal static class StagingApplier
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (!File.Exists(sourcePath))
         {
+            if (Directory.Exists(sourcePath))
+            {
+                reason = OperationFailureReason.AlreadyExists;
+                return false;
+            }
+
             return File.Exists(destPath);
         }
 
-        if (File.Exists(destPath))
+        if (File.Exists(destPath) || Directory.Exists(destPath))
         {
             reason = OperationFailureReason.AlreadyExists;
             return false;
@@ -651,6 +663,12 @@ internal static class StagingApplier
     private static bool TryDeleteFile(string path, out OperationFailureReason reason)
     {
         reason = OperationFailureReason.IoFailure;
+        if (Directory.Exists(path))
+        {
+            reason = OperationFailureReason.AlreadyExists;
+            return false;
+        }
+
         if (!File.Exists(path))
         {
             return true;

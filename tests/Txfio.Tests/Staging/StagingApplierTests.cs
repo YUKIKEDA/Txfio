@@ -81,6 +81,50 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
+    /// ファイルとディレクトリを取り違えると、種類に合った理由になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル移動の移動先がディレクトリ、ファイル移動の移動元がディレクトリかつ移動先がファイル、ディレクトリ移動の移動元がファイルかつ移動先がディレクトリ、ファイル削除の対象がディレクトリである</para>
+    /// <para>手順: TryMove、TryMoveDirectory、TryDeleteFile を呼ぶ</para>
+    /// <para>期待: どれも失敗し、ファイル移動とファイル削除の理由は AlreadyExists、ディレクトリ移動の理由は ReplacedByFile、元のパスは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryApply_種類が違うと理由が付くこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string file = System.IO.Path.Combine(work.Path, "a.txt");
+        string destDir = System.IO.Path.Combine(work.Path, "dest-dir");
+        await File.WriteAllTextAsync(file, "old");
+        Directory.CreateDirectory(destDir);
+
+        Assert.False(InvokeMove("TryMove", file, destDir, out OperationFailureReason destReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, destReason);
+        Assert.True(File.Exists(file));
+
+        string sourceDir = System.IO.Path.Combine(work.Path, "source-dir");
+        string destFile = System.IO.Path.Combine(work.Path, "b.txt");
+        Directory.CreateDirectory(sourceDir);
+        await File.WriteAllTextAsync(destFile, "block");
+        Assert.False(InvokeMove("TryMove", sourceDir, destFile, out OperationFailureReason sourceReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, sourceReason);
+        Assert.True(Directory.Exists(sourceDir));
+
+        string replaced = System.IO.Path.Combine(work.Path, "replaced");
+        string movedDir = System.IO.Path.Combine(work.Path, "moved");
+        await File.WriteAllTextAsync(replaced, "file");
+        Directory.CreateDirectory(movedDir);
+        Assert.False(InvokeMove("TryMoveDirectory", replaced, movedDir, out OperationFailureReason replacedReason));
+        Assert.Equal(OperationFailureReason.ReplacedByFile, replacedReason);
+        Assert.True(File.Exists(replaced));
+
+        string deleteTarget = System.IO.Path.Combine(work.Path, "delete-me");
+        Directory.CreateDirectory(deleteTarget);
+        Assert.False(InvokePath("TryDeleteFile", deleteTarget, out OperationFailureReason deleteReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, deleteReason);
+        Assert.True(Directory.Exists(deleteTarget));
+    }
+
+    /// <summary>
     /// ディレクトリ削除の対象がファイルなら ReplacedByFile になる
     /// </summary>
     /// <remarks>
