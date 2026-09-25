@@ -112,6 +112,7 @@ internal static class OperationOutcomes
 
         if (!TryCaptureStaging(operation, out PathState after))
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
 
@@ -137,6 +138,7 @@ internal static class OperationOutcomes
 
         if (!TryCaptureStaging(operation, out PathState after))
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
 

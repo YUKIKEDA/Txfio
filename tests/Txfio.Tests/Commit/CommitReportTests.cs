@@ -188,6 +188,45 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
+    /// .txnew をファイルとして読めない検証失敗は IoFailure になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add と Update のあと、両方の .txnew は消されている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Failed でどちらも Rejected かつ IoFailure、Update の対象は元の内容のまま</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_txnewが読めないとIoFailureになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string updated = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(updated, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("a.txt", "added");
+        await tx.WriteAllTextAsync("b.txt", "updated");
+        foreach (string staging in Directory.GetFiles(work.Path, "*.txnew"))
+        {
+            File.Delete(staging);
+        }
+
+        CommitReport report = await tx.CommitAsync();
+
+        Assert.Equal(CommitResult.Failed, report.Result);
+        Assert.Equal(2, report.Operations.Count);
+        Assert.All(
+            report.Operations,
+            operation =>
+            {
+                Assert.Equal(OperationDisposition.Rejected, operation.Disposition);
+                Assert.Equal(OperationFailureReason.IoFailure, operation.Reason);
+            });
+        Assert.Contains(report.Operations, operation => operation.Kind == PendingChangeKind.Add);
+        Assert.Contains(report.Operations, operation => operation.Kind == PendingChangeKind.Update);
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+        Assert.Equal("old", await File.ReadAllTextAsync(updated));
+    }
+
+    /// <summary>
     /// 読み取り専用の対象への適用は IoFailure になる
     /// </summary>
     /// <remarks>
