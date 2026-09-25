@@ -44,6 +44,25 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
+        if (IsFileMoveOut(existingIndex))
+        {
+            int contentIndex = FindContentAfterMoveOut(targetPath, existingIndex);
+            if (contentIndex >= 0 && _operations[contentIndex].Kind == PendingChangeKind.Move)
+            {
+                // 別の Move で入ってくるファイルを消す
+                await PersistFoldedAsync(
+                        operations => FoldMoveOutToSourceDelete(operations, contentIndex, destination: null),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (contentIndex >= 0)
+            {
+                existingIndex = contentIndex;
+            }
+        }
+
         if (existingIndex >= 0)
         {
             JournalOperation existing = _operations[existingIndex];
@@ -90,9 +109,8 @@ internal sealed partial class Transaction
                 return;
             }
 
-            await PersistReplacingOperationAsync(
-                    moveToIndex,
-                    new JournalOperation(PendingChangeKind.Delete, move.Path),
+            await PersistFoldedAsync(
+                    operations => FoldMoveOutToSourceDelete(operations, moveToIndex, destination: null),
                     cancellationToken)
                 .ConfigureAwait(false);
             return;
@@ -222,6 +240,11 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
         }
 
+        if (IsFileMoveOut(destIndex) && FindLaterOperationIndex(destPath, destIndex) >= 0)
+        {
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
         int moveToDest = FindMoveToIndex(destPath);
         if (moveToDest >= 0)
         {
@@ -246,6 +269,24 @@ internal sealed partial class Transaction
                     cancellationToken)
                 .ConfigureAwait(false);
             return;
+        }
+
+        if (IsFileMoveOut(sourceIndex))
+        {
+            // 移動済みの元から動かすのは、そのあと元のパスに来た中身である
+            int laterIndex = FindLaterOperationIndex(sourcePath, sourceIndex);
+            if (laterIndex >= 0)
+            {
+                sourceIndex = laterIndex;
+            }
+            else if (moveToSource >= 0)
+            {
+                sourceIndex = -1;
+            }
+            else
+            {
+                throw new ExternalConflictException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
+            }
         }
 
         if (sourceIndex >= 0)
@@ -307,6 +348,61 @@ internal sealed partial class Transaction
         {
             _operations.Remove(operation);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// ファイル Move を外し、移動元の元のファイルをコミットで消す形に畳む
+    /// </summary>
+    /// <remarks>
+    /// 移動元へ Add し直していれば、元を消して書くのと同じなので、その Add を Update にする。
+    /// 移動元へ別の Move で入ってくる予定があるときは、適用順（Move が先、Delete が後）で表せないので受け付けない
+    /// </remarks>
+    /// <param name="operations">畳む操作一覧（書き換える）</param>
+    /// <param name="moveIndex">外すファイル Move のインデックス</param>
+    /// <param name="destination">Move の代わりに足す操作（無ければ元の Delete を Move の位置に置く）</param>
+    private static void FoldMoveOutToSourceDelete(
+        List<JournalOperation> operations,
+        int moveIndex,
+        JournalOperation? destination)
+    {
+        string sourcePath = operations[moveIndex].Path;
+        operations.RemoveAt(moveIndex);
+        if (destination is not null)
+        {
+            operations.Add(destination);
+        }
+
+        int readdedIndex = operations.FindIndex(
+            operation => string.Equals(operation.Path, sourcePath, StringComparison.OrdinalIgnoreCase));
+        if (readdedIndex >= 0)
+        {
+            JournalOperation readded = operations[readdedIndex];
+            if (readded.Kind != PendingChangeKind.Add)
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+
+            operations[readdedIndex] = new JournalOperation(PendingChangeKind.Update, sourcePath, readded.StagingPath);
+            return;
+        }
+
+        bool movedInto = operations.Exists(
+            operation => operation.Kind == PendingChangeKind.Move
+                && string.Equals(operation.NewPath, sourcePath, StringComparison.OrdinalIgnoreCase));
+        if (movedInto)
+        {
+            throw new InvalidOperationException("移動元へ別のファイルを移す予定があるので、元を消す形に畳めません: " + sourcePath);
+        }
+
+        JournalOperation delete = new JournalOperation(PendingChangeKind.Delete, sourcePath);
+        if (destination is null)
+        {
+            operations.Insert(moveIndex, delete);
+        }
+        else
+        {
+            operations.Add(delete);
         }
     }
 
@@ -542,22 +638,38 @@ internal sealed partial class Transaction
     {
         JournalOperation existing = _operations[sourceIndex];
         JournalOperation[] previous = _operations.ToArray();
+
+        // .txnew は移動先の名前に付け替える。元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする
+        string? stagingPath = existing.StagingPath is null
+            ? null
+            : WorkPath.StagingFilePath(destPath, _transactionId);
+        bool journalUpdated = false;
         try
         {
             string sourcePath = existing.Path;
             _operations.RemoveAt(sourceIndex);
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, existing.StagingPath));
+            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
             if (deleteSource)
             {
                 _operations.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
             }
 
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journalUpdated = true;
+            if (existing.StagingPath is not null)
+            {
+                File.Move(existing.StagingPath, stagingPath!);
+            }
         }
         catch
         {
             _operations.Clear();
             _operations.AddRange(previous);
+            if (journalUpdated)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
             throw;
         }
     }
@@ -579,16 +691,18 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken)
     {
         string stagingPath = WorkPath.StagingFilePath(destPath, _transactionId);
+        List<JournalOperation> folded = new List<JournalOperation>(_operations);
+        FoldMoveOutToSourceDelete(
+            folded,
+            moveIndex,
+            new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
         await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
 
         JournalOperation[] previous = _operations.ToArray();
         try
         {
-            JournalOperation move = _operations[moveIndex];
-            _operations.RemoveAt(moveIndex);
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
-            _operations.Add(new JournalOperation(PendingChangeKind.Delete, move.Path));
-
+            _operations.Clear();
+            _operations.AddRange(folded);
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -596,6 +710,33 @@ internal sealed partial class Transaction
             _operations.Clear();
             _operations.AddRange(previous);
             StagingFile.TryDelete(stagingPath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 畳んだ操作一覧をジャーナルに書く。失敗したら元の一覧に戻す
+    /// </summary>
+    /// <param name="fold">操作一覧の写しを畳む処理。使い方の誤りなら書く前に例外を投げる</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ジャーナル書き込みの完了</returns>
+    private async Task PersistFoldedAsync(
+        Action<List<JournalOperation>> fold,
+        CancellationToken cancellationToken)
+    {
+        List<JournalOperation> folded = new List<JournalOperation>(_operations);
+        fold(folded);
+        JournalOperation[] previous = _operations.ToArray();
+        _operations.Clear();
+        _operations.AddRange(folded);
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _operations.Clear();
+            _operations.AddRange(previous);
             throw;
         }
     }
@@ -634,6 +775,17 @@ internal sealed partial class Transaction
                 {
                     existingIndex = contentIndex;
                     recordedKind = StagingRules.NormalizeRestageKind(_operations[existingIndex].Kind, kind);
+                }
+                else if (FindMoveToIndex(targetPath) >= 0)
+                {
+                    // 別の Move で入ってくるファイルがあるので、Update ならその Move の移動先への Update と同じ
+                    if (kind != PendingChangeKind.Update)
+                    {
+                        throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                    }
+
+                    moveToIndex = FindMoveToIndex(targetPath);
+                    existingIndex = -1;
                 }
                 else if (kind == PendingChangeKind.Add)
                 {

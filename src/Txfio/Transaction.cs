@@ -143,6 +143,20 @@ internal sealed partial class Transaction : ITransaction
         return -1;
     }
 
+    private bool IsFileMoveOut(int index)
+    {
+        return index >= 0
+            && _operations[index].Kind == PendingChangeKind.Move
+            && !_operations[index].IsDirectory;
+    }
+
+    // ファイル Move の移動元のパスで、そのあとの中身を決める操作。移動元へ書き直した操作か、別の Move で入ってくる操作
+    private int FindContentAfterMoveOut(string path, int moveOutIndex)
+    {
+        int later = FindLaterOperationIndex(path, moveOutIndex);
+        return later >= 0 ? later : FindMoveToIndex(path);
+    }
+
     private void ThrowIfMoveChainCloses(JournalOperation replacement, int replaceIndex)
     {
         List<JournalOperation> prospective = new List<JournalOperation>(_operations);
