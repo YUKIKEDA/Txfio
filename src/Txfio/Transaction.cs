@@ -88,7 +88,7 @@ internal sealed partial class Transaction : ITransaction
             bool cleanupSucceeded = true;
             foreach (JournalOperation operation in _operations)
             {
-                if (!TryCleanup(() => StagingFile.TryDelete(operation.StagingPath)))
+                if (!TryCleanup(() => OperationKind.DeleteStaging(operation)))
                 {
                     cleanupSucceeded = false;
                 }

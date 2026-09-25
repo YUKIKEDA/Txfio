@@ -65,9 +65,8 @@ internal static class StagingApplier
         List<JournalOperation> nondestructive = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
-            if (operation.Kind == PendingChangeKind.Add
-                || operation.Kind == PendingChangeKind.Move
-                || operation.Kind == PendingChangeKind.CreateDirectory)
+            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
+                && behavior.ApplyPhase == OperationKind.Phase.Nondestructive)
             {
                 nondestructive.Add(operation);
             }
@@ -77,7 +76,8 @@ internal static class StagingApplier
 
         foreach (JournalOperation operation in operations)
         {
-            if (operation.Kind == PendingChangeKind.Update)
+            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
+                && behavior.ApplyPhase == OperationKind.Phase.Update)
             {
                 ordered.Add(operation);
             }
@@ -86,8 +86,8 @@ internal static class StagingApplier
         List<JournalOperation> deletes = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
-            if (operation.Kind == PendingChangeKind.Delete
-                || operation.Kind == PendingChangeKind.DeleteTree)
+            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
+                && behavior.ApplyPhase == OperationKind.Phase.Delete)
             {
                 deletes.Add(operation);
             }
@@ -142,43 +142,9 @@ internal static class StagingApplier
             return false;
         }
 
-        if (operation.Kind is PendingChangeKind.Add or PendingChangeKind.Update)
+        if (OperationKind.TryGet(operation.Kind, out OperationKind behavior))
         {
-            return TryApplyStagedFile(operation, out reason);
-        }
-
-        if (Matches(operation, after: true))
-        {
-            return TryDeleteStaging(operation.StagingPath, out reason);
-        }
-
-        if (!Matches(operation, after: false))
-        {
-            return false;
-        }
-
-        if (operation.Kind == PendingChangeKind.DeleteTree)
-        {
-            return TryDeleteTree(operation.Path, out reason);
-        }
-
-        if (operation.Kind == PendingChangeKind.Delete)
-        {
-            return operation.IsDirectory
-                ? TryDeleteDirectory(operation.Path, out reason)
-                : TryDeleteFile(operation.Path, out reason);
-        }
-
-        if (operation.Kind == PendingChangeKind.Move)
-        {
-            return operation.IsDirectory
-                ? TryMoveDirectory(operation.Path, operation.NewPath!, out reason)
-                : TryMove(operation.Path, operation.NewPath!, out reason);
-        }
-
-        if (operation.Kind == PendingChangeKind.CreateDirectory)
-        {
-            return true;
+            return behavior.TryApply(operation, out reason);
         }
 
         if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
@@ -213,7 +179,7 @@ internal static class StagingApplier
     {
         foreach (JournalOperation operation in operations)
         {
-            StagingFile.TryDelete(operation.StagingPath);
+            OperationKind.DeleteStaging(operation);
         }
     }
 
@@ -321,12 +287,8 @@ internal static class StagingApplier
         bool succeeded = true;
         foreach (JournalOperation operation in operations)
         {
-            if (operation.Kind != PendingChangeKind.CreateDirectory || !Directory.Exists(operation.Path))
-            {
-                continue;
-            }
-
-            if (!DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true)))
+            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
+                && !behavior.TryDeleteCreatedTree(operation, ignoreIoFailures))
             {
                 succeeded = false;
             }
@@ -359,187 +321,6 @@ internal static class StagingApplier
         Exception exception = failure.Exception;
         failure.Exception = null;
         throw exception;
-    }
-
-    private static bool Matches(JournalOperation operation, bool after)
-    {
-        PathState? primary = after ? operation.After : operation.Before;
-        if (primary is null || !primary.Matches(operation.Path))
-        {
-            return false;
-        }
-
-        if (operation.Kind != PendingChangeKind.Move)
-        {
-            return true;
-        }
-
-        PathState? dest = after ? operation.DestAfter : operation.DestBefore;
-        return dest is not null
-            && operation.NewPath is not null
-            && dest.Matches(operation.NewPath);
-    }
-
-    private static bool TryApplyStagedFile(JournalOperation operation, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (string.IsNullOrEmpty(operation.StagingPath))
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-
-        // 残っている .txnew が Before と一致するなら未適用（Before と After が同じ時刻でも適用する）
-        if (File.Exists(operation.StagingPath) && Matches(operation, after: false))
-        {
-            try
-            {
-                bool overwrite = operation.Kind == PendingChangeKind.Update;
-                File.Move(operation.StagingPath, operation.Path, overwrite);
-                return true;
-            }
-            catch (IOException exception)
-            {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
-                return false;
-            }
-        }
-
-        if (Matches(operation, after: true))
-        {
-            return TryDeleteStaging(operation.StagingPath, out reason);
-        }
-
-        if (!File.Exists(operation.StagingPath) && Matches(operation, after: false))
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-
-        return false;
-    }
-
-    private static bool TryDeleteStaging(string? stagingPath, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.IoFailure;
-        try
-        {
-            StagingFile.TryDelete(stagingPath);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool TryMoveDirectory(string sourcePath, string destPath, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (!Directory.Exists(sourcePath))
-        {
-            if (File.Exists(sourcePath))
-            {
-                reason = OperationFailureReason.ReplacedByFile;
-                return false;
-            }
-
-            if (Directory.Exists(destPath))
-            {
-                return true;
-            }
-
-            if (File.Exists(destPath))
-            {
-                reason = OperationFailureReason.AlreadyExists;
-                return false;
-            }
-
-            reason = OperationFailureReason.Missing;
-            return false;
-        }
-
-        if (File.Exists(destPath) || Directory.Exists(destPath))
-        {
-            reason = OperationFailureReason.AlreadyExists;
-            return false;
-        }
-
-        try
-        {
-            SameVolumeMove.MoveDirectory(sourcePath, destPath);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool TryMove(string sourcePath, string destPath, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (!File.Exists(sourcePath))
-        {
-            if (Directory.Exists(sourcePath))
-            {
-                reason = OperationFailureReason.ReplacedByFile;
-                return false;
-            }
-
-            if (File.Exists(destPath))
-            {
-                return true;
-            }
-
-            if (Directory.Exists(destPath))
-            {
-                reason = OperationFailureReason.AlreadyExists;
-                return false;
-            }
-
-            reason = OperationFailureReason.Missing;
-            return false;
-        }
-
-        if (File.Exists(destPath) || Directory.Exists(destPath))
-        {
-            reason = OperationFailureReason.AlreadyExists;
-            return false;
-        }
-
-        try
-        {
-            SameVolumeMove.MoveFile(sourcePath, destPath);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
     }
 
     private static List<JournalOperation> OrderMoveChains(List<JournalOperation> items)
@@ -672,99 +453,6 @@ internal static class StagingApplier
         }
 
         return depth;
-    }
-
-    private static bool TryDeleteTree(string path, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (File.Exists(path))
-        {
-            reason = OperationFailureReason.ReplacedByFile;
-            return false;
-        }
-
-        if (!Directory.Exists(path))
-        {
-            return true;
-        }
-
-        try
-        {
-            Directory.Delete(path, recursive: true);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool TryDeleteDirectory(string path, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (File.Exists(path))
-        {
-            reason = OperationFailureReason.ReplacedByFile;
-            return false;
-        }
-
-        if (!Directory.Exists(path))
-        {
-            return true;
-        }
-
-        try
-        {
-            Directory.Delete(path);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool TryDeleteFile(string path, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.IoFailure;
-        if (Directory.Exists(path))
-        {
-            reason = OperationFailureReason.ReplacedByFile;
-            return false;
-        }
-
-        if (!File.Exists(path))
-        {
-            return true;
-        }
-
-        try
-        {
-            File.Delete(path);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
     }
 
     private static OperationFailureReason ClassifyIo(IOException exception)
