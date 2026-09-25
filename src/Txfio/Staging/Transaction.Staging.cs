@@ -43,7 +43,15 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDeleteTree(_operations, targetPath);
         StagingRules.ThrowIfCreateDirectoryPath(_operations, targetPath);
         _locks.AcquireShared(_workFolder);
-        _locks.Acquire(_workFolder, targetPath);
+        if (Directory.Exists(targetPath))
+        {
+            _locks.AcquireReserving(_workFolder, new[] { targetPath }, targetPath);
+        }
+        else
+        {
+            _locks.Acquire(_workFolder, targetPath);
+        }
+
         StagingRules.EnsureParentDirectoryExists(targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
@@ -481,9 +489,9 @@ internal sealed partial class Transaction
         }
 
         StagingRules.ThrowIfDirectoryMoveConflicts(_operations, root, destPath);
-        _locks.AcquireExclusive(_workFolder);
-        _locks.RejectForeignLocks(_workFolder);
-        _locks.Acquire(_workFolder, root, destPath);
+        _locks.AcquireShared(_workFolder);
+        _locks.AcquireReserving(_workFolder, new[] { root, destPath }, root, destPath);
+        using PathLockSet.WorkFolderExclusive exclusive = _locks.EnterExclusive(_workFolder);
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!destIsMoveSource)
         {
@@ -569,9 +577,9 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken,
         int replaceIndex = -1)
     {
-        _locks.AcquireExclusive(_workFolder);
-        _locks.RejectForeignLocks(_workFolder);
-        _locks.Acquire(_workFolder, directoryPath);
+        _locks.AcquireShared(_workFolder);
+        _locks.AcquireReserving(_workFolder, new[] { directoryPath }, directoryPath);
+        using PathLockSet.WorkFolderExclusive exclusive = _locks.EnterExclusive(_workFolder);
         if (!Directory.Exists(directoryPath))
         {
             throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + directoryPath, directoryPath);

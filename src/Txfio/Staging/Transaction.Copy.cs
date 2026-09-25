@@ -144,9 +144,9 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        _locks.AcquireExclusive(_workFolder);
-        _locks.RejectForeignLocks(_workFolder);
-        _locks.Acquire(_workFolder, sourcePath, destinationPath);
+        _locks.AcquireShared(_workFolder);
+        _locks.AcquireReserving(_workFolder, new[] { sourcePath, destinationPath }, destinationPath);
+        using PathLockSet.WorkFolderExclusive exclusive = _locks.EnterExclusive(_workFolder);
         if (!Directory.Exists(sourcePath))
         {
             throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);

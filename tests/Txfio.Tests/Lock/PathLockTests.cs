@@ -248,83 +248,94 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリ Delete は子ファイルをロックしない
+    /// ディレクトリ Delete は配下へのステージングを止める
     /// </summary>
     /// <remarks>
     /// <para>前提: 空のディレクトリを Delete 予約している</para>
     /// <para>手順: 別トランザクションがその直下を Add する</para>
-    /// <para>期待: Add できる</para>
+    /// <para>期待: LockContentionException になり、Path はそのディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_ディレクトリをロックしても子は別トランザクションが触れること()
+    public async Task DeleteAsync_ディレクトリの配下は別トランザクションが触れないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        string sub = System.IO.Path.Combine(work.Path, "sub");
+        Directory.CreateDirectory(sub);
         await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.DeleteAsync("sub");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
-        await second.AddAsync("sub/a.txt", content);
-        Assert.Single(second.GetPendingChanges());
+
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.AddAsync("sub/a.txt", content));
+
+        Assert.Equal(sub, contention.Path);
+        Assert.Empty(second.GetPendingChanges());
     }
 
     /// <summary>
-    /// ディレクトリ Move は他のトランザクションの変更を止める
+    /// ディレクトリ Move のあと、移動元は別トランザクションが触れない
     /// </summary>
     /// <remarks>
     /// <para>前提: ディレクトリがある</para>
-    /// <para>手順: Move してから、別トランザクションがそのディレクトリを Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>手順: Move してから、別トランザクションが移動元を Delete する</para>
+    /// <para>期待: LockContentionException になり、Path は移動元のディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ディレクトリはワークフォルダで他の変更を止めること()
+    public async Task MoveAsync_ディレクトリの移動元は戻ったあとも予約されること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        string sub = System.IO.Path.Combine(work.Path, "sub");
+        Directory.CreateDirectory(sub);
         await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.MoveAsync("sub", "other");
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => second.DeleteAsync("sub"));
 
-        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(sub, contention.Path);
         Assert.Equal(PendingChangeKind.Move, Assert.Single(first.GetPendingChanges()).Kind);
     }
 
     /// <summary>
-    /// 全削除は他のトランザクションの変更を止める
+    /// 全削除のあと、無関係なパスは通り、配下は止まる
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリがある</para>
-    /// <para>手順: DeleteTree してから、別トランザクションが別ファイルを Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>前提: ディレクトリと、別のファイルがある</para>
+    /// <para>手順: DeleteTree してから、別トランザクションが別ファイルを Delete し、配下を Add する</para>
+    /// <para>期待: 別ファイルは Delete でき、配下の Add は LockContentionException で Path はそのディレクトリである</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_ワークフォルダで他の変更を止めること()
+    public async Task DeleteTreeAsync_戻ったあとは配下だけを予約すること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
+        string tree = System.IO.Path.Combine(work.Path, "tree");
+        Directory.CreateDirectory(tree);
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
         await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.DeleteTreeAsync("tree");
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => second.DeleteAsync("a.txt"));
+        await second.DeleteAsync("a.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.AddAsync("tree/a.txt", content));
 
-        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(tree, contention.Path);
         Assert.Equal(PendingChangeKind.DeleteTree, Assert.Single(first.GetPendingChanges()).Kind);
+        Assert.Equal(PendingChangeKind.Delete, Assert.Single(second.GetPendingChanges()).Kind);
     }
 
     /// <summary>
-    /// CreateDirectory は他のトランザクションの変更を止める
+    /// CreateDirectory のあと、別トランザクションは無関係なパスも配下も触れる
     /// </summary>
     /// <remarks>
     /// <para>前提: 別ファイル a.txt がある</para>
-    /// <para>手順: CreateDirectory してから、別トランザクションが a.txt を Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>手順: CreateDirectory してから、別トランザクションが a.txt を Delete し、作ったディレクトリの直下を Add する</para>
+    /// <para>期待: どちらも成功する</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_ワークフォルダで他の変更を止めること()
+    public async Task CreateDirectoryAsync_戻ったあとは配下を予約しないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -332,11 +343,12 @@ public sealed class PathLockTests
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.CreateDirectoryAsync("drop");
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => second.DeleteAsync("a.txt"));
+        await second.DeleteAsync("a.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
+        await second.AddAsync("drop/a.txt", content);
 
-        Assert.Equal(work.Path, contention.Path);
         Assert.Equal(PendingChangeKind.CreateDirectory, Assert.Single(first.GetPendingChanges()).Kind);
+        Assert.Equal(2, second.GetPendingChanges().Count);
     }
 
     /// <summary>
@@ -398,18 +410,19 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリコピーは他のトランザクションの変更を止める
+    /// ディレクトリコピーは先だけを予約し、元と無関係なパスは通す
     /// </summary>
     /// <remarks>
     /// <para>前提: 子ファイルがあるディレクトリと、別のファイルがある</para>
-    /// <para>手順: ディレクトリをコピーしてから、別トランザクションがそのファイルを Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>手順: ディレクトリをコピーしてから、別トランザクションが別ファイルを Delete し、元の配下と先の配下を Add する</para>
+    /// <para>期待: 別ファイルと元の配下は成功し、先の配下は LockContentionException で Path はコピー先である</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ディレクトリはワークフォルダで他の変更を止めること()
+    public async Task CopyAsync_ディレクトリはコピー先だけを予約すること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
+        string dest = System.IO.Path.Combine(work.Path, "dest");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -417,23 +430,28 @@ public sealed class PathLockTests
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.CopyAsync("src", "dest");
 
+        await second.DeleteAsync("a.txt");
+        await using MemoryStream sourceChild = LeftoverAddFiles.Utf8Stream("more");
+        await second.AddAsync("src/more.txt", sourceChild);
+        await using MemoryStream destChild = LeftoverAddFiles.Utf8Stream("no");
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => second.DeleteAsync("a.txt"));
+            () => second.AddAsync("dest/more.txt", destChild));
 
-        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(dest, contention.Path);
         Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
+        Assert.Equal(2, second.GetPendingChanges().Count);
     }
 
     /// <summary>
-    /// ディレクトリからの ZIP 作成は他のトランザクションの変更を止める
+    /// ディレクトリからの ZIP 作成は、戻ったあと配下を予約しない
     /// </summary>
     /// <remarks>
     /// <para>前提: 子ファイルがあるディレクトリと、別のファイルがある</para>
     /// <para>手順: ディレクトリから ZIP を作ってから、別トランザクションがそのファイルを Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>期待: Delete は成功する</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_ディレクトリはワークフォルダで他の変更を止めること()
+    public async Task CreateArchiveAsync_ディレクトリは戻ったあと配下を予約しないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -444,26 +462,26 @@ public sealed class PathLockTests
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.CreateArchiveAsync("src", "src.zip");
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => second.DeleteAsync("a.txt"));
+        await second.DeleteAsync("a.txt");
 
-        Assert.Equal(work.Path, contention.Path);
         Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
+        Assert.Equal(PendingChangeKind.Delete, Assert.Single(second.GetPendingChanges()).Kind);
     }
 
     /// <summary>
-    /// ZIP の展開は他のトランザクションの変更を止める
+    /// ZIP の展開は展開先を予約し、無関係なパスは通す
     /// </summary>
     /// <remarks>
     /// <para>前提: ZIP と、別のファイルがある</para>
-    /// <para>手順: ZIP を展開してから、別トランザクションがそのファイルを Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>手順: ZIP を展開してから、別トランザクションが別ファイルを Delete し、展開先の配下を Add する</para>
+    /// <para>期待: 別ファイルは Delete でき、配下の Add は LockContentionException で Path は展開先である</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_ワークフォルダで他の変更を止めること()
+    public async Task ExtractArchiveAsync_展開先だけを予約すること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
+        string dest = System.IO.Path.Combine(work.Path, "dest");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         System.IO.Compression.ZipFile.CreateFromDirectory(source, System.IO.Path.Combine(work.Path, "src.zip"));
@@ -472,11 +490,14 @@ public sealed class PathLockTests
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.ExtractArchiveAsync("src.zip", "dest");
 
+        await second.DeleteAsync("a.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("no");
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => second.DeleteAsync("a.txt"));
+            () => second.AddAsync("dest/more.txt", content));
 
-        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(dest, contention.Path);
         Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
+        Assert.Equal(PendingChangeKind.Delete, Assert.Single(second.GetPendingChanges()).Kind);
     }
 
     /// <summary>
@@ -504,15 +525,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリを含む組で指定した ZIP 作成は、他のトランザクションの変更を止める
+    /// ディレクトリを含む組で指定した ZIP 作成は、戻ったあとほかのパスを止めない
     /// </summary>
     /// <remarks>
     /// <para>前提: 子ファイルがあるディレクトリと、別のファイルが 2 つある</para>
     /// <para>手順: ファイル 1 つとディレクトリを組で指定して ZIP を作ってから、別トランザクションがもう一方のファイルを Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>期待: Delete は成功する</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_ディレクトリを含む組はワークフォルダで他の変更を止めること()
+    public async Task CreateArchiveAsync_ディレクトリを含む組は戻ったあとほかのパスを止めないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -524,9 +545,8 @@ public sealed class PathLockTests
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.CreateArchiveAsync(new[] { new ArchiveEntrySource("a.txt"), new ArchiveEntrySource("src") }, "all.zip");
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => second.DeleteAsync("b.txt"));
+        await second.DeleteAsync("b.txt");
 
-        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(PendingChangeKind.Delete, Assert.Single(second.GetPendingChanges()).Kind);
     }
 }
