@@ -75,7 +75,7 @@ internal sealed partial class Transaction : ITransaction
             return;
         }
 
-        // Committing を書いたあとはロールバックしない。ジャーナルを残し、次の Recover が進める
+        // Committing を書いたあとはロールバックしない（ジャーナルを残し、次の Recover が進める）
         if (CrashInjector.ShouldSkipRollback || _committingWritten)
         {
             _locks.Release();
@@ -167,7 +167,7 @@ internal sealed partial class Transaction : ITransaction
             && !_operations[index].IsDirectory;
     }
 
-    // ファイル Move の移動元のパスで、そのあとの中身を決める操作。移動元へ書き直した操作か、別の Move で入ってくる操作
+    // ファイル Move の移動元のパスで、そのあとの中身を決める操作（移動元へ書き直した操作か、別の Move で入ってくる操作）
     private int FindContentAfterMoveOut(string path, int moveOutIndex)
     {
         int later = FindLaterOperationIndex(path, moveOutIndex);
@@ -207,7 +207,7 @@ internal sealed partial class Transaction : ITransaction
         return -1;
     }
 
-    // ジャーナルを消したあとで呼ぶ。先に閉じると、Recover が生きているトランザクションを巻き戻しうる
+    // ジャーナルを消したあとで呼ぶ（先に閉じると、Recover が生きているトランザクションを巻き戻しうる）
     private void ReleaseLiveness()
     {
         _liveness?.Dispose();

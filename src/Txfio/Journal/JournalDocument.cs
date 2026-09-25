@@ -14,7 +14,7 @@ internal sealed class JournalDocument
     /// <param name="transactionId">対象トランザクションの ID</param>
     /// <param name="committing">コミットの適用中なら <see langword="true"/></param>
     /// <param name="operations">未確定の操作一覧</param>
-    /// <param name="createdDirectories">このトランザクションが作るディレクトリ。操作には含めない</param>
+    /// <param name="createdDirectories">このトランザクションが作るディレクトリ（操作には含めない）</param>
     [JsonConstructor]
     public JournalDocument(
         int version,
@@ -51,7 +51,7 @@ internal sealed class JournalDocument
     public IReadOnlyList<JournalOperation> Operations { get; }
 
     /// <summary>
-    /// このトランザクションが作るディレクトリ。操作には含めない
+    /// このトランザクションが作るディレクトリ（操作には含めない）
     /// </summary>
     public IReadOnlyList<string> CreatedDirectories { get; }
 }

@@ -8,7 +8,7 @@ internal static class StagingApplier
     private static readonly AsyncLocal<ApplyFailure?> _nextApplyFailure = new AsyncLocal<ApplyFailure?>();
 
     /// <summary>
-    /// 次の適用で、指定した例外を投げる。テスト用
+    /// 次の適用で、指定した例外を投げる（テスト用）
     /// </summary>
     /// <param name="exception">投げる例外</param>
     internal static void FailNextApply(Exception exception)
@@ -206,7 +206,7 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// 操作ごとの `.txnew` を消す。無いものは飛ばす
+    /// 操作ごとの `.txnew` を消す（無いものは飛ばす）
     /// </summary>
     /// <param name="operations">操作一覧</param>
     internal static void DeleteStagingFiles(IReadOnlyList<JournalOperation> operations)
@@ -343,7 +343,7 @@ internal static class StagingApplier
             return false;
         }
 
-        // .txnew が残り Before と一致するなら未適用。Before と After が同じ時刻でも適用する
+        // 残っている .txnew が Before と一致するなら未適用（Before と After が同じ時刻でも適用する）
         if (File.Exists(operation.StagingPath) && Matches(operation, after: false))
         {
             try

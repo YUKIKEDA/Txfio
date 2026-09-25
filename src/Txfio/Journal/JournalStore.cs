@@ -52,7 +52,7 @@ internal static class JournalStore
         {
             await WriteAsync(tempPath, document, FileMode.Create, cancellationToken).ConfigureAwait(false);
 
-            // File.Move の共有違反は UnauthorizedAccessException になるため、先に開いて閉じる。開けないときの共有違反は IOException のまま返す
+            // File.Move の共有違反は UnauthorizedAccessException になるため、先に開いて閉じる（開けないときの共有違反は IOException のまま返す）
             EnsureReplaceable(journalPath);
             File.Move(tempPath, journalPath, overwrite: true);
         }
@@ -64,11 +64,11 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// ジャーナルを読む。JSON として読めないときは <see langword="null"/>
+    /// ジャーナルを読む（JSON として読めないときは <see langword="null"/>）
     /// </summary>
     /// <param name="journalPath">読み取り元</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>読めた文書。JSON として読めないときと JSON の null は <see langword="null"/></returns>
+    /// <returns>読めた文書（JSON として読めないときと、値が JSON の null のときは <see langword="null"/>）</returns>
     /// <exception cref="IOException">読み取りに失敗した</exception>
     internal static async Task<JournalDocument?> TryReadAsync(string journalPath, CancellationToken cancellationToken)
     {

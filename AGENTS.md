@@ -40,6 +40,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - Do not start coding without a GitHub Issue and branch. Roadmap text is not a start signal
 - Grill (`.cursor/skills/grilling`) when design still branches; skip when the Issue already has acceptance criteria and matches `docs/design.md`
 - Design-changing work needs a **design PR first** (typos/examples may ship with code)
+- A sentence in `docs/design.md` is a past decision, not proof it is still best. Propose the current optimum. If it differs, change the design. Do not add public API only to keep an older shape (`.cursor/rules/design-docs.mdc`)
 - Branch: `type/<issue-number>-<slug>`
 - Commits / PR titles: Conventional Commits (Japanese subject OK)
 - Local verification gate: `./build.ps1` against **`Txfio.slnx`** on Windows

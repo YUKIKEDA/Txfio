@@ -9,7 +9,7 @@ public readonly record struct TransferProgress
     /// 書き終えたバイト数と、開始時点の残りバイト数を指定する
     /// </summary>
     /// <param name="bytesCopied">.txnew に書き終えたバイト数</param>
-    /// <param name="totalBytes">開始時点の残りバイト数。不明なときは null</param>
+    /// <param name="totalBytes">開始時点の残りバイト数（不明なときは null）</param>
     public TransferProgress(long bytesCopied, long? totalBytes)
     {
         BytesCopied = bytesCopied;
@@ -22,7 +22,7 @@ public readonly record struct TransferProgress
     public long BytesCopied { get; }
 
     /// <summary>
-    /// 開始時点の残りバイト数。不明なときは null
+    /// 開始時点の残りバイト数（不明なときは null）
     /// </summary>
     public long? TotalBytes { get; }
 }

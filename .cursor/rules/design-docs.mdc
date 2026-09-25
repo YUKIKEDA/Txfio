@@ -19,3 +19,14 @@ alwaysApply: true
 - Do not implement first and "update the design later"
 
 When implementing, follow `docs/design.md`. If code and design conflict, stop and fix the design via the process above.
+
+## Judge the current optimum
+
+`docs/design.md` records a decision made at that time. It is not proof that the decision is still the best one.
+
+When proposing or defending a design:
+
+- Recommend the best solution for the problem as it stands now
+- Do not cite an existing sentence as the reason to keep that shape
+- Do not add public API only so an older shape can stay
+- If the written decision is no longer the best one, say so and change `docs/design.md` through the process above
