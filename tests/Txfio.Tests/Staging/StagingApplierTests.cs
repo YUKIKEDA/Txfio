@@ -125,6 +125,82 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
+    /// 移動元も移動先も無いと Missing になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル移動とディレクトリ移動のそれぞれで、移動元も移動先も無い</para>
+    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
+    /// <para>期待: どちらも失敗し、理由は Missing</para>
+    /// </remarks>
+    [Fact]
+    public void TryMove_移動元も移動先も無いとMissingになること()
+    {
+        string missingFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-file-" + Guid.NewGuid().ToString("N"));
+        string missingDest = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-dest-" + Guid.NewGuid().ToString("N"));
+        string missingDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-dir-" + Guid.NewGuid().ToString("N"));
+        string missingDirDest = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-dir-dest-" + Guid.NewGuid().ToString("N"));
+
+        Assert.False(InvokeMove("TryMove", missingFile, missingDest, out OperationFailureReason fileReason));
+        Assert.Equal(OperationFailureReason.Missing, fileReason);
+        Assert.False(InvokeMove("TryMoveDirectory", missingDir, missingDirDest, out OperationFailureReason directoryReason));
+        Assert.Equal(OperationFailureReason.Missing, directoryReason);
+    }
+
+    /// <summary>
+    /// 移動元が無く移動先が別の種類だと AlreadyExists になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル移動の移動先だけディレクトリ、ディレクトリ移動の移動先だけファイルがある</para>
+    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
+    /// <para>期待: どちらも失敗し、理由は AlreadyExists、移動先は残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryMove_移動元が無く移動先が別種類ならAlreadyExistsになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string missingFile = System.IO.Path.Combine(work.Path, "gone.txt");
+        string destDir = System.IO.Path.Combine(work.Path, "dest-dir");
+        Directory.CreateDirectory(destDir);
+        string missingDir = System.IO.Path.Combine(work.Path, "gone-dir");
+        string destFile = System.IO.Path.Combine(work.Path, "dest.txt");
+        await File.WriteAllTextAsync(destFile, "block");
+
+        Assert.False(InvokeMove("TryMove", missingFile, destDir, out OperationFailureReason fileReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, fileReason);
+        Assert.True(Directory.Exists(destDir));
+        Assert.False(InvokeMove("TryMoveDirectory", missingDir, destFile, out OperationFailureReason directoryReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, directoryReason);
+        Assert.True(File.Exists(destFile));
+    }
+
+    /// <summary>
+    /// .txnew が無く Before だけ一致すると IoFailure になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Update の対象ファイルがあり Before は一致し、.txnew は無い</para>
+    /// <para>手順: TryApplyStagedFile を呼ぶ</para>
+    /// <para>期待: 失敗し、理由は IoFailure、対象は元の内容のまま</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryApplyStagedFile_txnewが無くBeforeだけ一致するとIoFailureになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string path = System.IO.Path.Combine(work.Path, "a.txt");
+        string staging = System.IO.Path.Combine(work.Path, "a.txt.txnew");
+        await File.WriteAllTextAsync(path, "old");
+        JournalOperation operation = new JournalOperation(
+            PendingChangeKind.Update,
+            path,
+            staging,
+            before: PathState.Capture(path),
+            after: new PathState(exists: true, length: 1, lastWriteTimeUtc: DateTime.UnixEpoch));
+
+        Assert.False(InvokeStaged(operation, out OperationFailureReason reason));
+        Assert.Equal(OperationFailureReason.IoFailure, reason);
+        Assert.Equal("old", await File.ReadAllTextAsync(path));
+    }
+
+    /// <summary>
     /// ディレクトリ削除の対象がファイルなら ReplacedByFile になる
     /// </summary>
     /// <remarks>
@@ -204,6 +280,17 @@ public sealed class StagingApplierTests
             methodName,
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         object?[] args = { path, null };
+        bool applied = (bool)method.Invoke(null, args)!;
+        reason = (OperationFailureReason)args[1]!;
+        return applied;
+    }
+
+    private static bool InvokeStaged(JournalOperation operation, out OperationFailureReason reason)
+    {
+        System.Reflection.MethodInfo method = typeof(StagingApplier).GetMethod(
+            "TryApplyStagedFile",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        object?[] args = { operation, null };
         bool applied = (bool)method.Invoke(null, args)!;
         reason = (OperationFailureReason)args[1]!;
         return applied;

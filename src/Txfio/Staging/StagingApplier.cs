@@ -369,6 +369,12 @@ internal static class StagingApplier
             return TryDeleteStaging(operation.StagingPath, out reason);
         }
 
+        if (!File.Exists(operation.StagingPath) && Matches(operation, after: false))
+        {
+            reason = OperationFailureReason.IoFailure;
+            return false;
+        }
+
         return false;
     }
 
@@ -403,7 +409,19 @@ internal static class StagingApplier
                 return false;
             }
 
-            return Directory.Exists(destPath);
+            if (Directory.Exists(destPath))
+            {
+                return true;
+            }
+
+            if (File.Exists(destPath))
+            {
+                reason = OperationFailureReason.AlreadyExists;
+                return false;
+            }
+
+            reason = OperationFailureReason.Missing;
+            return false;
         }
 
         if (File.Exists(destPath) || Directory.Exists(destPath))
@@ -440,7 +458,19 @@ internal static class StagingApplier
                 return false;
             }
 
-            return File.Exists(destPath);
+            if (File.Exists(destPath))
+            {
+                return true;
+            }
+
+            if (Directory.Exists(destPath))
+            {
+                reason = OperationFailureReason.AlreadyExists;
+                return false;
+            }
+
+            reason = OperationFailureReason.Missing;
+            return false;
         }
 
         if (File.Exists(destPath) || Directory.Exists(destPath))
