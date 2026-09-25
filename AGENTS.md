@@ -45,7 +45,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - Local verification gate: `./build.ps1` against **`Txfio.slnx`** on Windows
 - Layout: `src/Txfio` ↔ `tests/Txfio.Tests`, TFM `net8.0`, namespace `Txfio`
 - Private fields: `_camelCase`. Do not prefix members with `this.` unless needed for disambiguation
-- Comments (XML docs / inline) in **Japanese**; do not end them with `。` or `.`
+- Comments (XML docs / inline) in **Japanese**; no `。` or `.` mid-sentence or at the end. Wording that Gemini or a human already corrected lives in [`.cursor/skills/japanese-writing/SKILL.md`](.cursor/skills/japanese-writing/SKILL.md). Read it before writing comments, and add a new general rule there in the same change when a review finds one
 - New or changed `src/` XML docs: Gemini reviews natural Japanese before the PR is ready (`.cursor/rules/japanese-docs.mdc`)
 - Test methods use natural Japanese names plus 前提 / 手順 / 期待 in remarks
 - When a problem is pointed out, search for the same kind of gap before fixing only the cited spot (`.cursor/rules/similar-findings.mdc`)
