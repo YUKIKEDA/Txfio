@@ -118,7 +118,7 @@ public static class TransactionTextExtensions
     }
 
     /// <summary>
-    /// 文字列を書く。ディスク上にファイルが無ければ Add、あれば Update、Move の移動先も Update。エンコーディングは BOM なし UTF-8
+    /// 文字列を書く。コミット後の姿でファイルが無ければ Add、あれば Update。エンコーディングは BOM なし UTF-8
     /// </summary>
     /// <param name="transaction">対象のトランザクション</param>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
@@ -139,7 +139,7 @@ public static class TransactionTextExtensions
     }
 
     /// <summary>
-    /// 文字列を、指定したエンコーディングで書く。ディスク上にファイルが無ければ Add、あれば Update、Move の移動先も Update
+    /// 文字列を、指定したエンコーディングで書く。コミット後の姿でファイルが無ければ Add、あれば Update
     /// </summary>
     /// <param name="transaction">対象のトランザクション</param>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
@@ -171,7 +171,7 @@ public static class TransactionTextExtensions
     }
 
     /// <summary>
-    /// 行を書く。ディスク上にファイルが無ければ Add、あれば Update、Move の移動先も Update。エンコーディングは BOM なし UTF-8
+    /// 行を書く。コミット後の姿でファイルが無ければ Add、あれば Update。エンコーディングは BOM なし UTF-8
     /// </summary>
     /// <param name="transaction">対象のトランザクション</param>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
@@ -192,7 +192,7 @@ public static class TransactionTextExtensions
     }
 
     /// <summary>
-    /// 行を、指定したエンコーディングで書く。ディスク上にファイルが無ければ Add、あれば Update、Move の移動先も Update
+    /// 行を、指定したエンコーディングで書く。コミット後の姿でファイルが無ければ Add、あれば Update
     /// </summary>
     /// <param name="transaction">対象のトランザクション</param>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
@@ -228,7 +228,7 @@ public static class TransactionTextExtensions
     }
 
     /// <summary>
-    /// メモリ上のバイトを書く。ディスク上にファイルが無ければ Add、あれば Update、Move の移動先も Update
+    /// メモリ上のバイトを書く。コミット後の姿でファイルが無ければ Add、あれば Update
     /// </summary>
     /// <param name="transaction">対象のトランザクション</param>
     /// <param name="path">対象パス</param>
@@ -249,7 +249,7 @@ public static class TransactionTextExtensions
             throw new ArgumentException("Txfio のトランザクションである必要があります", nameof(transaction));
         }
 
-        if (concrete.FileExistsOnDisk(path) || concrete.IsMoveDestination(path))
+        if (concrete.FileExistsInCommitView(path))
         {
             return concrete.UpdateAsync(path, content, progress: null, cancellationToken);
         }

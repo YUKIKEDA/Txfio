@@ -73,44 +73,48 @@ public sealed class ReadTests
     }
 
     /// <summary>
-    /// Delete 予約中も本物を読む
+    /// Delete 予約中のファイルは無い
     /// </summary>
     /// <remarks>
     /// <para>前提: 既存ファイルを Delete 予約している</para>
     /// <para>手順: ReadAsync する</para>
-    /// <para>期待: 本物の内容が読める</para>
+    /// <para>期待: ExternalConflictException になり、ディスク上のファイルは残る</para>
     /// </remarks>
     [Fact]
-    public async Task ReadAsync_Delete予約中は本物を読むこと()
+    public async Task ReadAsync_Delete予約中はExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "keep");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
 
-        Assert.Equal("keep", await ReadTextAsync(tx, "a.txt"));
+        ExternalConflictException missing = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.ReadAsync("a.txt"));
+        Assert.Equal(target, missing.Path);
+        Assert.Equal("keep", await File.ReadAllTextAsync(target));
     }
 
     /// <summary>
-    /// Move の移動元は本物を読み、移動先は無い
+    /// Move の移動先は移動元のバイトを読み、移動元は無い
     /// </summary>
     /// <remarks>
     /// <para>前提: a.txt を b.txt へ Move 予約している</para>
     /// <para>手順: 移動元と移動先を ReadAsync する</para>
-    /// <para>期待: 移動元は本物の内容が読め、移動先は ExternalConflictException になり Path は b.txt の絶対パスである</para>
+    /// <para>期待: 移動先は移動元の内容が読め、移動元は ExternalConflictException になり Path は a.txt の絶対パスである</para>
     /// </remarks>
     [Fact]
-    public async Task ReadAsync_Moveの移動元は本物で移動先はExternalConflictExceptionになること()
+    public async Task ReadAsync_Moveの移動先は元のバイトで移動元はExternalConflictExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        string dest = System.IO.Path.Combine(work.Path, "b.txt");
-        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(source, "src");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
 
-        Assert.Equal("src", await ReadTextAsync(tx, "a.txt"));
-        ExternalConflictException missing = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.ReadAsync("b.txt"));
-        Assert.Equal(dest, missing.Path);
+        Assert.Equal("src", await ReadTextAsync(tx, "b.txt"));
+        ExternalConflictException missing = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.ReadAsync("a.txt"));
+        Assert.Equal(source, missing.Path);
+        Assert.Equal("src", await File.ReadAllTextAsync(source));
     }
 
     /// <summary>

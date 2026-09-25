@@ -280,7 +280,7 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ステージング済みならその内容を、無ければ本物のファイルを開く
+    /// コミット後の姿のファイルを開く
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
@@ -290,6 +290,16 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="InvalidOperationException">呼び出しが重なっている、メタデータ配下である、またはコミット済みである</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// コミット後の姿で、ファイルかディレクトリがあるかを返す
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
+    /// <returns>ファイルかディレクトリがあるなら <see langword="true"/></returns>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、メタデータ配下である、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// ステージングした変更をワークフォルダへ確定する
