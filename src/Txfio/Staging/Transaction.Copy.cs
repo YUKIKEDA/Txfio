@@ -12,6 +12,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);

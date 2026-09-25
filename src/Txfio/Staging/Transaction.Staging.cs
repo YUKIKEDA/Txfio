@@ -6,28 +6,33 @@ namespace Txfio;
 internal sealed partial class Transaction
 {
     /// <inheritdoc />
-    public Task AddAsync(
+    public async Task AddAsync(
         string path,
         Stream content,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return StageAsync(PendingChangeKind.Add, path, content, progress, cancellationToken);
+        using CallScope scope = EnterCall();
+        await StageAsync(PendingChangeKind.Add, path, content, progress, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public Task UpdateAsync(
+    public async Task UpdateAsync(
         string path,
         Stream content,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return StageAsync(PendingChangeKind.Update, path, content, progress, cancellationToken);
+        using CallScope scope = EnterCall();
+        await StageAsync(PendingChangeKind.Update, path, content, progress, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public async Task DeleteAsync(string path, CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
@@ -131,6 +136,7 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task DeleteTreeAsync(string path, CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
@@ -188,6 +194,7 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, oldPath);
         string destPath = WorkPath.ResolveInWorkFolder(_workFolder, newPath);

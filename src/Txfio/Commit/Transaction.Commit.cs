@@ -8,6 +8,7 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task<CommitResult> CommitAsync(CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
 

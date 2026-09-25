@@ -16,13 +16,14 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string archive = WorkPath.ResolveInWorkFolder(_workFolder, archivePath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, archive);
         string destination = ValidateExtractDestination(destinationDir);
         AcquireExtractLocks(destination);
-        await using Stream content = await ReadAsync(archive, cancellationToken).ConfigureAwait(false);
+        await using Stream content = ReadCore(archive, cancellationToken);
         await ExtractAsync(content, destination, entryNameEncoding, progress, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -35,6 +36,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalArchivePath);

@@ -8,6 +8,7 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);

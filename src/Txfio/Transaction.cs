@@ -15,6 +15,7 @@ internal sealed partial class Transaction : ITransaction
     private bool _committed;
     private bool _committingWritten;
     private bool _disposed;
+    private int _callDepth;
 
     /// <summary>
     /// 指定したワークフォルダとジャーナルでトランザクションを開始する
@@ -34,6 +35,7 @@ internal sealed partial class Transaction : ITransaction
     /// <inheritdoc />
     public IReadOnlyList<PendingChange> GetPendingChanges()
     {
+        using CallScope scope = EnterCall();
         ObjectDisposedException.ThrowIf(_disposed, this);
         PendingChange[] result = new PendingChange[_operations.Count];
         for (int i = 0; i < _operations.Count; i++)
@@ -48,6 +50,7 @@ internal sealed partial class Transaction : ITransaction
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        using CallScope scope = EnterCall();
         if (_disposed)
         {
             return;
@@ -85,6 +88,24 @@ internal sealed partial class Transaction : ITransaction
             _locks.Release();
             ReleaseLiveness();
         }
+    }
+
+    private CallScope EnterCall()
+    {
+        if (Interlocked.Increment(ref _callDepth) != 1)
+        {
+            Interlocked.Decrement(ref _callDepth);
+
+            // 入れなかった呼び出しは数えず、先に入った呼び出しを続ける
+            throw new InvalidOperationException("同じトランザクションへの呼び出しが重なっています");
+        }
+
+        return new CallScope(this);
+    }
+
+    private void ExitCall()
+    {
+        Interlocked.Decrement(ref _callDepth);
     }
 
     private void ThrowIfCannotMutate()
@@ -155,6 +176,31 @@ internal sealed partial class Transaction : ITransaction
         catch (UnauthorizedAccessException)
         {
             // ジャーナルが残っていれば、次の Recover が消す
+        }
+    }
+
+    /// <summary>
+    /// 公開呼び出しの監視をメソッド終了時に閉じる
+    /// </summary>
+    private readonly struct CallScope : IDisposable
+    {
+        private readonly Transaction _transaction;
+
+        /// <summary>
+        /// 重なりの監視を始める
+        /// </summary>
+        /// <param name="transaction">対象のトランザクション</param>
+        public CallScope(Transaction transaction)
+        {
+            _transaction = transaction;
+        }
+
+        /// <summary>
+        /// 公開呼び出しを 1 つ終える
+        /// </summary>
+        public void Dispose()
+        {
+            _transaction.ExitCall();
         }
     }
 }
