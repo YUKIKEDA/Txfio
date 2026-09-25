@@ -33,6 +33,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - [`.cursor/rules/engineering.mdc`](.cursor/rules/engineering.mdc)
 - [`.cursor/rules/design-docs.mdc`](.cursor/rules/design-docs.mdc)
 - [`.cursor/rules/japanese-docs.mdc`](.cursor/rules/japanese-docs.mdc)
+- [`.cursor/rules/similar-findings.mdc`](.cursor/rules/similar-findings.mdc)
 
 ## Working agreements (summary)
 
@@ -47,6 +48,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - Comments (XML docs / inline) in **Japanese**; do not end them with `。` or `.`
 - New or changed `src/` XML docs: Gemini reviews natural Japanese before the PR is ready (`.cursor/rules/japanese-docs.mdc`)
 - Test methods use natural Japanese names plus 前提 / 手順 / 期待 in remarks
+- When a problem is pointed out, search for the same kind of gap before fixing only the cited spot (`.cursor/rules/similar-findings.mdc`)
 
 ## Current backlog pointer
 
