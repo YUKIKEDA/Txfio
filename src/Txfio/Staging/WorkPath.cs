@@ -12,6 +12,7 @@ internal static class WorkPath
     /// <param name="path">相対または絶対の対象パス</param>
     /// <returns>正規化した絶対パス</returns>
     /// <exception cref="ArgumentException">ワークフォルダの外側を指している</exception>
+    /// <exception cref="InvalidOperationException">対象自身、またはワークフォルダ自身を除く祖先がリパースポイントである</exception>
     internal static string ResolveInWorkFolder(string workFolder, string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -24,6 +25,7 @@ internal static class WorkPath
             throw new ArgumentException("パスはワークフォルダの内側である必要があります", nameof(path));
         }
 
+        ThrowIfReparseInside(workFolder, fullPath);
         return fullPath;
     }
 
@@ -88,6 +90,39 @@ internal static class WorkPath
         return path.EndsWith(
             "." + transactionId.ToString("D") + ".txnew",
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ThrowIfReparseInside(string workFolder, string fullPath)
+    {
+        string root = System.IO.Path.TrimEndingDirectorySeparator(workFolder);
+        string? current = fullPath;
+        while (!string.IsNullOrEmpty(current))
+        {
+            string trimmed = System.IO.Path.TrimEndingDirectorySeparator(current);
+            if (string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (IsReparsePoint(trimmed))
+            {
+                throw new InvalidOperationException("リパースポイントは操作できません: " + trimmed);
+            }
+
+            current = System.IO.Path.GetDirectoryName(trimmed);
+        }
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return false;
+        }
     }
 
     private static bool IsInsideWorkFolder(string workFolder, string fullPath)
