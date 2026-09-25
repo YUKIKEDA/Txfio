@@ -193,7 +193,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - `SharingViolation` = 5。共有違反
 - `IoFailure` = 6。それ以外の IO 失敗（`UnauthorizedAccessException` を含む）
 
-検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`。`.txnew` をファイルとして読めないときは、検証でも `IoFailure` にする。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。
+検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`。`.txnew` をファイルとして読めないときは、検証でも `IoFailure` にする。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。適用中に移動先が既にあるときは `AlreadyExists`、ディレクトリの代わりにファイルがあるときは `ReplacedByFile` にする。`UnauthorizedAccessException` は `IoFailure` にする。
 
 `Failed` は実体に触れない（`CreateDirectory` がすでに作ったディレクトリを除く。失敗時の破棄は未コミットの Dispose と同じ）。ジャーナルは残り、コミット済みにはしない。同じトランザクションで、状態を直したあと `CommitAsync` を再度呼べる。`PartialConflict` はジャーナルと、適用しなかった操作の `.txnew` を消して確定する。同じインスタンスではやり直せない。共有違反で飛ばしたパスは、新しいトランザクションでやり直せる。`BeforeAfterMismatch` は、同じ書き込みを繰り返しても意図どおりには戻らない。ライブラリは共有違反を自動では再試行しない。
 

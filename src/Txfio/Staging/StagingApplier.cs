@@ -387,6 +387,7 @@ internal static class StagingApplier
         }
         catch (UnauthorizedAccessException)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
     }
@@ -401,6 +402,7 @@ internal static class StagingApplier
 
         if (File.Exists(destPath) || Directory.Exists(destPath))
         {
+            reason = OperationFailureReason.AlreadyExists;
             return false;
         }
 
@@ -431,6 +433,7 @@ internal static class StagingApplier
 
         if (File.Exists(destPath))
         {
+            reason = OperationFailureReason.AlreadyExists;
             return false;
         }
 
@@ -588,6 +591,7 @@ internal static class StagingApplier
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (File.Exists(path))
         {
+            reason = OperationFailureReason.ReplacedByFile;
             return false;
         }
 
@@ -618,6 +622,7 @@ internal static class StagingApplier
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (File.Exists(path))
         {
+            reason = OperationFailureReason.ReplacedByFile;
             return false;
         }
 
@@ -663,6 +668,7 @@ internal static class StagingApplier
         }
         catch (UnauthorizedAccessException)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
     }
