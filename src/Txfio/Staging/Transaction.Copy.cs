@@ -277,11 +277,11 @@ internal sealed partial class Transaction
         }
     }
 
-    private void DeleteCreatedDirectoriesFrom(int start, bool ignoreIoFailures)
+    private bool DeleteCreatedDirectoriesFrom(int start, bool ignoreIoFailures)
     {
         if (start < 0 || start >= _createdDirectories.Count)
         {
-            return;
+            return true;
         }
 
         List<string> pending = _createdDirectories.GetRange(start, _createdDirectories.Count - start);
@@ -296,6 +296,7 @@ internal sealed partial class Transaction
             return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
         });
 
+        bool succeeded = true;
         foreach (string path in pending)
         {
             try
@@ -310,12 +311,16 @@ internal sealed partial class Transaction
             catch (IOException) when (ignoreIoFailures)
             {
                 // 失敗したコピーの後始末では、元の例外を残す
+                succeeded = false;
             }
             catch (UnauthorizedAccessException) when (ignoreIoFailures)
             {
                 // 失敗したコピーの後始末では、元の例外を残す
+                succeeded = false;
             }
         }
+
+        return succeeded;
     }
 
     private sealed class PlannedCopyFile

@@ -137,12 +137,12 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ロールバック中にジャーナル削除が失敗してもロックは閉じる
+    /// ロールバック中にジャーナル削除が失敗してもロックは閉じ、例外は出さない
     /// </summary>
     /// <remarks>
     /// <para>前提: Add したあと、ジャーナルを共有なしで開いている</para>
-    /// <para>手順: DisposeAsync し、BeginAsync する。ジャーナルを閉じてから RecoverAsync し、別トランザクションが同じパスを Add する</para>
-    /// <para>期待: Dispose は IOException になり、BeginAsync は RecoveryRequiredException（Path はワークフォルダ）。Recover は RolledBack で、そのあと Add できる</para>
+    /// <para>手順: DisposeAsync し、BeginAsync したあと、ジャーナルを閉じてから RecoverAsync し、別トランザクションが同じパスを Add する</para>
+    /// <para>期待: DisposeAsync は例外を出さず、.txnew は消え、BeginAsync は RecoveryRequiredException（Path はワークフォルダ）であり、Recover は RolledBack であり、そのあと Add できる</para>
     /// </remarks>
     [WindowsFact("開いたファイルは削除できない")]
     public async Task DisposeAsync_ジャーナル削除に失敗してもロックを閉じること()
@@ -155,7 +155,8 @@ public sealed class PathLockTests
         using (FileStream hold = new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None))
         {
             Assert.True(hold.CanRead);
-            await Assert.ThrowsAsync<IOException>(async () => await first.DisposeAsync());
+            await first.DisposeAsync();
+            Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
 
             RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
                 () => global::Txfio.Txfio.BeginAsync(work.Path));

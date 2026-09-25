@@ -85,20 +85,59 @@ internal sealed partial class Transaction : ITransaction
 
         try
         {
+            bool cleanupSucceeded = true;
             foreach (JournalOperation operation in _operations)
             {
-                StagingFile.TryDelete(operation.StagingPath);
+                if (!TryCleanup(() => StagingFile.TryDelete(operation.StagingPath)))
+                {
+                    cleanupSucceeded = false;
+                }
             }
 
-            StagingApplier.DeleteCreateDirectoryTrees(_operations);
-            StagingApplier.DeleteStagingBackups(_workFolder, _transactionId);
-            DeleteCreatedDirectoriesFrom(0, ignoreIoFailures: false);
-            await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+            if (!StagingApplier.DeleteCreateDirectoryTrees(_operations, ignoreIoFailures: true))
+            {
+                cleanupSucceeded = false;
+            }
+
+            if (!StagingApplier.DeleteStagingBackups(_workFolder, _transactionId, ignoreIoFailures: true))
+            {
+                cleanupSucceeded = false;
+            }
+
+            if (!DeleteCreatedDirectoriesFrom(0, ignoreIoFailures: true))
+            {
+                cleanupSucceeded = false;
+            }
+
+            if (cleanupSucceeded)
+            {
+                try
+                {
+                    await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // ジャーナルは残し、Dispose からは投げない
+                }
+            }
         }
         finally
         {
             _locks.Release();
             ReleaseLiveness();
+        }
+    }
+
+    private static bool TryCleanup(Action action)
+    {
+        try
+        {
+            action();
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
