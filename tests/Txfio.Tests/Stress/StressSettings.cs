@@ -26,6 +26,11 @@ internal static class StressSettings
     public const string ProcessesVariable = "TXFIO_STRESS_PROCESSES";
 
     /// <summary>
+    /// 子プロセスが奪い合うファイルの数
+    /// </summary>
+    public const string FilesVariable = "TXFIO_STRESS_FILES";
+
+    /// <summary>
     /// 環境変数のシード。無ければ既定値
     /// </summary>
     /// <param name="defaultValue">環境変数が無いときの値</param>
@@ -45,6 +50,13 @@ internal static class StressSettings
     /// <param name="defaultValue">環境変数が無いときの値</param>
     /// <returns>プロセス数</returns>
     public static int Processes(int defaultValue) => Read(ProcessesVariable, defaultValue);
+
+    /// <summary>
+    /// 環境変数のファイル数。無ければ既定値
+    /// </summary>
+    /// <param name="defaultValue">環境変数が無いときの値</param>
+    /// <returns>ファイル数</returns>
+    public static int Files(int defaultValue) => Read(FilesVariable, defaultValue);
 
     private static int Read(string name, int defaultValue)
     {

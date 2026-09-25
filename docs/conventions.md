@@ -78,7 +78,8 @@ tests/Txfio.Tests/
 - 乱数で約束を確かめる耐久テストは `tests/Txfio.Tests/Stress/` に置く。対応する `src/` のフォルダは無い
   - ランダム操作列はメモリ上のモデルと比べ、失敗したら手を外して縮めた列を出す
   - 多プロセスの耐久は、テストの実行ファイル自身を子プロセスとして起動する（`Program.cs` の入口）
-  - 既定は通常の `dotnet test` で短く終わる規模にする。長く回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
+  - 既定は通常の `dotnet test` で短く終わる規模にする。長く回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES`、`TXFIO_STRESS_FILES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
+  - 多プロセスの耐久は、少数のファイルを待たずに奪い合う版（競合の組み合わせを増やす）と、多めのファイルを競合したらやり直す版（使い方に近い負荷）の 2 つを持つ。結果の件数はテストの出力に出る
   - 見つかった不具合はテストで隠さず、別 Issue にする
 
 ## 書式

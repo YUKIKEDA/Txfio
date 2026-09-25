@@ -27,6 +27,8 @@ internal sealed class StressProcess : IAsyncDisposable
     /// <param name="child">子の番号</param>
     /// <param name="transactions">繰り返すトランザクション数</param>
     /// <param name="seed">子の乱数のシード</param>
+    /// <param name="files">奪い合うファイルの数</param>
+    /// <param name="retry">ロック競合のあとやり直すなら true</param>
     /// <param name="logFile">結果を書く記録ファイル</param>
     /// <param name="startFile">できるまで待つ開始ファイル</param>
     /// <returns>起動した子プロセス</returns>
@@ -35,6 +37,8 @@ internal sealed class StressProcess : IAsyncDisposable
         int child,
         int transactions,
         int seed,
+        int files,
+        bool retry,
         string logFile,
         string startFile)
     {
@@ -53,6 +57,8 @@ internal sealed class StressProcess : IAsyncDisposable
         start.ArgumentList.Add(child.ToString(CultureInfo.InvariantCulture));
         start.ArgumentList.Add(transactions.ToString(CultureInfo.InvariantCulture));
         start.ArgumentList.Add(seed.ToString(CultureInfo.InvariantCulture));
+        start.ArgumentList.Add(files.ToString(CultureInfo.InvariantCulture));
+        start.ArgumentList.Add(retry ? "1" : "0");
         start.ArgumentList.Add(logFile);
         start.ArgumentList.Add(startFile);
 
