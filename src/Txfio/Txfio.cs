@@ -12,6 +12,7 @@ public static class Txfio
     /// <param name="cancellationToken">開始処理を取り消すトークン</param>
     /// <returns>開始したトランザクション</returns>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
     public static Task<ITransaction> BeginAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -26,6 +27,7 @@ public static class Txfio
     /// <param name="cancellationToken">開始処理を取り消すトークン</param>
     /// <returns>開始したトランザクション</returns>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
     public static Task<ITransaction> BeginAsync(
         string path,
@@ -44,6 +46,7 @@ public static class Txfio
     /// <returns>開始したトランザクション</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
     public static Task<ITransaction> BeginAsync(string path, TimeSpan lockWait, CancellationToken cancellationToken = default)
     {
@@ -60,6 +63,7 @@ public static class Txfio
     /// <returns>開始したトランザクション</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
     public static async Task<ITransaction> BeginAsync(
         string path,
@@ -73,11 +77,7 @@ public static class Txfio
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        string workFolder = System.IO.Path.GetFullPath(path);
-        if (!Directory.Exists(workFolder))
-        {
-            throw new ExternalConflictException("ワークフォルダが存在しません: " + workFolder, workFolder);
-        }
+        string workFolder = NormalizeWorkFolder(path);
 
         cancellationToken.ThrowIfCancellationRequested();
         EnsureMetadataFolder(workFolder);
@@ -108,6 +108,7 @@ public static class Txfio
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
     /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="LockContentionException">他のトランザクションがワークフォルダを押さえている</exception>
     /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
     public static Task<RecoverReport> RecoverAsync(string path, CancellationToken cancellationToken = default)
@@ -124,6 +125,7 @@ public static class Txfio
     /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="LockContentionException">期限までにワークフォルダを押さえられない</exception>
     /// <exception cref="OperationCanceledException">ワークフォルダ全体のロックを待っているあいだに取り消された</exception>
     /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
@@ -135,13 +137,20 @@ public static class Txfio
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string workFolder = NormalizeWorkFolder(path);
+
+        return await RecoverService.RecoverAsync(workFolder, lockWait, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string NormalizeWorkFolder(string path)
+    {
         string workFolder = System.IO.Path.GetFullPath(path);
         if (!Directory.Exists(workFolder))
         {
             throw new ExternalConflictException("ワークフォルダが存在しません: " + workFolder, workFolder);
         }
 
-        return await RecoverService.RecoverAsync(workFolder, lockWait, cancellationToken).ConfigureAwait(false);
+        return WorkPath.ToLongPath(workFolder);
     }
 
     private static void EnsureMetadataFolder(string workFolder)

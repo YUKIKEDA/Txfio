@@ -1,3 +1,7 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
 namespace Txfio;
 
 /// <summary>
@@ -13,13 +17,14 @@ internal static class WorkPath
     /// <returns>正規化した絶対パス</returns>
     /// <exception cref="ArgumentException">ワークフォルダの外側を指している</exception>
     /// <exception cref="InvalidOperationException">対象自身、またはワークフォルダ自身を除く祖先がリパースポイントである</exception>
+    /// <exception cref="IOException">存在する要素の長い名前を取れない</exception>
     internal static string ResolveInWorkFolder(string workFolder, string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string combined = System.IO.Path.IsPathRooted(path)
             ? path
             : System.IO.Path.Combine(workFolder, path);
-        string fullPath = System.IO.Path.GetFullPath(combined);
+        string fullPath = ToLongPath(System.IO.Path.GetFullPath(combined));
         if (!IsInsideWorkFolder(workFolder, fullPath))
         {
             throw new ArgumentException("パスはワークフォルダの内側である必要があります", nameof(path));
@@ -91,6 +96,74 @@ internal static class WorkPath
             "." + transactionId.ToString("D") + ".txnew",
             StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// 存在する要素を長い名前へ揃える（まだ無い末尾の名前はそのまま残す）
+    /// </summary>
+    /// <param name="fullPath">絶対パス</param>
+    /// <returns>長い名前へ揃えた絶対パス</returns>
+    /// <exception cref="IOException">存在する要素の長い名前を取れない</exception>
+    internal static string ToLongPath(string fullPath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return fullPath;
+        }
+
+        string? suffix = null;
+        string current = fullPath;
+        while (true)
+        {
+            string trimmed = System.IO.Path.TrimEndingDirectorySeparator(current);
+            if (TryQueryLongPath(trimmed, out string longPath))
+            {
+                return suffix is null ? longPath : System.IO.Path.Combine(longPath, suffix);
+            }
+
+            string? parent = System.IO.Path.GetDirectoryName(trimmed);
+            if (string.IsNullOrEmpty(parent)
+                || string.Equals(parent, trimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                return fullPath;
+            }
+
+            string name = System.IO.Path.GetFileName(trimmed);
+            suffix = suffix is null ? name : System.IO.Path.Combine(name, suffix);
+            current = parent;
+        }
+    }
+
+    private static bool TryQueryLongPath(string path, out string longPath)
+    {
+        var buffer = new StringBuilder(Math.Max(path.Length + 1, 260));
+        while (true)
+        {
+            uint length = GetLongPathName(path, buffer, (uint)buffer.Capacity);
+            if (length == 0)
+            {
+                int error = Marshal.GetLastWin32Error();
+                if (error is 2 or 3)
+                {
+                    longPath = string.Empty;
+                    return false;
+                }
+
+                int hresult = error <= 0 ? error : unchecked((int)(0x80070000 | error));
+                throw new IOException(new Win32Exception(error).Message, hresult);
+            }
+
+            if (length < buffer.Capacity)
+            {
+                longPath = buffer.ToString();
+                return true;
+            }
+
+            buffer.Capacity = (int)length;
+        }
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetLongPathNameW", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern uint GetLongPathName(string shortPath, StringBuilder longPath, uint bufferLength);
 
     private static void ThrowIfReparseInside(string workFolder, string fullPath)
     {
