@@ -12,12 +12,14 @@ internal static class OperationOutcomes
     /// <param name="transactionId">ディレクトリ直下の検証に使うトランザクション ID</param>
     /// <param name="stamped">状態を付けた操作一覧（失敗時は空）</param>
     /// <param name="rejections">検証で拒んだ操作（成功時は空）</param>
+    /// <param name="isExternalChange">記録と違う Update（または畳んだ残り）のとき <see langword="true"/>（null は比べない）</param>
     /// <returns>すべて記録できたら <see langword="true"/></returns>
     internal static bool TryStamp(
         IReadOnlyList<JournalOperation> operations,
         Guid transactionId,
         out JournalOperation[] stamped,
-        out OperationReport[] rejections)
+        out OperationReport[] rejections,
+        Func<JournalOperation, bool>? isExternalChange = null)
     {
         JournalOperation[] result = operations.ToArray();
         Dictionary<JournalOperation, int> indexByOperation = new Dictionary<JournalOperation, int>(
@@ -34,6 +36,15 @@ internal static class OperationOutcomes
             if (!TryProject(operation, result, transactionId, projected, out JournalOperation next, out OperationFailureReason reason))
             {
                 rejected.Add(OperationReport.Create(operation, OperationDisposition.Rejected, reason));
+                continue;
+            }
+
+            if (isExternalChange is not null && isExternalChange(operation))
+            {
+                rejected.Add(OperationReport.Create(
+                    operation,
+                    OperationDisposition.Rejected,
+                    OperationFailureReason.ExternalChange));
                 continue;
             }
 

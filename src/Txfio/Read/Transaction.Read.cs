@@ -59,7 +59,9 @@ internal sealed partial class Transaction
             throw new UnsupportedOperationException("ディレクトリの読み取りは未対応です: " + targetPath);
         }
 
-        return OpenRead(appearance.ContentPath, targetPath);
+        Stream stream = OpenRead(appearance.ContentPath, targetPath);
+        _externalChanges?.NoteRead(_operations, targetPath, appearance.ContentPath, _transactionId);
+        return stream;
     }
 
     private string? FindStagingPath(string targetPath)

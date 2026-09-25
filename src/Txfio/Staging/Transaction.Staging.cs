@@ -828,10 +828,21 @@ internal sealed partial class Transaction
         _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, targetPath);
         StagingRules.EnsureParentDirectoryExists(targetPath);
+        if (kind == PendingChangeKind.Update)
+        {
+            _externalChanges?.NoteUpdate(_operations, targetPath, _transactionId);
+        }
+
         if (moveToIndex >= 0)
         {
+            string sourcePath = _operations[moveToIndex].Path;
             await FoldMoveDestinationUpdateAsync(moveToIndex, targetPath, content, progress, cancellationToken)
                 .ConfigureAwait(false);
+            if (kind == PendingChangeKind.Update)
+            {
+                _externalChanges?.NoteFoldedUpdate(targetPath, sourcePath);
+            }
+
             return;
         }
 
