@@ -100,7 +100,7 @@ public sealed class PathLockTests
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
             await tx.AddAsync("a.txt", content);
-            Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+            Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         }
 
         Assert.True(File.Exists(lockFile));
@@ -144,7 +144,7 @@ public sealed class PathLockTests
     /// <para>手順: DisposeAsync し、BeginAsync する。ジャーナルを閉じてから RecoverAsync し、別トランザクションが同じパスを Add する</para>
     /// <para>期待: Dispose は IOException になり、BeginAsync は RecoveryRequiredException（Path はワークフォルダ）。Recover は RolledBack で、そのあと Add できる</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("開いたファイルは削除できない")]
     public async Task DisposeAsync_ジャーナル削除に失敗してもロックを閉じること()
     {
         await using TempDirectory work = TempDirectory.Create();
@@ -162,7 +162,7 @@ public sealed class PathLockTests
             Assert.Equal(work.Path, required.Path);
         }
 
-        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
 
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream again = LeftoverAddFiles.Utf8Stream("other");

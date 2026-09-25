@@ -44,9 +44,255 @@ public sealed class StagingApplierTests
                 destAfter: sourceState),
         };
 
-        Assert.True(StagingApplier.TryApplyAll(operations));
+        Assert.True(StagingApplier.TryApplyAll(operations, out _));
         Assert.False(File.Exists(source));
         Assert.Equal("updated", await File.ReadAllTextAsync(dest));
         Assert.False(File.Exists(staging));
+    }
+
+    /// <summary>
+    /// 移動先が既にあると AlreadyExists になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイルとディレクトリのそれぞれで、移動元と移動先の両方が存在する</para>
+    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
+    /// <para>期待: どちらも失敗し、理由は AlreadyExists、移動元は残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryMove_移動先があるとAlreadyExistsになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string fileSource = System.IO.Path.Combine(work.Path, "a.txt");
+        string fileDest = System.IO.Path.Combine(work.Path, "b.txt");
+        File.WriteAllText(fileSource, "old");
+        File.WriteAllText(fileDest, "block");
+        string dirSource = System.IO.Path.Combine(work.Path, "src");
+        string dirDest = System.IO.Path.Combine(work.Path, "dst");
+        Directory.CreateDirectory(dirSource);
+        Directory.CreateDirectory(dirDest);
+
+        Assert.False(InvokeMove("TryMove", fileSource, fileDest, out OperationFailureReason fileReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, fileReason);
+        Assert.True(File.Exists(fileSource));
+
+        Assert.False(InvokeMove("TryMoveDirectory", dirSource, dirDest, out OperationFailureReason directoryReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, directoryReason);
+        Assert.True(Directory.Exists(dirSource));
+    }
+
+    /// <summary>
+    /// ファイルとディレクトリを取り違えると、種類に合った理由になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル移動の移動先がディレクトリ、ファイル移動の移動元がディレクトリかつ移動先がファイル、ディレクトリ移動の移動元がファイルかつ移動先がディレクトリ、ファイル削除の対象がディレクトリである</para>
+    /// <para>手順: TryMove、TryMoveDirectory、TryDeleteFile を呼ぶ</para>
+    /// <para>期待: どれも失敗し、ファイル移動の移動先がディレクトリなら AlreadyExists、それ以外は ReplacedByFile、元のパスは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryApply_種類が違うと理由が付くこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string file = System.IO.Path.Combine(work.Path, "a.txt");
+        string destDir = System.IO.Path.Combine(work.Path, "dest-dir");
+        await File.WriteAllTextAsync(file, "old");
+        Directory.CreateDirectory(destDir);
+
+        Assert.False(InvokeMove("TryMove", file, destDir, out OperationFailureReason destReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, destReason);
+        Assert.True(File.Exists(file));
+
+        string sourceDir = System.IO.Path.Combine(work.Path, "source-dir");
+        string destFile = System.IO.Path.Combine(work.Path, "b.txt");
+        Directory.CreateDirectory(sourceDir);
+        await File.WriteAllTextAsync(destFile, "block");
+        Assert.False(InvokeMove("TryMove", sourceDir, destFile, out OperationFailureReason sourceReason));
+        Assert.Equal(OperationFailureReason.ReplacedByFile, sourceReason);
+        Assert.True(Directory.Exists(sourceDir));
+
+        string replaced = System.IO.Path.Combine(work.Path, "replaced");
+        string movedDir = System.IO.Path.Combine(work.Path, "moved");
+        await File.WriteAllTextAsync(replaced, "file");
+        Directory.CreateDirectory(movedDir);
+        Assert.False(InvokeMove("TryMoveDirectory", replaced, movedDir, out OperationFailureReason replacedReason));
+        Assert.Equal(OperationFailureReason.ReplacedByFile, replacedReason);
+        Assert.True(File.Exists(replaced));
+
+        string deleteTarget = System.IO.Path.Combine(work.Path, "delete-me");
+        Directory.CreateDirectory(deleteTarget);
+        Assert.False(InvokePath("TryDeleteFile", deleteTarget, out OperationFailureReason deleteReason));
+        Assert.Equal(OperationFailureReason.ReplacedByFile, deleteReason);
+        Assert.True(Directory.Exists(deleteTarget));
+    }
+
+    /// <summary>
+    /// 移動元も移動先も無いと Missing になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル移動とディレクトリ移動のそれぞれで、移動元も移動先も無い</para>
+    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
+    /// <para>期待: どちらも失敗し、理由は Missing</para>
+    /// </remarks>
+    [Fact]
+    public void TryMove_移動元も移動先も無いとMissingになること()
+    {
+        string missingFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-file-" + Guid.NewGuid().ToString("N"));
+        string missingDest = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-dest-" + Guid.NewGuid().ToString("N"));
+        string missingDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-dir-" + Guid.NewGuid().ToString("N"));
+        string missingDirDest = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-dir-dest-" + Guid.NewGuid().ToString("N"));
+
+        Assert.False(InvokeMove("TryMove", missingFile, missingDest, out OperationFailureReason fileReason));
+        Assert.Equal(OperationFailureReason.Missing, fileReason);
+        Assert.False(InvokeMove("TryMoveDirectory", missingDir, missingDirDest, out OperationFailureReason directoryReason));
+        Assert.Equal(OperationFailureReason.Missing, directoryReason);
+    }
+
+    /// <summary>
+    /// 移動元が無く移動先が別の種類だと AlreadyExists になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル移動の移動先だけディレクトリ、ディレクトリ移動の移動先だけファイルがある</para>
+    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
+    /// <para>期待: どちらも失敗し、理由は AlreadyExists、移動先は残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryMove_移動元が無く移動先が別種類ならAlreadyExistsになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string missingFile = System.IO.Path.Combine(work.Path, "gone.txt");
+        string destDir = System.IO.Path.Combine(work.Path, "dest-dir");
+        Directory.CreateDirectory(destDir);
+        string missingDir = System.IO.Path.Combine(work.Path, "gone-dir");
+        string destFile = System.IO.Path.Combine(work.Path, "dest.txt");
+        await File.WriteAllTextAsync(destFile, "block");
+
+        Assert.False(InvokeMove("TryMove", missingFile, destDir, out OperationFailureReason fileReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, fileReason);
+        Assert.True(Directory.Exists(destDir));
+        Assert.False(InvokeMove("TryMoveDirectory", missingDir, destFile, out OperationFailureReason directoryReason));
+        Assert.Equal(OperationFailureReason.AlreadyExists, directoryReason);
+        Assert.True(File.Exists(destFile));
+    }
+
+    /// <summary>
+    /// .txnew が無く Before だけ一致すると IoFailure になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Update の対象ファイルがあり Before は一致し、.txnew は無い</para>
+    /// <para>手順: TryApplyStagedFile を呼ぶ</para>
+    /// <para>期待: 失敗し、理由は IoFailure、対象は元の内容のまま</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryApplyStagedFile_txnewが無くBeforeだけ一致するとIoFailureになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string path = System.IO.Path.Combine(work.Path, "a.txt");
+        string staging = System.IO.Path.Combine(work.Path, "a.txt.txnew");
+        await File.WriteAllTextAsync(path, "old");
+        JournalOperation operation = new JournalOperation(
+            PendingChangeKind.Update,
+            path,
+            staging,
+            before: PathState.Capture(path),
+            after: new PathState(exists: true, length: 1, lastWriteTimeUtc: DateTime.UnixEpoch));
+
+        Assert.False(InvokeStaged(operation, out OperationFailureReason reason));
+        Assert.Equal(OperationFailureReason.IoFailure, reason);
+        Assert.Equal("old", await File.ReadAllTextAsync(path));
+    }
+
+    /// <summary>
+    /// ディレクトリ削除の対象がファイルなら ReplacedByFile になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: DeleteTree と Delete の対象パスがファイルである</para>
+    /// <para>手順: TryDeleteTree と TryDeleteDirectory を呼ぶ</para>
+    /// <para>期待: どちらも失敗し、理由は ReplacedByFile、ファイルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryDelete_対象がファイルならReplacedByFileになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string tree = System.IO.Path.Combine(work.Path, "tree");
+        string directory = System.IO.Path.Combine(work.Path, "dir");
+        await File.WriteAllTextAsync(tree, "file");
+        await File.WriteAllTextAsync(directory, "file");
+
+        Assert.False(InvokePath("TryDeleteTree", tree, out OperationFailureReason treeReason));
+        Assert.Equal(OperationFailureReason.ReplacedByFile, treeReason);
+        Assert.False(InvokePath("TryDeleteDirectory", directory, out OperationFailureReason directoryReason));
+        Assert.Equal(OperationFailureReason.ReplacedByFile, directoryReason);
+        Assert.True(File.Exists(tree));
+        Assert.True(File.Exists(directory));
+    }
+
+    /// <summary>
+    /// 読み取り専用ファイルの削除は IoFailure になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 削除対象のファイルと .txnew が読み取り専用である</para>
+    /// <para>手順: TryDeleteFile と TryDeleteStaging を呼ぶ</para>
+    /// <para>期待: どちらも失敗し、理由は IoFailure、ファイルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task TryDelete_読み取り専用はIoFailureになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string file = System.IO.Path.Combine(work.Path, "a.txt");
+        string staging = System.IO.Path.Combine(work.Path, "a.txt.txnew");
+        await File.WriteAllTextAsync(file, "old");
+        await File.WriteAllTextAsync(staging, "staged");
+        File.SetAttributes(file, FileAttributes.ReadOnly);
+        File.SetAttributes(staging, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.False(InvokePath("TryDeleteFile", file, out OperationFailureReason fileReason));
+            Assert.Equal(OperationFailureReason.IoFailure, fileReason);
+            Assert.False(InvokePath("TryDeleteStaging", staging, out OperationFailureReason stagingReason));
+            Assert.Equal(OperationFailureReason.IoFailure, stagingReason);
+            Assert.True(File.Exists(file));
+            Assert.True(File.Exists(staging));
+        }
+        finally
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+            File.SetAttributes(staging, FileAttributes.Normal);
+        }
+    }
+
+    private static bool InvokeMove(
+        string methodName,
+        string source,
+        string dest,
+        out OperationFailureReason reason)
+    {
+        System.Reflection.MethodInfo method = typeof(StagingApplier).GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        object?[] args = { source, dest, null };
+        bool applied = (bool)method.Invoke(null, args)!;
+        reason = (OperationFailureReason)args[2]!;
+        return applied;
+    }
+
+    private static bool InvokePath(string methodName, string path, out OperationFailureReason reason)
+    {
+        System.Reflection.MethodInfo method = typeof(StagingApplier).GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        object?[] args = { path, null };
+        bool applied = (bool)method.Invoke(null, args)!;
+        reason = (OperationFailureReason)args[1]!;
+        return applied;
+    }
+
+    private static bool InvokeStaged(JournalOperation operation, out OperationFailureReason reason)
+    {
+        System.Reflection.MethodInfo method = typeof(StagingApplier).GetMethod(
+            "TryApplyStagedFile",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        object?[] args = { operation, null };
+        bool applied = (bool)method.Invoke(null, args)!;
+        reason = (OperationFailureReason)args[1]!;
+        return applied;
     }
 }

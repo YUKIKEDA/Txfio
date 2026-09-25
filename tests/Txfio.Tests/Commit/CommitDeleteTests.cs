@@ -21,8 +21,8 @@ public sealed class CommitDeleteTests
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(File.Exists(target));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -44,8 +44,8 @@ public sealed class CommitDeleteTests
         await tx.AddAsync("a.txt", content);
         await tx.DeleteAsync("a.txt");
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
     }
 
@@ -68,8 +68,8 @@ public sealed class CommitDeleteTests
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("a.txt", content);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
     }
 
@@ -91,8 +91,8 @@ public sealed class CommitDeleteTests
         await tx.DeleteAsync("a.txt");
         File.Delete(target);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Failed, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Failed, result.Result);
         Assert.False(File.Exists(target));
         Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }

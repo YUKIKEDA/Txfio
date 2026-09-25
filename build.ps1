@@ -1,12 +1,12 @@
 # Local verification gate (source of truth while GitHub Actions may be restricted).
 # Usage: ./build.ps1
-# Windows only. On Linux do not run this script; restore/build/format only (see AGENTS.md).
+# Windows only. On Linux do not run this script; run restore/format/build/test directly (see AGENTS.md).
 # Exits non-zero on failure.
 
 $ErrorActionPreference = "Stop"
 
 if ($env:OS -ne "Windows_NT") {
-    Write-Error "build.ps1 is Windows-only. On Linux run restore, format --verify-no-changes, and build; do not treat tests as the merge gate."
+    Write-Error "build.ps1 is Windows-only. On Linux run restore, format --verify-no-changes, build, and test; Linux tests are a pre-PR check, not the merge gate."
     exit 1
 }
 

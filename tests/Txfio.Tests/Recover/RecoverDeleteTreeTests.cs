@@ -19,8 +19,8 @@ public sealed class RecoverDeleteTreeTests
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteDeleteTreeAsync(work.Path, committing: false);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledBack, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
         Assert.True(Directory.Exists(target));
         Assert.True(File.Exists(System.IO.Path.Combine(target, "a.txt")));
@@ -40,8 +40,8 @@ public sealed class RecoverDeleteTreeTests
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteDeleteTreeAsync(work.Path, committing: true);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(Directory.Exists(target));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -62,8 +62,8 @@ public sealed class RecoverDeleteTreeTests
         Directory.Delete(target, recursive: true);
         await File.WriteAllTextAsync(target, "file");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.ConflictDetected, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.Equal("file", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }

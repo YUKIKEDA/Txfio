@@ -30,7 +30,7 @@ public sealed class CreateArchiveTests
         PendingChange pending = Assert.Single(tx.GetPendingChanges());
         Assert.Equal(PendingChangeKind.Add, pending.Kind);
         Assert.False(File.Exists(archive));
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Dictionary<string, string> entries = await ReadEntriesAsync(archive);
         Assert.Equal(new[] { "a.txt", "empty/", "sub/b.txt" }, entries.Keys.Order(StringComparer.Ordinal));
         Assert.Equal("alpha", entries["a.txt"]);
@@ -57,7 +57,7 @@ public sealed class CreateArchiveTests
         await tx.CreateArchiveAsync("tree", "tree.zip", includeBaseDirectory: true);
         await tx.CreateArchiveAsync("blank", "blank.zip", includeBaseDirectory: true);
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Dictionary<string, string> tree = await ReadEntriesAsync(System.IO.Path.Combine(work.Path, "tree.zip"));
         Dictionary<string, string> blank = await ReadEntriesAsync(System.IO.Path.Combine(work.Path, "blank.zip"));
         Assert.Equal("alpha", Assert.Single(tree, pair => pair.Key == "tree/a.txt").Value);
@@ -85,7 +85,7 @@ public sealed class CreateArchiveTests
 
         await tx.CreateArchiveAsync("a.txt", "a.zip", CompressionLevel.Fastest, includeBaseDirectory: true, progress);
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         using ZipArchive zip = ZipFile.OpenRead(System.IO.Path.Combine(work.Path, "a.zip"));
         ZipArchiveEntry entry = Assert.Single(zip.Entries);
         Assert.Equal("a.txt", entry.FullName);
@@ -111,7 +111,7 @@ public sealed class CreateArchiveTests
 
         await tx.CreateArchiveAsync("blank", "blank.zip", progress: progress);
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Empty(await ReadEntriesAsync(System.IO.Path.Combine(work.Path, "blank.zip")));
         Assert.Equal(new TransferProgress(0, null), Assert.Single(progress.Reports));
     }

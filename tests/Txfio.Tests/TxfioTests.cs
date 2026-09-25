@@ -90,8 +90,8 @@ public sealed class TxfioTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
 
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
         Assert.Empty(Directory.GetFiles(metadata, "tx-*.journal"));
@@ -109,8 +109,8 @@ public sealed class TxfioTests
     public async Task RecoverAsync_ジャーナルが無いとNoPendingTransactionsになること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.NoPendingTransactions, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.NoPendingTransactions, result.Result);
     }
 
     /// <summary>
@@ -127,8 +127,8 @@ public sealed class TxfioTests
         await using TempDirectory work = TempDirectory.Create();
         string journal = await WriteLeftoverJournalAsync(work.Path, committing: false);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledBack, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(journal));
     }
 
@@ -146,8 +146,8 @@ public sealed class TxfioTests
         await using TempDirectory work = TempDirectory.Create();
         string journal = await WriteLeftoverJournalAsync(work.Path, committing: true);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(journal));
     }
 

@@ -305,10 +305,10 @@ public interface ITransaction : IAsyncDisposable
     /// ステージングした変更をワークフォルダへ確定する
     /// </summary>
     /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
-    /// <returns>確定結果</returns>
+    /// <returns>全体の結果と、拒んだ操作または飛ばした操作</returns>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている。実体には触れず、未コミットのまま残る</exception>
     /// <exception cref="InvalidOperationException">呼び出しが重なっている、またはコミット済みである</exception>
-    Task<CommitResult> CommitAsync(CancellationToken cancellationToken = default);
+    Task<CommitReport> CommitAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 現在のジャーナル上の未確定操作一覧を返す

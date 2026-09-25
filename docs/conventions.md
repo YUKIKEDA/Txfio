@@ -82,6 +82,15 @@ tests/Txfio.Tests/
   - 多プロセスの耐久は、少数のファイルを待たずに奪い合う版（競合の組み合わせを増やす）と、多めのファイルを競合したらやり直す版（使い方に近い負荷）の 2 つを持つ。結果の件数はテストの出力に出る
   - 見つかった不具合はテストで隠さず、別 Issue にする
 
+### Windows 専用のテストと Linux での実行
+
+実行時に保証するのは Windows だけである（`docs/design.md`「対象プラットフォーム」）。ただし開発環境として、Linux でも `dotnet test` を回せるようにしておく。
+
+- Windows の挙動そのものに頼るテストは `[WindowsFact("理由")]`（`tests/Txfio.Tests/Support/`）にする。対象は、ジャンクション、ドライブ文字のパス、開いたままのファイルを rename や削除できないこと。Windows 以外では `Windows 専用: 理由` として Skip になる
+- パスの区切りはテストでも `/` か `Path.Combine` を使う。`\` は Linux ではファイル名の一部になる
+- Linux では、PR を出す前に `WindowsFact` 以外のテストがすべて通っていること。マージの関門は Windows の `./build.ps1` のままで、Windows では Skip は 0 件である
+- ロック競合の判定（`PathLockSet.IsSharingViolation`）は、Linux の EAGAIN（`HResult` = 11）も共有違反とみなす。テストを回すためのもので、実行時の保証ではない。macOS は実機で確かめるまで足さない
+
 ## 書式
 
 - 正本はリポジトリルートの `.editorconfig`

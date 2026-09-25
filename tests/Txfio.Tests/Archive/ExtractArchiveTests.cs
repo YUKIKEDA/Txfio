@@ -49,7 +49,7 @@ public sealed class ExtractArchiveTests
         Assert.Equal(2, pending.Count);
         Assert.All(pending, change => Assert.Equal(PendingChangeKind.Add, change.Kind));
         Assert.False(File.Exists(System.IO.Path.Combine(output, "a.txt")));
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("alpha", await File.ReadAllTextAsync(System.IO.Path.Combine(output, "a.txt")));
         Assert.Equal("beta", await File.ReadAllTextAsync(System.IO.Path.Combine(output, "sub", "b.txt")));
         Assert.True(Directory.Exists(System.IO.Path.Combine(output, "empty")));
@@ -74,7 +74,7 @@ public sealed class ExtractArchiveTests
 
         await tx.ExtractArchiveAsync("in.zip", "out", progress: progress);
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal(written, File.GetLastWriteTime(System.IO.Path.Combine(work.Path, "out", "a.txt")));
         Assert.All(progress.Reports, report => Assert.Equal(11, report.TotalBytes));
         Assert.Equal(11, progress.Reports[^1].BytesCopied);
@@ -99,7 +99,7 @@ public sealed class ExtractArchiveTests
 
         await tx.ExtractArchiveAsync("tree.zip", "copy");
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("alpha", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "copy", "a.txt")));
     }
 
@@ -155,7 +155,7 @@ public sealed class ExtractArchiveTests
 
         await tx.ImportArchiveAsync(archive, "out", shiftJis);
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("naiyou", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "out", "日本語.txt")));
         Assert.True(File.Exists(archive));
     }
