@@ -169,7 +169,7 @@ flowchart TD
 
 ## AddAsync
 
-`AddAsync` は、ディスク上にまだ無いファイルの内容を、同じディレクトリの `.txnew` へ書きます。本物のパスはコミットまで存在せず、コミットするとそのパスへ rename します。破棄すると `.txnew` だけ消えます。印を書く前に落ちると `.txnew` を消し、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
+`AddAsync` は、ディスク上にまだ無いファイルの内容を、同じディレクトリの `.txnew` へ書きます。本物のパスはコミットまで存在せず、コミットするとそのパスへ rename します。破棄すると `.txnew` だけ消えます。印を書く前に落ちると `.txnew` を消し、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。ファイル Move の移動元なら、ディスク上にファイルがまだあっても Add できます。ディレクトリ Move の移動元への Add は失敗します。
 
 ワークフォルダ全体は共有で押さえ、そのファイルもロックします。81920 バイト書くたびに `TransferProgress` を通知し、空の内容は最後に 1 回、0 バイトです。null の progress は通知しません。渡したストリームは閉じません。
 
@@ -181,8 +181,10 @@ await tx.AddAsync("big.bin", content);
 ```mermaid
 flowchart TD
   add["AddAsync"] --> exists{"ディスク上にファイルがある?"}
-  exists -->|ある| ext["ExternalConflictException"]
-  exists -->|無い| parent{"親ディレクトリがある?"}
+  exists -->|ある| moved{"ファイル Move の移動元?"}
+  moved -->|いいえ| ext["ExternalConflictException"]
+  moved -->|はい| parent{"親ディレクトリがある?"}
+  exists -->|無い| parent
   parent -->|無い| ext
   parent -->|ある| ok[".txnew に書く"]
 ```
@@ -204,7 +206,7 @@ flowchart TD
 
 ## 文字列と JSON
 
-小さい文字列は `WriteAllTextAsync` です。ディスク上にファイルが無ければ Add、あれば Update です。このトランザクションの Move の移動先も Update です。ファイルなら移動先の Add と元の Delete に畳み、ディレクトリなら Update と同じく失敗します。未コミットの `.txnew` は、ディスク上のファイルには数えません。同じパスへ続けて書くと、予約は 1 件のまま内容だけ置き換わります。
+小さい文字列は `WriteAllTextAsync` です。ディスク上にファイルが無ければ Add、あれば Update です。このトランザクションの Move の移動先も Update です。ファイルなら移動先の Add と元の Delete に畳み、ディレクトリなら Update と同じく失敗します。移動元はディスク上にファイルが残っているので、その書き込みは Update のままで失敗します。退避して差し替えるときは Add を使います。未コミットの `.txnew` は、ディスク上のファイルには数えません。同じパスへ続けて書くと、予約は 1 件のまま内容だけ置き換わります。
 
 ```csharp
 await tx.WriteAllTextAsync("new.txt", "hello");
@@ -306,7 +308,7 @@ flowchart TD
 
 `MoveAsync` は、同一ボリューム内のファイルまたはディレクトリの移動を予約します。対象はコミットまで元の場所に残り、コミット時に 1 回 rename します。ディレクトリの中身はジャーナルに書かず、rename に付いていきます。破棄しても何も消えません。印が無ければディスクは変えず、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
 
-ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリのあいだはワークフォルダ全体を排他で押さえ、元と先をロックします。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。ジャーナルには載せず、ロックも取りません。
+ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリのあいだはワークフォルダ全体を排他で押さえ、元と先をロックします。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。ジャーナルには載せず、ロックも取りません。移動先は、空いているか、既にこのトランザクションの別の Move の移動元であるときだけ受け付けます。呼び出しは空いている端からで、空いている端が無い循環は受け付けません。適用もその端からで、ファイルの移動元への Add はその Move のあとです。存在するファイルを上書きする Move はしません。
 
 ```csharp
 await tx.MoveAsync("tree", "archive");
@@ -318,10 +320,12 @@ flowchart TD
   same -->|はい| invSame["InvalidOperationException"]
   same -->|いいえ| vol{"別ボリューム?"}
   vol -->|はい| uns["UnsupportedOperationException"]
-  vol -->|いいえ| place{"元が無い、または先がある?"}
+  vol -->|いいえ| place{"元が無い、または先が塞がっていて別の Move の移動元でもない?"}
   place -->|はい| ext["ExternalConflictException"]
-  place -->|いいえ| under{"配下、または自分自身の配下?"}
-  under -->|はい| inv["InvalidOperationException"]
+  place -->|いいえ| cycle{"空いている端が無い?"}
+  cycle -->|はい| inv["InvalidOperationException"]
+  cycle -->|いいえ| under{"配下、または自分自身の配下?"}
+  under -->|はい| inv
   under -->|いいえ| ok["移動を予約する"]
 ```
 

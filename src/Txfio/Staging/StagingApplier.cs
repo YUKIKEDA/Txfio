@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// ステージングした操作を対象パスへ適用する
+/// ステージングした操作を対象パスへ適用する（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
 /// </summary>
 internal static class StagingApplier
 {
@@ -31,7 +31,7 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// Add / Move / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する
+    /// Add / Move / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
     /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
@@ -53,22 +53,25 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// Add / Move / CreateDirectory、Update、Delete と DeleteTree（深い順）の順に並べる
+    /// Add / Move / CreateDirectory、Update、Delete と DeleteTree（深い順）の順に並べる（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
     /// </summary>
     /// <param name="operations">操作一覧</param>
     /// <returns>適用順の操作</returns>
     internal static JournalOperation[] InApplyOrder(IReadOnlyList<JournalOperation> operations)
     {
         List<JournalOperation> ordered = new List<JournalOperation>(operations.Count);
+        List<JournalOperation> nondestructive = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
             if (operation.Kind == PendingChangeKind.Add
                 || operation.Kind == PendingChangeKind.Move
                 || operation.Kind == PendingChangeKind.CreateDirectory)
             {
-                ordered.Add(operation);
+                nondestructive.Add(operation);
             }
         }
+
+        ordered.AddRange(OrderMoveChains(nondestructive));
 
         foreach (JournalOperation operation in operations)
         {
@@ -91,6 +94,25 @@ internal static class StagingApplier
         deletes.Sort(static (left, right) => PathDepth(right.Path).CompareTo(PathDepth(left.Path)));
         ordered.AddRange(deletes);
         return ordered.ToArray();
+    }
+
+    /// <summary>
+    /// すべての Move を、空いている端から辿れるかを判定する
+    /// </summary>
+    /// <param name="operations">操作一覧</param>
+    /// <returns>循環が無ければ <see langword="true"/></returns>
+    internal static bool MovesReachFreeEnd(IReadOnlyList<JournalOperation> operations)
+    {
+        List<JournalOperation> moves = new List<JournalOperation>();
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Move)
+            {
+                moves.Add(operation);
+            }
+        }
+
+        return TryOrderMoves(moves, out _);
     }
 
     /// <summary>
@@ -406,6 +428,124 @@ internal static class StagingApplier
         {
             return false;
         }
+    }
+
+    private static List<JournalOperation> OrderMoveChains(List<JournalOperation> items)
+    {
+        List<int> moveSlots = new List<int>();
+        List<JournalOperation> moves = new List<JournalOperation>();
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i].Kind == PendingChangeKind.Move)
+            {
+                moveSlots.Add(i);
+                moves.Add(items[i]);
+            }
+        }
+
+        if (!TryOrderMoves(moves, out List<JournalOperation> orderedMoves))
+        {
+            return items;
+        }
+
+        JournalOperation[] placed = items.ToArray();
+        for (int i = 0; i < moveSlots.Count; i++)
+        {
+            placed[moveSlots[i]] = orderedMoves[i];
+        }
+
+        HashSet<string> fileMoveSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (JournalOperation operation in placed)
+        {
+            if (operation.Kind == PendingChangeKind.Move && !operation.IsDirectory)
+            {
+                fileMoveSources.Add(operation.Path);
+            }
+        }
+
+        HashSet<string> emittedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        List<JournalOperation> output = new List<JournalOperation>(placed.Length);
+        List<JournalOperation> heldAdds = new List<JournalOperation>();
+        foreach (JournalOperation operation in placed)
+        {
+            if (operation.Kind == PendingChangeKind.Add
+                && fileMoveSources.Contains(operation.Path)
+                && !emittedSources.Contains(operation.Path))
+            {
+                heldAdds.Add(operation);
+                continue;
+            }
+
+            output.Add(operation);
+            if (operation.Kind != PendingChangeKind.Move || operation.IsDirectory)
+            {
+                continue;
+            }
+
+            emittedSources.Add(operation.Path);
+            for (int i = heldAdds.Count - 1; i >= 0; i--)
+            {
+                if (!string.Equals(heldAdds[i].Path, operation.Path, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                output.Add(heldAdds[i]);
+                heldAdds.RemoveAt(i);
+            }
+        }
+
+        output.AddRange(heldAdds);
+        return output;
+    }
+
+    private static bool TryOrderMoves(List<JournalOperation> moves, out List<JournalOperation> ordered)
+    {
+        ordered = new List<JournalOperation>(moves.Count);
+        List<JournalOperation> remaining = new List<JournalOperation>(moves);
+        while (remaining.Count > 0)
+        {
+            int ready = -1;
+            for (int i = 0; i < remaining.Count; i++)
+            {
+                if (HasFreeDestination(remaining, i))
+                {
+                    ready = i;
+                    break;
+                }
+            }
+
+            if (ready < 0)
+            {
+                ordered.Clear();
+                return false;
+            }
+
+            ordered.Add(remaining[ready]);
+            remaining.RemoveAt(ready);
+        }
+
+        return true;
+    }
+
+    private static bool HasFreeDestination(List<JournalOperation> remaining, int index)
+    {
+        string? dest = remaining[index].NewPath;
+        if (string.IsNullOrEmpty(dest)
+            || string.Equals(remaining[index].Path, dest, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < remaining.Count; i++)
+        {
+            if (i != index && string.Equals(remaining[i].Path, dest, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static int PathDepth(string path)
