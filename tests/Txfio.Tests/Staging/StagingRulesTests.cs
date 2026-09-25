@@ -1,3 +1,5 @@
+using Txfio.Tests.Support;
+
 namespace Txfio.Tests.Staging;
 
 public sealed class StagingRulesTests
@@ -10,7 +12,7 @@ public sealed class StagingRulesTests
     /// <para>手順: EnsureSameVolume する</para>
     /// <para>期待: 例外にならない</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("ドライブ文字のパス")]
     public void EnsureSameVolume_同じルートなら例外にならないこと()
     {
         StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"C:\work\sub\b.txt");
@@ -24,7 +26,7 @@ public sealed class StagingRulesTests
     /// <para>手順: EnsureSameVolume する</para>
     /// <para>期待: UnsupportedOperationException になる</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("ドライブ文字のパス")]
     public void EnsureSameVolume_ルートが違うとUnsupportedOperationExceptionになること()
     {
         Assert.Throws<UnsupportedOperationException>(() => StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"D:\work\b.txt"));

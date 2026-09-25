@@ -555,7 +555,7 @@ TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`�
 
 ## ローカル検証
 
-Windows では `./build.ps1` がゲートです。Linux ではこのスクリプトを実行せず、restore / format / build までにします。
+Windows では `./build.ps1` がゲートです。Linux ではこのスクリプトを実行せず、restore / format / build / `dotnet test` を回します。Linux では Windows 専用のテストが Skip になります。
 
 ```powershell
 ./build.ps1

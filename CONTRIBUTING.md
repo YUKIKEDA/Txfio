@@ -90,7 +90,7 @@ GitHub Actions の workflow はリポジトリに置くが、**利用制限に�
 
 想定内容: `dotnet restore` → `dotnet format --verify-no-changes` → `dotnet build` → `dotnet test`。対象は **`Txfio.slnx`**。
 
-このスクリプトは **Windows 専用** です。Linux のエージェントは `./build.ps1` を実行せず、restore / format / build までに留める。Linux でのテスト成功を Done と書いてはならない。マージ前のテスト記録は Windows 側が必要です。
+このスクリプトは **Windows 専用** です。Linux では `./build.ps1` を実行せず、restore / format / build / `dotnet test` を順に回す。PR を出す前に、`Windows 専用` として Skip されるもの（`WindowsFact`）以外のテストがすべて通っていること。これは PR 前の条件で、マージの関門ではない。マージ前のテスト記録は Windows 側が必要です。テストの実行には .NET 10 SDK に加えて .NET 8 ランタイムが要る。
 
 クラッシュインジェクションと SMB 検証は、Issue の受け入れ条件に書いたときだけローカル必須とする。
 

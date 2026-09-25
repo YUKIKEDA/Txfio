@@ -12,6 +12,9 @@ internal sealed class PathLockSet
 
     private const int LockViolation = 33;
 
+    // Linux の EAGAIN（EWOULDBLOCK）。.NET は Unix では errno をそのまま HResult に入れる
+    private const int LinuxWouldBlock = 11;
+
     private static readonly AsyncLocal<Queue<(FileShare Share, Exception Exception)>?> _openFailures =
         new AsyncLocal<Queue<(FileShare Share, Exception Exception)>?>();
 
@@ -47,7 +50,13 @@ internal sealed class PathLockSet
     internal static bool IsSharingViolation(IOException exception)
     {
         int code = exception.HResult & 0xFFFF;
-        return code == SharingViolation || code == LockViolation;
+        if (code == SharingViolation || code == LockViolation)
+        {
+            return true;
+        }
+
+        // Linux の判定は開発環境でテストを回すためのもので、実行時に保証するのは Windows だけである
+        return OperatingSystem.IsLinux() && exception.HResult == LinuxWouldBlock;
     }
 
     /// <summary>

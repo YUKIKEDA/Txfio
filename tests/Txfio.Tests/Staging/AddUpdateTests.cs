@@ -107,7 +107,7 @@ public sealed class AddUpdateTests
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
-        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("sub\\a.txt", content));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("sub/a.txt", content));
         Assert.Equal(System.IO.Path.Combine(work.Path, "sub"), ex.Path);
     }
 
