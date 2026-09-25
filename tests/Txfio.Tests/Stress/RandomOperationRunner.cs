@@ -216,17 +216,7 @@ internal static class RandomOperationRunner
     private static async Task<string?> CompareReadAsync(ITransaction tx, RandomOperationModel model, string path)
     {
         string expected = model.Files[path];
-        string actual;
-        try
-        {
-            actual = await ReadAsync(tx, path);
-        }
-        catch (ExternalConflictException) when (model.IsMoveDestination(path))
-        {
-            // Move の移動先は .txnew も本物も無いので読めなくてよい
-            return null;
-        }
-
+        string actual = await ReadAsync(tx, path);
         return actual == expected ? null : $"{path} は期待 \"{expected}\"、実際 \"{actual}\"";
     }
 

@@ -1,13 +1,11 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ランダム操作列を比べるメモリ上のモデル
+/// ランダム操作列を比べるメモリ上のモデル。「コミット後の姿」を持つ
 /// </summary>
 internal sealed class RandomOperationModel
 {
     private readonly Dictionary<string, string> _files;
-
-    private readonly HashSet<string> _moveDestinations = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 開始時のファイルからモデルを作る
@@ -19,16 +17,9 @@ internal sealed class RandomOperationModel
     }
 
     /// <summary>
-    /// コミットしたときにあるはずのファイル（相対パスから内容）
+    /// コミットしたときにあるはずのファイル（相対パスから内容）。ReadAsync もこの内容を返す
     /// </summary>
     public IReadOnlyDictionary<string, string> Files => _files;
-
-    /// <summary>
-    /// 内容が Move だけで来たパスか。そのパスは .txnew も本物も無いので、コミット前の ReadAsync で読めなくてよい
-    /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>Move の移動先のままなら true</returns>
-    public bool IsMoveDestination(string path) => _moveDestinations.Contains(path);
 
     /// <summary>
     /// 通った操作をモデルに反映する
@@ -37,17 +28,5 @@ internal sealed class RandomOperationModel
     public void Apply(RandomOperation operation)
     {
         operation.ApplyTo(_files);
-        switch (operation.Kind)
-        {
-            case RandomOperationKind.Move:
-                _moveDestinations.Remove(operation.Path);
-                _moveDestinations.Add(operation.NewPath!);
-                break;
-            case RandomOperationKind.Read:
-                break;
-            default:
-                _moveDestinations.Remove(operation.Path);
-                break;
-        }
     }
 }
