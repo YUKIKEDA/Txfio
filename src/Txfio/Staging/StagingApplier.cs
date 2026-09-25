@@ -242,19 +242,34 @@ internal static class StagingApplier
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <param name="transactionId">トランザクション ID</param>
-    internal static void DeleteStagingBackups(string workFolder, Guid transactionId)
+    /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに最後まで続ける</param>
+    /// <returns>すべて消せたら <see langword="true"/>（例外を投げるときは戻らない）</returns>
+    internal static bool DeleteStagingBackups(string workFolder, Guid transactionId, bool ignoreIoFailures = false)
     {
-        string suffix = "." + transactionId.ToString("D") + ".txnew.prev";
-        string pattern = "*" + suffix;
-        foreach (string path in Directory.EnumerateFiles(workFolder, pattern, SearchOption.AllDirectories))
+        try
         {
-            if (WorkPath.IsInMetadataFolder(workFolder, path)
-                || !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            bool succeeded = true;
+            string suffix = "." + transactionId.ToString("D") + ".txnew.prev";
+            string pattern = "*" + suffix;
+            foreach (string path in Directory.EnumerateFiles(workFolder, pattern, SearchOption.AllDirectories))
             {
-                continue;
+                if (WorkPath.IsInMetadataFolder(workFolder, path)
+                    || !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!DeleteOne(ignoreIoFailures, () => File.Delete(path)))
+                {
+                    succeeded = false;
+                }
             }
 
-            File.Delete(path);
+            return succeeded;
+        }
+        catch (Exception exception) when (ignoreIoFailures && exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
@@ -262,7 +277,9 @@ internal static class StagingApplier
     /// 作成ディレクトリを深い順に、再帰せず消す
     /// </summary>
     /// <param name="directories">消すディレクトリ</param>
-    internal static void DeleteCreatedDirectories(IReadOnlyList<string> directories)
+    /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに最後まで続ける</param>
+    /// <returns>すべて消せたら <see langword="true"/>（例外を投げるときは戻らない）</returns>
+    internal static bool DeleteCreatedDirectories(IReadOnlyList<string> directories, bool ignoreIoFailures = false)
     {
         List<string> pending = new List<string>(directories);
         pending.Sort(static (left, right) =>
@@ -276,21 +293,32 @@ internal static class StagingApplier
             return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
         });
 
+        bool succeeded = true;
         foreach (string path in pending)
         {
-            if (Directory.Exists(path))
+            if (!Directory.Exists(path))
             {
-                Directory.Delete(path);
+                continue;
+            }
+
+            if (!DeleteOne(ignoreIoFailures, () => Directory.Delete(path)))
+            {
+                succeeded = false;
             }
         }
+
+        return succeeded;
     }
 
     /// <summary>
     /// CreateDirectory が作ったディレクトリを、中身ごと消す
     /// </summary>
     /// <param name="operations">操作一覧</param>
-    internal static void DeleteCreateDirectoryTrees(IReadOnlyList<JournalOperation> operations)
+    /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに最後まで続ける</param>
+    /// <returns>すべて消せたら <see langword="true"/>（例外を投げるときは戻らない）</returns>
+    internal static bool DeleteCreateDirectoryTrees(IReadOnlyList<JournalOperation> operations, bool ignoreIoFailures = false)
     {
+        bool succeeded = true;
         foreach (JournalOperation operation in operations)
         {
             if (operation.Kind != PendingChangeKind.CreateDirectory || !Directory.Exists(operation.Path))
@@ -298,7 +326,25 @@ internal static class StagingApplier
                 continue;
             }
 
-            Directory.Delete(operation.Path, recursive: true);
+            if (!DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true)))
+            {
+                succeeded = false;
+            }
+        }
+
+        return succeeded;
+    }
+
+    private static bool DeleteOne(bool ignoreIoFailures, Action delete)
+    {
+        try
+        {
+            delete();
+            return true;
+        }
+        catch (Exception exception) when (ignoreIoFailures && exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
