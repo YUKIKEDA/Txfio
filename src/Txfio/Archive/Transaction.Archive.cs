@@ -20,6 +20,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
@@ -42,6 +43,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         IReadOnlyList<ArchiveRoot> roots = ToArchiveRoots(entries);

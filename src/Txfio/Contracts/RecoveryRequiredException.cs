@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// 持ち主のいない残骸ジャーナルが残っている。<see cref="Txfio.RecoverAsync"/> を呼べば解消する
+/// 持ち主のいない残骸ジャーナルが残っており、<see cref="Txfio.RecoverAsync(string, CancellationToken)"/> を呼べば解消する
 /// </summary>
 public sealed class RecoveryRequiredException : TxfioException
 {

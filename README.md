@@ -166,7 +166,7 @@ flowchart TD
 
 同じトランザクションの公開メンバーは、重なって呼べません。先に入った呼び出しは最後まで行い、後から重なった呼び出しは状態を変える前に `InvalidOperationException` です。進行中の progress から同じインスタンスを呼ぶのも同じです。呼び出しが終わったあとは、また 1 つずつ呼べます。別のトランザクションは、別のパスなら今までどおり並行できます。
 
-変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの（組ならディレクトリを含む）`CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、何もせず `LockContentionException` です。`.lock` ファイルは消しません。
+変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの（組ならディレクトリを含む）`CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は、既定では待たずに `LockContentionException` です。`BeginAsync` か `RecoverAsync` に待ち時間を渡すと、その呼び出しの開始からその時間まで、共有違反のときだけ 100ms 間隔で開き直します。時間切れは同じ例外で、待ちの取り消しは `OperationCanceledException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、待ち時間を渡さないときは何もせず `LockContentionException` です。`.lock` ファイルは消しません。
 
 ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExistsAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 

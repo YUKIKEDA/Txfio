@@ -13,6 +13,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);

@@ -9,10 +9,16 @@ internal static class RecoverService
     /// ワークフォルダ内の残骸ジャーナルを処理する
     /// </summary>
     /// <param name="workFolder">既存のワークフォルダ</param>
+    /// <param name="lockWait">ワークフォルダ全体のロックが取れないとき、この呼び出しで待つ上限</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
     /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
-    internal static async Task<RecoverReport> RecoverAsync(string workFolder, CancellationToken cancellationToken)
+    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックを取れない</exception>
+    /// <exception cref="OperationCanceledException">ワークフォルダ全体のロックを待っているあいだに取り消された</exception>
+    internal static async Task<RecoverReport> RecoverAsync(
+        string workFolder,
+        TimeSpan lockWait,
+        CancellationToken cancellationToken)
     {
         string metadataFolder = MetadataNames.FolderPath(workFolder);
         if (!Directory.Exists(metadataFolder))
@@ -24,6 +30,7 @@ internal static class RecoverService
         PathLockSet sentinel = new PathLockSet();
         try
         {
+            sentinel.BeginAttempt(lockWait, cancellationToken);
             sentinel.AcquireExclusive(workFolder);
             sentinel.RejectForeignLocks(workFolder);
             string[] journals = Directory.GetFiles(

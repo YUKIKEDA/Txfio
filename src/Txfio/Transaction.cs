@@ -11,6 +11,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly List<JournalOperation> _operations = new List<JournalOperation>();
     private readonly List<string> _createdDirectories = new List<string>();
     private readonly PathLockSet _locks = new PathLockSet();
+    private readonly TimeSpan _lockWait;
     private FileStream? _liveness;
     private bool _committed;
     private bool _committingWritten;
@@ -24,12 +25,14 @@ internal sealed partial class Transaction : ITransaction
     /// <param name="transactionId">このトランザクションの ID</param>
     /// <param name="journalPath">このトランザクションのジャーナルファイル</param>
     /// <param name="liveness">トランザクションが終わるまで持つ生存ロック</param>
-    internal Transaction(string workFolder, Guid transactionId, string journalPath, FileStream liveness)
+    /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限</param>
+    internal Transaction(string workFolder, Guid transactionId, string journalPath, FileStream liveness, TimeSpan lockWait)
     {
         _workFolder = workFolder;
         _transactionId = transactionId;
         _journalPath = journalPath;
         _liveness = liveness;
+        _lockWait = lockWait;
     }
 
     /// <inheritdoc />
@@ -88,6 +91,11 @@ internal sealed partial class Transaction : ITransaction
             _locks.Release();
             ReleaseLiveness();
         }
+    }
+
+    private void BeginLockAttempt(CancellationToken cancellationToken)
+    {
+        _locks.BeginAttempt(_lockWait, cancellationToken);
     }
 
     private CallScope EnterCall()
