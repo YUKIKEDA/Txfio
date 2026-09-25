@@ -314,17 +314,12 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(archive);
-        if (roots.Any(static root => root.IsDirectory))
-        {
-            _locks.AcquireExclusive(_workFolder);
-            _locks.RejectForeignLocks(_workFolder);
-        }
-        else
-        {
-            _locks.AcquireShared(_workFolder);
-        }
-
+        bool directoryInput = roots.Any(static root => root.IsDirectory);
+        _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray());
+        using PathLockSet.WorkFolderExclusive exclusive = directoryInput
+            ? _locks.EnterExclusive(_workFolder)
+            : default;
         foreach (ArchiveRoot root in roots)
         {
             if (root.IsDirectory ? !Directory.Exists(root.SourcePath) : !File.Exists(root.SourcePath))

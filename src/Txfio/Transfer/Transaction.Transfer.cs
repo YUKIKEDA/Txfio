@@ -168,9 +168,9 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfOperationUnderDirectory(_operations, target);
         ThrowIfCopyPathIsStaged(target);
         EnsureCopyDestinationFree(target);
-        _locks.AcquireExclusive(_workFolder);
-        _locks.RejectForeignLocks(_workFolder);
-        _locks.Acquire(_workFolder, target);
+        _locks.AcquireShared(_workFolder);
+        _locks.AcquireReserving(_workFolder, new[] { target }, target);
+        using PathLockSet.WorkFolderExclusive exclusive = _locks.EnterExclusive(_workFolder);
         if (!Directory.Exists(external))
         {
             throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + external, external);

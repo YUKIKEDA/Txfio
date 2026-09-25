@@ -62,19 +62,20 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// ディレクトリの Import は他のトランザクションの変更を止める
+    /// ディレクトリの Import は取り込み先を予約し、無関係なパスは通す
     /// </summary>
     /// <remarks>
     /// <para>前提: 外にディレクトリがあり、ワークフォルダに別のファイルがある</para>
-    /// <para>手順: ディレクトリを Import してから、別トランザクションがそのファイルを Delete する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダである</para>
+    /// <para>手順: ディレクトリを Import してから、別トランザクションがそのファイルを Delete し、取り込み先の配下を Add する</para>
+    /// <para>期待: 別ファイルは Delete でき、配下の Add は LockContentionException で Path は取り込み先である</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_ディレクトリはワークフォルダで他の変更を止めること()
+    public async Task ImportAsync_ディレクトリは取り込み先だけを予約すること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
         string source = System.IO.Path.Combine(outside.Path, "src");
+        string dest = System.IO.Path.Combine(work.Path, "dest");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -82,11 +83,14 @@ public sealed class DirectoryImportExportTests
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
         await first.ImportAsync(source, "dest");
 
+        await second.DeleteAsync("a.txt");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("no");
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => second.DeleteAsync("a.txt"));
+            () => second.AddAsync("dest/more.txt", content));
 
-        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(dest, contention.Path);
         Assert.Equal(PendingChangeKind.Add, Assert.Single(first.GetPendingChanges()).Kind);
+        Assert.Equal(PendingChangeKind.Delete, Assert.Single(second.GetPendingChanges()).Kind);
     }
 
     /// <summary>

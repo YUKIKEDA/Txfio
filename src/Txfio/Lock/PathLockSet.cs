@@ -22,6 +22,10 @@ internal sealed class PathLockSet
 
     private readonly Dictionary<string, FileStream> _handles = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
 
+    private readonly Dictionary<string, FileStream> _intents = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
+
+    private readonly HashSet<string> _exclusiveIntents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     private bool _workFolderExclusive;
 
     // 共有へ戻せなかったとき、次の取得で開き直す
@@ -43,13 +47,18 @@ internal sealed class PathLockSet
     /// <returns>`.lock` ファイルのパス</returns>
     internal static string FilePath(string workFolder, string fullPath)
     {
-        string relative = System.IO.Path.GetRelativePath(workFolder, fullPath);
-        relative = relative.Replace(
-            System.IO.Path.AltDirectorySeparatorChar,
-            System.IO.Path.DirectorySeparatorChar);
-        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(relative.ToUpperInvariant()));
-        string hex = Convert.ToHexString(hash).ToLowerInvariant();
-        return System.IO.Path.Combine(MetadataNames.LockFolderPath(workFolder), hex + ".lock");
+        return LockFile(workFolder, RelativeKey(workFolder, fullPath));
+    }
+
+    /// <summary>
+    /// 意図ロックの絶対パスを返す（相対パスの末尾に `\*` を足してからハッシュする）
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="fullPath">正規化した絶対パス</param>
+    /// <returns>意図ロックの `.lock` ファイルのパス</returns>
+    internal static string IntentFilePath(string workFolder, string fullPath)
+    {
+        return LockFile(workFolder, RelativeKey(workFolder, fullPath) + @"\*");
     }
 
     /// <summary>
@@ -251,17 +260,51 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 絶対パスを大文字化して辞書順に並べ、その順でロックする。同じパスは開き直さない
+    /// ワークフォルダ全体を排他にし、自分以外の `.lock` が空いていることを確かめる
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <returns>呼び出しの終わりに排他を共有へ戻す</returns>
+    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロック、またはほかのロックが空かない</exception>
+    /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
+    internal WorkFolderExclusive EnterExclusive(string workFolder)
+    {
+        AcquireExclusive(workFolder);
+        try
+        {
+            RejectForeignLocks(workFolder);
+        }
+        catch
+        {
+            if (_workFolderExclusive)
+            {
+                ReleaseWorkFolderExclusive(workFolder);
+            }
+
+            throw;
+        }
+
+        return new WorkFolderExclusive(this, workFolder);
+    }
+
+    /// <summary>
+    /// 絶対パスを大文字化して辞書順に並べ、祖先の意図ロックを取ってからその順でロックし、同じパスは開き直さない
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <param name="fullPaths">正規化した絶対パス</param>
     internal void Acquire(string workFolder, params string[] fullPaths)
     {
-        List<string> ordered = Order(fullPaths);
-        foreach (string fullPath in ordered)
-        {
-            AcquireOne(workFolder, fullPath);
-        }
+        AcquireCore(workFolder, fullPaths, exclusiveIntentPaths: null);
+    }
+
+    /// <summary>
+    /// パスロックに加え、予約するディレクトリの意図ロックを排他で取る
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="fullPaths">正規化した絶対パス</param>
+    /// <param name="exclusiveIntentPaths">排他の意図ロックを取るディレクトリ</param>
+    internal void AcquireReserving(string workFolder, string[] fullPaths, params string[] exclusiveIntentPaths)
+    {
+        AcquireCore(workFolder, fullPaths, exclusiveIntentPaths);
     }
 
     /// <summary>
@@ -275,8 +318,57 @@ internal sealed class PathLockSet
         }
 
         _handles.Clear();
+        foreach (FileStream intent in _intents.Values)
+        {
+            intent.Dispose();
+        }
+
+        _intents.Clear();
+        _exclusiveIntents.Clear();
         _workFolderExclusive = false;
         _workFolderShareLost = false;
+    }
+
+    private static string RelativeKey(string workFolder, string fullPath)
+    {
+        string relative = System.IO.Path.GetRelativePath(workFolder, fullPath);
+        return relative.Replace(
+            System.IO.Path.AltDirectorySeparatorChar,
+            System.IO.Path.DirectorySeparatorChar).ToUpperInvariant();
+    }
+
+    private static string LockFile(string workFolder, string key)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+        string hex = Convert.ToHexString(hash).ToLowerInvariant();
+        return System.IO.Path.Combine(MetadataNames.LockFolderPath(workFolder), hex + ".lock");
+    }
+
+    private static List<string> Ancestors(string workFolder, string fullPath)
+    {
+        string root = System.IO.Path.TrimEndingDirectorySeparator(workFolder);
+        string prefix = root + System.IO.Path.DirectorySeparatorChar;
+        List<string> ancestors = new List<string>();
+        string? current = System.IO.Path.GetDirectoryName(fullPath);
+        while (!string.IsNullOrEmpty(current))
+        {
+            string trimmed = System.IO.Path.TrimEndingDirectorySeparator(current);
+            if (string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            if (!trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            ancestors.Add(trimmed);
+            current = System.IO.Path.GetDirectoryName(trimmed);
+        }
+
+        ancestors.Reverse();
+        return ancestors;
     }
 
     private static List<string> Order(string[] fullPaths)
@@ -314,8 +406,12 @@ internal sealed class PathLockSet
 
     private static FileStream Open(string workFolder, string fullPath, FileShare share)
     {
+        return OpenLockFile(FilePath(workFolder, fullPath), share);
+    }
+
+    private static FileStream OpenLockFile(string lockPath, FileShare share)
+    {
         ThrowIfOpenArmed(share);
-        string lockPath = FilePath(workFolder, fullPath);
         string? directory = System.IO.Path.GetDirectoryName(lockPath);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -430,6 +526,11 @@ internal sealed class PathLockSet
             owned.Add(FilePath(workFolder, fullPath));
         }
 
+        foreach (string intentPath in _intents.Keys)
+        {
+            owned.Add(IntentFilePath(workFolder, intentPath));
+        }
+
         foreach (string lockFile in Directory.GetFiles(directory, "*.lock"))
         {
             if (owned.Contains(lockFile))
@@ -535,6 +636,248 @@ internal sealed class PathLockSet
         {
             _workFolderShareLost = true;
             throw;
+        }
+    }
+
+    private void AcquireCore(string workFolder, string[] fullPaths, IReadOnlyCollection<string>? exclusiveIntentPaths)
+    {
+        HashSet<string> exclusive = exclusiveIntentPaths is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(exclusiveIntentPaths, StringComparer.OrdinalIgnoreCase);
+        foreach (string fullPath in Order(fullPaths))
+        {
+            foreach (string ancestor in Ancestors(workFolder, fullPath))
+            {
+                AcquireIntent(workFolder, ancestor, exclusive.Contains(ancestor));
+            }
+
+            if (exclusive.Contains(fullPath))
+            {
+                AcquireIntent(workFolder, fullPath, exclusive: true);
+            }
+
+            AcquireOne(workFolder, fullPath);
+        }
+    }
+
+    private void AcquireIntent(string workFolder, string directory, bool exclusive)
+    {
+        if (_intents.ContainsKey(directory) && (!exclusive || _exclusiveIntents.Contains(directory)))
+        {
+            return;
+        }
+
+        if (exclusive)
+        {
+            AcquireExclusiveIntent(workFolder, directory);
+            return;
+        }
+
+        try
+        {
+            OpenIntent(workFolder, directory, FileShare.ReadWrite, exclusive: false);
+        }
+        catch (IOException exception) when (IsSharingViolation(exception))
+        {
+            throw new LockContentionException("他のトランザクションがこのパスを使用中です: " + directory, directory);
+        }
+    }
+
+    // 排他の意図ロックを待っているあいだはワークフォルダ全体のロックを持たない
+    // 持ったままだと、待っている側が排他に上げるのを塞ぐ
+    private void AcquireExclusiveIntent(string workFolder, string directory)
+    {
+        bool closedOwnShared = false;
+        if (_intents.Remove(directory, out FileStream? held))
+        {
+            held.Dispose();
+            _exclusiveIntents.Remove(directory);
+            closedOwnShared = true;
+        }
+
+        bool releasedShared = false;
+        try
+        {
+            while (true)
+            {
+                try
+                {
+                    _intents.Add(directory, OpenLockFile(IntentFilePath(workFolder, directory), FileShare.None));
+                    _exclusiveIntents.Add(directory);
+                    return;
+                }
+                catch (IOException exception) when (IsSharingViolation(exception))
+                {
+                    if (!releasedShared && !_workFolderExclusive && _handles.ContainsKey(workFolder))
+                    {
+                        ReleaseHandle(workFolder);
+                        releasedShared = true;
+                    }
+
+                    if (!WaitForRetry())
+                    {
+                        throw new LockContentionException(
+                            "他のトランザクションがこのパスを使用中です: " + directory,
+                            directory);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (closedOwnShared)
+            {
+                RestoreSharedIntent(workFolder, directory);
+            }
+
+            throw;
+        }
+        catch (LockContentionException)
+        {
+            if (closedOwnShared)
+            {
+                RestoreSharedIntent(workFolder, directory);
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (releasedShared)
+            {
+                try
+                {
+                    RestoreShared(workFolder);
+                }
+                catch (LockContentionException)
+                {
+                    _workFolderShareLost = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    _workFolderShareLost = true;
+                }
+                catch (IOException)
+                {
+                    _workFolderShareLost = true;
+                    throw;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    _workFolderShareLost = true;
+                    throw;
+                }
+            }
+        }
+    }
+
+    private void OpenIntent(string workFolder, string directory, FileShare share, bool exclusive)
+    {
+        string lockPath = IntentFilePath(workFolder, directory);
+        while (true)
+        {
+            try
+            {
+                _intents.Add(directory, OpenLockFile(lockPath, share));
+                if (exclusive)
+                {
+                    _exclusiveIntents.Add(directory);
+                }
+
+                return;
+            }
+            catch (IOException exception) when (IsSharingViolation(exception))
+            {
+                if (!WaitForRetry())
+                {
+                    throw;
+                }
+            }
+        }
+    }
+
+    private void RestoreSharedIntent(string workFolder, string directory)
+    {
+        if (_intents.ContainsKey(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            _intents.Add(directory, OpenLockFile(IntentFilePath(workFolder, directory), FileShare.ReadWrite));
+        }
+        catch (IOException)
+        {
+            // 共有へ戻せなくても、呼び出し側が元の例外を返す
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // 共有へ戻せなくても、呼び出し側が元の例外を返す
+        }
+    }
+
+    private void ReleaseWorkFolderExclusive(string workFolder)
+    {
+        if (!_workFolderExclusive)
+        {
+            return;
+        }
+
+        ReleaseHandle(workFolder);
+        try
+        {
+            RestoreShared(workFolder);
+        }
+        catch (LockContentionException)
+        {
+            _workFolderShareLost = true;
+        }
+        catch (OperationCanceledException)
+        {
+            _workFolderShareLost = true;
+        }
+        catch (IOException)
+        {
+            _workFolderShareLost = true;
+            throw;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _workFolderShareLost = true;
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// ワークフォルダ全体の排他を、破棄するときに共有へ戻す
+    /// </summary>
+    internal readonly struct WorkFolderExclusive : IDisposable
+    {
+        private readonly PathLockSet? _locks;
+
+        private readonly string? _workFolder;
+
+        /// <summary>
+        /// 戻す対象を覚える
+        /// </summary>
+        /// <param name="locks">ロックの集合</param>
+        /// <param name="workFolder">ワークフォルダ</param>
+        internal WorkFolderExclusive(PathLockSet locks, string workFolder)
+        {
+            _locks = locks;
+            _workFolder = workFolder;
+        }
+
+        /// <summary>
+        /// ワークフォルダ全体の排他を共有へ戻す
+        /// </summary>
+        public void Dispose()
+        {
+            if (_locks is not null && _workFolder is not null)
+            {
+                _locks.ReleaseWorkFolderExclusive(_workFolder);
+            }
         }
     }
 }
