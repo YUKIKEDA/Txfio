@@ -130,6 +130,37 @@ internal sealed partial class Transaction : ITransaction
         return -1;
     }
 
+    private int FindLaterOperationIndex(string path, int afterIndex)
+    {
+        for (int i = afterIndex + 1; i < _operations.Count; i++)
+        {
+            if (string.Equals(_operations[i].Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private void ThrowIfMoveChainCloses(JournalOperation replacement, int replaceIndex)
+    {
+        List<JournalOperation> prospective = new List<JournalOperation>(_operations);
+        if (replaceIndex >= 0)
+        {
+            prospective[replaceIndex] = replacement;
+        }
+        else
+        {
+            prospective.Add(replacement);
+        }
+
+        if (!StagingApplier.MovesReachFreeEnd(prospective))
+        {
+            throw new InvalidOperationException("空いている端が無い移動は受け付けられません");
+        }
+    }
+
     private int FindMoveToIndex(string destPath)
     {
         for (int i = 0; i < _operations.Count; i++)

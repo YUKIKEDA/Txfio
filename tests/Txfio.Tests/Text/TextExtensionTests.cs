@@ -337,4 +337,27 @@ public sealed class TextExtensionTests
         PendingChange pending = Assert.Single(tx.GetPendingChanges());
         Assert.Equal(PendingChangeKind.Move, pending.Kind);
     }
+
+    /// <summary>
+    /// Move の移動元への WriteAllText は Update のままで失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を a.bak へ Move している</para>
+    /// <para>手順: a.txt へ WriteAllTextAsync する</para>
+    /// <para>期待: InvalidOperationException で、pending は Move のままである</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAllTextAsync_Moveの移動元はUpdateのままで失敗すること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "a.bak");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.WriteAllTextAsync("a.txt", "new"));
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Move, pending.Kind);
+        Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
 }

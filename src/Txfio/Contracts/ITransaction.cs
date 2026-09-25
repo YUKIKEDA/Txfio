@@ -19,9 +19,9 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">対象が既にある、または親ディレクトリが無い</exception>
+    /// <exception cref="ExternalConflictException">対象が既にあり、ファイル Move の移動元ではない、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、ディレクトリ Move の移動元への追加、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task AddAsync(
         string path,
@@ -79,10 +79,10 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>予約の完了</returns>
-    /// <exception cref="ExternalConflictException">移動元が無い、移動先が塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="ExternalConflictException">移動元が無い、移動先が別の Move の移動元でもなく塞がっている、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動である</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動（大文字小文字だけの違いを含む）、別操作でステージング済み、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動（大文字小文字だけの違いを含む）、別操作でステージング済み、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
