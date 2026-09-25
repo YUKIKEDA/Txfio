@@ -153,15 +153,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// コピー元ディレクトリがジャンクションなら中をコピーしない
+    /// コピー元ディレクトリがジャンクションなら操作できない
     /// </summary>
     /// <remarks>
     /// <para>前提: 中にファイルがあるディレクトリへのジャンクションがある</para>
     /// <para>手順: そのジャンクションを CopyAsync する</para>
-    /// <para>期待: コピー先は空のディレクトリで、pending は空、ジャンクションの先は残る</para>
+    /// <para>期待: InvalidOperationException になり、コピー先は無く、ジャンクションの先は残る</para>
     /// </remarks>
     [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task CopyAsync_コピー元がジャンクションなら中をコピーしないこと()
+    public async Task CopyAsync_コピー元がジャンクションならInvalidOperationExceptionになること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "target");
@@ -173,11 +173,11 @@ public sealed class CopyTests
         {
             await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
 
-            await tx.CopyAsync("link", "dest");
+            InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => tx.CopyAsync("link", "dest"));
 
-            string destination = System.IO.Path.Combine(work.Path, "dest");
-            Assert.True(Directory.Exists(destination));
-            Assert.Empty(Directory.GetFileSystemEntries(destination));
+            Assert.Contains("リパースポイントは操作できません", error.Message, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "dest")));
             Assert.Empty(tx.GetPendingChanges());
             Assert.Equal("secret", await File.ReadAllTextAsync(System.IO.Path.Combine(target, "secret.txt")));
         }
@@ -208,7 +208,7 @@ public sealed class CopyTests
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CopyAsync("link.txt", "copy.txt"));
 
-        Assert.Contains("シンボリックリンクはコピーできません", error.Message, StringComparison.Ordinal);
+        Assert.Contains("リパースポイントは操作できません", error.Message, StringComparison.Ordinal);
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "copy.txt")));
         Assert.Empty(tx.GetPendingChanges());
         Assert.Equal("secret", await File.ReadAllTextAsync(target));
