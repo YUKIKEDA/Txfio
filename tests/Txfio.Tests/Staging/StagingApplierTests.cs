@@ -44,7 +44,7 @@ public sealed class StagingApplierTests
                 destAfter: sourceState),
         };
 
-        Assert.True(StagingApplier.TryApplyAll(operations));
+        Assert.True(StagingApplier.TryApplyAll(operations, out _));
         Assert.False(File.Exists(source));
         Assert.Equal("updated", await File.ReadAllTextAsync(dest));
         Assert.False(File.Exists(staging));

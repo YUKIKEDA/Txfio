@@ -34,22 +34,24 @@ internal static class StagingApplier
     /// Add / Move / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
-    /// <returns>全て適用できた、または既に適用済みなら <see langword="true"/></returns>
-    internal static bool TryApplyAll(IReadOnlyList<JournalOperation> operations)
+    /// <param name="skipped">適用で飛ばした操作（すべてできたときは空）</param>
+    /// <returns>すべて適用できた、または既に適用済みなら <see langword="true"/></returns>
+    internal static bool TryApplyAll(IReadOnlyList<JournalOperation> operations, out OperationReport[] skipped)
     {
-        bool appliedAll = true;
+        List<OperationReport> failures = new List<OperationReport>();
         foreach (JournalOperation operation in InApplyOrder(operations))
         {
-            if (!TryApply(operation))
+            if (!TryApply(operation, out OperationFailureReason reason))
             {
-                appliedAll = false;
+                failures.Add(OperationReport.Create(operation, OperationDisposition.Skipped, reason));
                 continue;
             }
 
             CrashInjector.CheckPoint(CrashInjector.AfterApply);
         }
 
-        return appliedAll;
+        skipped = failures.ToArray();
+        return failures.Count == 0;
     }
 
     /// <summary>
@@ -119,12 +121,15 @@ internal static class StagingApplier
     /// 1 操作を適用する（既に適用済みなら成功、失敗なら <see langword="false"/>）
     /// </summary>
     /// <param name="operation">適用する操作</param>
+    /// <param name="reason">飛ばした理由（成功時は使わない）</param>
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
-    internal static bool TryApply(JournalOperation operation)
+    internal static bool TryApply(JournalOperation operation, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.BeforeAfterMismatch;
         ThrowIfApplyArmed();
         if (operation.Before is null || operation.After is null)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
 
@@ -133,17 +138,18 @@ internal static class StagingApplier
                 || operation.DestBefore is null
                 || operation.DestAfter is null))
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
 
         if (operation.Kind is PendingChangeKind.Add or PendingChangeKind.Update)
         {
-            return TryApplyStagedFile(operation);
+            return TryApplyStagedFile(operation, out reason);
         }
 
         if (Matches(operation, after: true))
         {
-            return TryDeleteStaging(operation.StagingPath);
+            return TryDeleteStaging(operation.StagingPath, out reason);
         }
 
         if (!Matches(operation, after: false))
@@ -153,21 +159,21 @@ internal static class StagingApplier
 
         if (operation.Kind == PendingChangeKind.DeleteTree)
         {
-            return TryDeleteTree(operation.Path);
+            return TryDeleteTree(operation.Path, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.Delete)
         {
             return operation.IsDirectory
-                ? TryDeleteDirectory(operation.Path)
-                : TryDeleteFile(operation.Path);
+                ? TryDeleteDirectory(operation.Path, out reason)
+                : TryDeleteFile(operation.Path, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.Move)
         {
             return operation.IsDirectory
-                ? TryMoveDirectory(operation.Path, operation.NewPath!)
-                : TryMove(operation.Path, operation.NewPath!);
+                ? TryMoveDirectory(operation.Path, operation.NewPath!, out reason)
+                : TryMove(operation.Path, operation.NewPath!, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.CreateDirectory)
@@ -177,6 +183,7 @@ internal static class StagingApplier
 
         if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
 
@@ -186,12 +193,14 @@ internal static class StagingApplier
             File.Move(operation.StagingPath, operation.Path, overwrite);
             return true;
         }
-        catch (IOException)
+        catch (IOException exception)
         {
+            reason = ClassifyIo(exception);
             return false;
         }
         catch (UnauthorizedAccessException)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
     }
@@ -325,10 +334,12 @@ internal static class StagingApplier
             && dest.Matches(operation.NewPath);
     }
 
-    private static bool TryApplyStagedFile(JournalOperation operation)
+    private static bool TryApplyStagedFile(JournalOperation operation, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.BeforeAfterMismatch;
         if (string.IsNullOrEmpty(operation.StagingPath))
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
 
@@ -341,33 +352,37 @@ internal static class StagingApplier
                 File.Move(operation.StagingPath, operation.Path, overwrite);
                 return true;
             }
-            catch (IOException)
+            catch (IOException exception)
             {
+                reason = ClassifyIo(exception);
                 return false;
             }
             catch (UnauthorizedAccessException)
             {
+                reason = OperationFailureReason.IoFailure;
                 return false;
             }
         }
 
         if (Matches(operation, after: true))
         {
-            return TryDeleteStaging(operation.StagingPath);
+            return TryDeleteStaging(operation.StagingPath, out reason);
         }
 
         return false;
     }
 
-    private static bool TryDeleteStaging(string? stagingPath)
+    private static bool TryDeleteStaging(string? stagingPath, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.IoFailure;
         try
         {
             StagingFile.TryDelete(stagingPath);
             return true;
         }
-        catch (IOException)
+        catch (IOException exception)
         {
+            reason = ClassifyIo(exception);
             return false;
         }
         catch (UnauthorizedAccessException)
@@ -376,8 +391,9 @@ internal static class StagingApplier
         }
     }
 
-    private static bool TryMoveDirectory(string sourcePath, string destPath)
+    private static bool TryMoveDirectory(string sourcePath, string destPath, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.BeforeAfterMismatch;
         if (!Directory.Exists(sourcePath))
         {
             return Directory.Exists(destPath);
@@ -393,18 +409,21 @@ internal static class StagingApplier
             Directory.Move(sourcePath, destPath);
             return true;
         }
-        catch (IOException)
+        catch (IOException exception)
         {
+            reason = ClassifyIo(exception);
             return false;
         }
         catch (UnauthorizedAccessException)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
     }
 
-    private static bool TryMove(string sourcePath, string destPath)
+    private static bool TryMove(string sourcePath, string destPath, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.BeforeAfterMismatch;
         if (!File.Exists(sourcePath))
         {
             return File.Exists(destPath);
@@ -420,12 +439,14 @@ internal static class StagingApplier
             File.Move(sourcePath, destPath);
             return true;
         }
-        catch (IOException)
+        catch (IOException exception)
         {
+            reason = ClassifyIo(exception);
             return false;
         }
         catch (UnauthorizedAccessException)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
     }
@@ -562,8 +583,9 @@ internal static class StagingApplier
         return depth;
     }
 
-    private static bool TryDeleteTree(string path)
+    private static bool TryDeleteTree(string path, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.BeforeAfterMismatch;
         if (File.Exists(path))
         {
             return false;
@@ -579,18 +601,21 @@ internal static class StagingApplier
             Directory.Delete(path, recursive: true);
             return true;
         }
-        catch (IOException)
+        catch (IOException exception)
         {
+            reason = ClassifyIo(exception);
             return false;
         }
         catch (UnauthorizedAccessException)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
     }
 
-    private static bool TryDeleteDirectory(string path)
+    private static bool TryDeleteDirectory(string path, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.BeforeAfterMismatch;
         if (File.Exists(path))
         {
             return false;
@@ -606,18 +631,21 @@ internal static class StagingApplier
             Directory.Delete(path);
             return true;
         }
-        catch (IOException)
+        catch (IOException exception)
         {
+            reason = ClassifyIo(exception);
             return false;
         }
         catch (UnauthorizedAccessException)
         {
+            reason = OperationFailureReason.IoFailure;
             return false;
         }
     }
 
-    private static bool TryDeleteFile(string path)
+    private static bool TryDeleteFile(string path, out OperationFailureReason reason)
     {
+        reason = OperationFailureReason.IoFailure;
         if (!File.Exists(path))
         {
             return true;
@@ -628,14 +656,22 @@ internal static class StagingApplier
             File.Delete(path);
             return true;
         }
-        catch (IOException)
+        catch (IOException exception)
         {
+            reason = ClassifyIo(exception);
             return false;
         }
         catch (UnauthorizedAccessException)
         {
             return false;
         }
+    }
+
+    private static OperationFailureReason ClassifyIo(IOException exception)
+    {
+        return PathLockSet.IsSharingViolation(exception)
+            ? OperationFailureReason.SharingViolation
+            : OperationFailureReason.IoFailure;
     }
 
     private sealed class ApplyFailure

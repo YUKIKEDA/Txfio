@@ -49,11 +49,11 @@ public static class Txfio
     /// </summary>
     /// <param name="path">既存のワークフォルダ</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>復旧結果。JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/></returns>
+    /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
     /// <exception cref="LockContentionException">他のトランザクションがワークフォルダを押さえている</exception>
     /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
-    public static async Task<RecoverResult> RecoverAsync(string path, CancellationToken cancellationToken = default)
+    public static async Task<RecoverReport> RecoverAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string workFolder = System.IO.Path.GetFullPath(path);

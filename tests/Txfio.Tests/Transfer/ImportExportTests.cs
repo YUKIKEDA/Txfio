@@ -27,7 +27,7 @@ public sealed class ImportExportTests
         PendingChange pending = Assert.Single(tx.GetPendingChanges());
         Assert.Equal(PendingChangeKind.Add, pending.Kind);
         Assert.Equal(new TransferProgress(5, 5), Assert.Single(progress.Reports));
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("hello", await File.ReadAllTextAsync(external));
         Assert.Equal("hello", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
     }

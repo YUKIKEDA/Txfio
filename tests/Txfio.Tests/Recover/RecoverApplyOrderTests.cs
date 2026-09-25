@@ -20,8 +20,8 @@ public sealed class RecoverApplyOrderTests
             work.Path,
             committing: true);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.SourcePath));
         Assert.False(File.Exists(leftover.StagingPath));

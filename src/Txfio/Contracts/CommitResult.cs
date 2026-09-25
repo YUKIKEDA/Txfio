@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// <see cref="ITransaction.CommitAsync"/> の結果
+/// <see cref="CommitReport.Result"/> の値
 /// </summary>
 public enum CommitResult
 {

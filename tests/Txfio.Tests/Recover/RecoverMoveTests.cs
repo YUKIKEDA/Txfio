@@ -23,8 +23,8 @@ public sealed class RecoverMoveTests
             "b.txt",
             "keep");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledBack, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.Equal("keep", await File.ReadAllTextAsync(leftover.SourcePath));
         Assert.False(File.Exists(leftover.DestPath));
@@ -49,8 +49,8 @@ public sealed class RecoverMoveTests
             "b.txt",
             "gone");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.SourcePath));
         Assert.Equal("gone", await File.ReadAllTextAsync(leftover.DestPath));
@@ -76,8 +76,8 @@ public sealed class RecoverMoveTests
             "done",
             alreadyMoved: true);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.SourcePath));
         Assert.Equal("done", await File.ReadAllTextAsync(leftover.DestPath));

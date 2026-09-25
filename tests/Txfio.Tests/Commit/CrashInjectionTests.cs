@@ -39,8 +39,8 @@ public sealed class CrashInjectionTests : IDisposable
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Single(Journals(work.Path));
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Empty(Journals(work.Path));
@@ -71,8 +71,8 @@ public sealed class CrashInjectionTests : IDisposable
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Single(Journals(work.Path));
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.Empty(Journals(work.Path));
     }
@@ -103,8 +103,8 @@ public sealed class CrashInjectionTests : IDisposable
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Single(Journals(work.Path));
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
         Assert.Empty(Journals(work.Path));
     }
@@ -133,8 +133,8 @@ public sealed class CrashInjectionTests : IDisposable
         Assert.False(File.Exists(target));
         Assert.Single(Journals(work.Path));
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(target));
         Assert.Empty(Journals(work.Path));
     }
@@ -165,8 +165,8 @@ public sealed class CrashInjectionTests : IDisposable
         Assert.Equal("moved", await File.ReadAllTextAsync(dest));
         Assert.Single(Journals(work.Path));
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(source));
         Assert.Equal("moved", await File.ReadAllTextAsync(dest));
         Assert.Empty(Journals(work.Path));
@@ -200,8 +200,8 @@ public sealed class CrashInjectionTests : IDisposable
         Assert.Equal("keep", await File.ReadAllTextAsync(deleted));
         Assert.Single(Journals(work.Path));
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("added", await File.ReadAllTextAsync(added));
         Assert.False(File.Exists(deleted));
         Assert.Empty(Journals(work.Path));

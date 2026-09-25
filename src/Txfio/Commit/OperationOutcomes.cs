@@ -11,11 +11,13 @@ internal static class OperationOutcomes
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="transactionId">ディレクトリ直下の検証に使うトランザクション ID</param>
     /// <param name="stamped">状態を付けた操作一覧（失敗時は空）</param>
+    /// <param name="rejections">検証で拒んだ操作（成功時は空）</param>
     /// <returns>すべて記録できたら <see langword="true"/></returns>
     internal static bool TryStamp(
         IReadOnlyList<JournalOperation> operations,
         Guid transactionId,
-        out JournalOperation[] stamped)
+        out JournalOperation[] stamped,
+        out OperationReport[] rejections)
     {
         JournalOperation[] result = operations.ToArray();
         Dictionary<JournalOperation, int> indexByOperation = new Dictionary<JournalOperation, int>(
@@ -25,19 +27,28 @@ internal static class OperationOutcomes
             indexByOperation.Add(result[i], i);
         }
 
+        List<OperationReport> rejected = new List<OperationReport>();
         Dictionary<string, PathState> projected = new Dictionary<string, PathState>(StringComparer.OrdinalIgnoreCase);
         foreach (JournalOperation operation in StagingApplier.InApplyOrder(result))
         {
-            if (!TryProject(operation, result, transactionId, projected, out JournalOperation next))
+            if (!TryProject(operation, result, transactionId, projected, out JournalOperation next, out OperationFailureReason reason))
             {
-                stamped = Array.Empty<JournalOperation>();
-                return false;
+                rejected.Add(OperationReport.Create(operation, OperationDisposition.Rejected, reason));
+                continue;
             }
 
             result[indexByOperation[operation]] = next;
         }
 
+        if (rejected.Count > 0)
+        {
+            stamped = Array.Empty<JournalOperation>();
+            rejections = rejected.ToArray();
+            return false;
+        }
+
         stamped = result;
+        rejections = Array.Empty<OperationReport>();
         return true;
     }
 
@@ -46,37 +57,39 @@ internal static class OperationOutcomes
         IReadOnlyList<JournalOperation> operations,
         Guid transactionId,
         Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
+        out JournalOperation stamped,
+        out OperationFailureReason reason)
     {
         stamped = operation;
+        reason = OperationFailureReason.Missing;
         if (operation.Kind == PendingChangeKind.Add)
         {
-            return TryProjectAdd(operation, projected, out stamped);
+            return TryProjectAdd(operation, projected, out stamped, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.Update)
         {
-            return TryProjectUpdate(operation, projected, out stamped);
+            return TryProjectUpdate(operation, projected, out stamped, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.Move)
         {
-            return TryProjectMove(operation, projected, out stamped);
+            return TryProjectMove(operation, projected, out stamped, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.CreateDirectory)
         {
-            return TryProjectCreateDirectory(operation, projected, out stamped);
+            return TryProjectCreateDirectory(operation, projected, out stamped, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.DeleteTree)
         {
-            return TryProjectDeleteTree(operation, projected, out stamped);
+            return TryProjectDeleteTree(operation, projected, out stamped, out reason);
         }
 
         if (operation.Kind == PendingChangeKind.Delete)
         {
-            return TryProjectDelete(operation, operations, transactionId, projected, out stamped);
+            return TryProjectDelete(operation, operations, transactionId, projected, out stamped, out reason);
         }
 
         return false;
@@ -85,11 +98,19 @@ internal static class OperationOutcomes
     private static bool TryProjectAdd(
         JournalOperation operation,
         Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
+        out JournalOperation stamped,
+        out OperationFailureReason reason)
     {
         stamped = operation;
+        reason = OperationFailureReason.Missing;
         PathState before = Current(projected, operation.Path);
-        if (before.Exists || !TryCaptureStaging(operation, out PathState after))
+        if (before.Exists)
+        {
+            reason = OperationFailureReason.AlreadyExists;
+            return false;
+        }
+
+        if (!TryCaptureStaging(operation, out PathState after))
         {
             return false;
         }
@@ -102,11 +123,19 @@ internal static class OperationOutcomes
     private static bool TryProjectUpdate(
         JournalOperation operation,
         Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
+        out JournalOperation stamped,
+        out OperationFailureReason reason)
     {
         stamped = operation;
+        reason = OperationFailureReason.Missing;
         PathState before = Current(projected, operation.Path);
-        if (!before.IsFile || !TryCaptureStaging(operation, out PathState after))
+        if (!before.IsFile)
+        {
+            reason = ReasonWhenFileRequired(before);
+            return false;
+        }
+
+        if (!TryCaptureStaging(operation, out PathState after))
         {
             return false;
         }
@@ -119,9 +148,11 @@ internal static class OperationOutcomes
     private static bool TryProjectMove(
         JournalOperation operation,
         Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
+        out JournalOperation stamped,
+        out OperationFailureReason reason)
     {
         stamped = operation;
+        reason = OperationFailureReason.Missing;
         if (string.IsNullOrEmpty(operation.NewPath))
         {
             return false;
@@ -131,8 +162,15 @@ internal static class OperationOutcomes
         PathState destBefore = Current(projected, operation.NewPath);
         if (operation.IsDirectory)
         {
-            if (!before.IsDirectory || destBefore.Exists)
+            if (!before.IsDirectory)
             {
+                reason = ReasonWhenDirectoryRequired(before);
+                return false;
+            }
+
+            if (destBefore.Exists)
+            {
+                reason = OperationFailureReason.AlreadyExists;
                 return false;
             }
 
@@ -142,8 +180,15 @@ internal static class OperationOutcomes
             return true;
         }
 
-        if (!before.IsFile || destBefore.Exists)
+        if (!before.IsFile)
         {
+            reason = ReasonWhenFileRequired(before);
+            return false;
+        }
+
+        if (destBefore.Exists)
+        {
+            reason = OperationFailureReason.AlreadyExists;
             return false;
         }
 
@@ -156,12 +201,15 @@ internal static class OperationOutcomes
     private static bool TryProjectCreateDirectory(
         JournalOperation operation,
         Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
+        out JournalOperation stamped,
+        out OperationFailureReason reason)
     {
         stamped = operation;
+        reason = OperationFailureReason.Missing;
         PathState current = Current(projected, operation.Path);
         if (!current.IsDirectory)
         {
+            reason = ReasonWhenDirectoryRequired(current);
             return false;
         }
 
@@ -173,12 +221,15 @@ internal static class OperationOutcomes
     private static bool TryProjectDeleteTree(
         JournalOperation operation,
         Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
+        out JournalOperation stamped,
+        out OperationFailureReason reason)
     {
         stamped = operation;
+        reason = OperationFailureReason.Missing;
         PathState before = Current(projected, operation.Path);
         if (!before.IsDirectory)
         {
+            reason = ReasonWhenDirectoryRequired(before);
             return false;
         }
 
@@ -192,20 +243,29 @@ internal static class OperationOutcomes
         IReadOnlyList<JournalOperation> operations,
         Guid transactionId,
         Dictionary<string, PathState> projected,
-        out JournalOperation stamped)
+        out JournalOperation stamped,
+        out OperationFailureReason reason)
     {
         stamped = operation;
+        reason = OperationFailureReason.Missing;
         PathState before = Current(projected, operation.Path);
         if (operation.IsDirectory)
         {
-            if (!before.IsDirectory
-                || !StagingRules.MatchesDirectoryDeletePreconditions(operation.Path, operations, transactionId))
+            if (!before.IsDirectory)
             {
+                reason = ReasonWhenDirectoryRequired(before);
+                return false;
+            }
+
+            if (!StagingRules.MatchesDirectoryDeletePreconditions(operation.Path, operations, transactionId))
+            {
+                reason = OperationFailureReason.DirectoryPreconditions;
                 return false;
             }
         }
         else if (!before.IsFile)
         {
+            reason = ReasonWhenFileRequired(before);
             return false;
         }
 
@@ -234,5 +294,20 @@ internal static class OperationOutcomes
         }
 
         return PathState.Capture(path);
+    }
+
+    private static OperationFailureReason ReasonWhenFileRequired(PathState state)
+    {
+        return state.Exists ? OperationFailureReason.AlreadyExists : OperationFailureReason.Missing;
+    }
+
+    private static OperationFailureReason ReasonWhenDirectoryRequired(PathState state)
+    {
+        if (!state.Exists)
+        {
+            return OperationFailureReason.Missing;
+        }
+
+        return state.IsFile ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
     }
 }

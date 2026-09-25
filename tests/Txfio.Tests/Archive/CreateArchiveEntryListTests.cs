@@ -31,7 +31,7 @@ public sealed class CreateArchiveEntryListTests
             "out.zip");
 
         Assert.Equal(PendingChangeKind.Add, Assert.Single(tx.GetPendingChanges()).Kind);
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         List<(string Name, string Content)> entries = await ReadEntriesAsync(System.IO.Path.Combine(work.Path, "out.zip"));
         Assert.Equal(new[] { ("m/09.csv", "csv"), ("a.txt", "alpha") }, entries);
     }
@@ -64,7 +64,7 @@ public sealed class CreateArchiveEntryListTests
             },
             "out.zip");
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         List<(string Name, string Content)> entries = await ReadEntriesAsync(System.IO.Path.Combine(work.Path, "out.zip"));
         Assert.Equal(
             new[] { "a.txt", "data/sub/a.txt", "data/sub/empty/", "empty/", "reports/x.csv", "tree/a.txt", "tree/empty/" },
@@ -92,7 +92,7 @@ public sealed class CreateArchiveEntryListTests
             "twice.zip");
         await tx.CreateArchiveAsync(Array.Empty<ArchiveEntrySource>(), "empty.zip", progress: progress);
 
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal(
             new[] { ("one.txt", "alpha"), ("two.txt", "alpha") },
             await ReadEntriesAsync(System.IO.Path.Combine(work.Path, "twice.zip")));

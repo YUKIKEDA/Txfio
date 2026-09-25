@@ -31,7 +31,7 @@ public sealed class DirectoryMoveTests
         Assert.Equal(PendingChangeKind.Move, pending.Kind);
         Assert.Equal(source, pending.Path, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(dest, pending.NewPath, StringComparer.OrdinalIgnoreCase);
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.False(Directory.Exists(source));
         Assert.Equal("hello", await File.ReadAllTextAsync(System.IO.Path.Combine(dest, "a.txt")));
         Assert.Equal("deep", await File.ReadAllTextAsync(System.IO.Path.Combine(dest, "nested", "b.txt")));
@@ -167,7 +167,7 @@ public sealed class DirectoryMoveTests
         Assert.Equal(PendingChangeKind.Move, pending.Kind);
         Assert.Equal(source, pending.Path, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(dest, pending.NewPath, StringComparer.OrdinalIgnoreCase);
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.False(Directory.Exists(source));
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "mid")));
         Assert.True(Directory.Exists(dest));
@@ -194,7 +194,7 @@ public sealed class DirectoryMoveTests
         PendingChange pending = Assert.Single(tx.GetPendingChanges());
         Assert.Equal(PendingChangeKind.Delete, pending.Kind);
         Assert.Equal(source, pending.Path, StringComparer.OrdinalIgnoreCase);
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.False(Directory.Exists(source));
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "other")));
     }
@@ -242,7 +242,7 @@ public sealed class DirectoryMoveTests
         await tx.AddAsync("c.txt", content);
 
         Assert.Equal(2, tx.GetPendingChanges().Count);
-        Assert.Equal(CommitResult.Succeeded, await tx.CommitAsync());
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "other")));
         Assert.Equal("out", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "c.txt")));
     }

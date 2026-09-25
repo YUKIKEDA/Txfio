@@ -39,8 +39,8 @@ public sealed class RecoverLockTests : IDisposable
         Assert.True(File.Exists(lockFile));
         Assert.False(File.Exists(target));
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.True(File.Exists(lockFile));
 
@@ -87,8 +87,8 @@ public sealed class RecoverLockTests : IDisposable
             Assert.False(File.Exists(held));
         }
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.False(File.Exists(held));
     }

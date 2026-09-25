@@ -1,0 +1,221 @@
+using Txfio.Tests.Support;
+
+namespace Txfio.Tests.Commit;
+
+public sealed class CommitReportTests
+{
+    /// <summary>
+    /// 成功したコミットは操作一覧を空にする
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 空のワークフォルダで Add している</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Succeeded で Operations は空</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_成功の操作一覧は空であること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("a.txt", "hello");
+
+        CommitReport report = await tx.CommitAsync();
+
+        Assert.Equal(CommitResult.Succeeded, report.Result);
+        Assert.Empty(report.Operations);
+    }
+
+    /// <summary>
+    /// 検証で拒んだ操作はすべて載り、直したあと同じトランザクションでもう一度コミットできる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt と b.txt を Add したあと、どちらも外部で作られている</para>
+    /// <para>手順: CommitAsync し、外部のファイルを消してからもう一度 CommitAsync する</para>
+    /// <para>期待: 1 回目は Failed で両方 AlreadyExists、2 回目は Succeeded で対象は Add の内容</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_検証失敗のあと直して同じトランザクションでコミットできること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("a.txt", "a");
+        await tx.WriteAllTextAsync("b.txt", "b");
+        string first = System.IO.Path.Combine(work.Path, "a.txt");
+        string second = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(first, "external-a");
+        await File.WriteAllTextAsync(second, "external-b");
+
+        CommitReport failed = await tx.CommitAsync();
+
+        Assert.Equal(CommitResult.Failed, failed.Result);
+        Assert.Equal(2, failed.Operations.Count);
+        Assert.Equal(PendingChangeKind.Add, failed.Operations[0].Kind);
+        Assert.Equal(OperationDisposition.Rejected, failed.Operations[0].Disposition);
+        Assert.Equal(OperationFailureReason.AlreadyExists, failed.Operations[0].Reason);
+        Assert.EndsWith("a.txt", failed.Operations[0].Path, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(failed.Operations[0].NewPath);
+        Assert.Equal(OperationFailureReason.AlreadyExists, failed.Operations[1].Reason);
+        Assert.EndsWith("b.txt", failed.Operations[1].Path, StringComparison.OrdinalIgnoreCase);
+        File.Delete(first);
+        File.Delete(second);
+
+        CommitReport again = await tx.CommitAsync();
+
+        Assert.Equal(CommitResult.Succeeded, again.Result);
+        Assert.Empty(again.Operations);
+        Assert.Equal("a", await File.ReadAllTextAsync(first));
+        Assert.Equal("b", await File.ReadAllTextAsync(second));
+    }
+
+    /// <summary>
+    /// 移動先が既にある Move は移動先パスと AlreadyExists を載せる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Move したあと、移動先は外部で作られている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Failed で NewPath は移動先、理由は AlreadyExists</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_移動先が既にあるとNewPathと理由を載せること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        await File.WriteAllTextAsync(dest, "external");
+
+        CommitReport report = await tx.CommitAsync();
+
+        OperationReport operation = Assert.Single(report.Operations);
+        Assert.Equal(CommitResult.Failed, report.Result);
+        Assert.Equal(PendingChangeKind.Move, operation.Kind);
+        Assert.Equal(OperationDisposition.Rejected, operation.Disposition);
+        Assert.Equal(OperationFailureReason.AlreadyExists, operation.Reason);
+        Assert.Equal(source, operation.Path, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(dest, operation.NewPath, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// ディレクトリがファイルにすり替わると ReplacedByFile になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: CreateDirectory したあと、そのパスをファイルにしている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Failed で理由は ReplacedByFile</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_ファイルにすり替わるとReplacedByFileになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string dir = System.IO.Path.Combine(work.Path, "drop");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.CreateDirectoryAsync("drop");
+        Directory.Delete(dir);
+        await File.WriteAllTextAsync(dir, "file");
+
+        CommitReport report = await tx.CommitAsync();
+
+        OperationReport operation = Assert.Single(report.Operations);
+        Assert.Equal(CommitResult.Failed, report.Result);
+        Assert.Equal(PendingChangeKind.CreateDirectory, operation.Kind);
+        Assert.Equal(OperationFailureReason.ReplacedByFile, operation.Reason);
+    }
+
+    /// <summary>
+    /// 消したファイルは Missing、直下に予定外の子があるディレクトリは DirectoryPreconditions になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Update の対象を消し、空ディレクトリの Delete の直下へ外部でファイルが足されている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Failed で、Update は Missing、Delete は DirectoryPreconditions</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_対象が無いと直下条件は理由が分かれること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string file = System.IO.Path.Combine(work.Path, "a.txt");
+        string dir = System.IO.Path.Combine(work.Path, "sub");
+        await File.WriteAllTextAsync(file, "old");
+        Directory.CreateDirectory(dir);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("a.txt", "new");
+        await tx.DeleteAsync("sub");
+        File.Delete(file);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "external.txt"), "no");
+
+        CommitReport report = await tx.CommitAsync();
+
+        Assert.Equal(CommitResult.Failed, report.Result);
+        Assert.Contains(
+            report.Operations,
+            operation => operation.Kind == PendingChangeKind.Update
+                && operation.Reason == OperationFailureReason.Missing);
+        Assert.Contains(
+            report.Operations,
+            operation => operation.Kind == PendingChangeKind.Delete
+                && operation.Reason == OperationFailureReason.DirectoryPreconditions);
+    }
+
+    /// <summary>
+    /// Delete の適用が共有違反なら PartialConflict で、同じインスタンスではやり直せない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Delete したあと、対象ファイルを共有なしで開いたままにしている</para>
+    /// <para>手順: CommitAsync し、同じトランザクションでもう一度 CommitAsync する</para>
+    /// <para>期待: PartialConflict で理由は SharingViolation、2 回目は InvalidOperationException</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_共有違反はPartialConflictで同じインスタンスではやり直せないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.DeleteAsync("a.txt");
+        await using FileStream locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        CommitReport report = await tx.CommitAsync();
+
+        OperationReport operation = Assert.Single(report.Operations);
+        Assert.Equal(CommitResult.PartialConflict, report.Result);
+        Assert.Equal(OperationDisposition.Skipped, operation.Disposition);
+        Assert.Equal(OperationFailureReason.SharingViolation, operation.Reason);
+        Assert.Equal(PendingChangeKind.Delete, operation.Kind);
+        InvalidOperationException again = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CommitAsync());
+        Assert.Equal("このトランザクションは既にコミット済みです", again.Message);
+    }
+
+    /// <summary>
+    /// 読み取り専用の対象への適用は IoFailure になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Update したあと、対象ファイルを読み取り専用にしている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: PartialConflict で理由は IoFailure、対象は元の内容</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_読み取り専用への適用はIoFailureになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("a.txt", "new");
+        File.SetAttributes(target, FileAttributes.ReadOnly);
+        try
+        {
+            CommitReport report = await tx.CommitAsync();
+
+            OperationReport operation = Assert.Single(report.Operations);
+            Assert.Equal(CommitResult.PartialConflict, report.Result);
+            Assert.Equal(OperationFailureReason.IoFailure, operation.Reason);
+            Assert.Equal("old", await File.ReadAllTextAsync(target));
+        }
+        finally
+        {
+            File.SetAttributes(target, FileAttributes.Normal);
+        }
+    }
+}

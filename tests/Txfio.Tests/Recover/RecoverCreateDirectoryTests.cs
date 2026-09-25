@@ -19,9 +19,9 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteCreateDirectoryAsync(work.Path, committing: false, createDirectory: true);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
-        Assert.Equal(RecoverResult.RolledBack, result);
+        Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(Directory.Exists(target));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -40,9 +40,9 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         await WriteCreateDirectoryAsync(work.Path, committing: false, createDirectory: false);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
-        Assert.Equal(RecoverResult.RolledBack, result);
+        Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
@@ -60,9 +60,9 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteCreateDirectoryAsync(work.Path, committing: true, createDirectory: true);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
-        Assert.Equal(RecoverResult.RolledForward, result);
+        Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("keep", await File.ReadAllTextAsync(System.IO.Path.Combine(target, "a.txt")));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -81,9 +81,9 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         await WriteCreateDirectoryAsync(work.Path, committing: true, createDirectory: false);
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
-        Assert.Equal(RecoverResult.ConflictDetected, result);
+        Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
@@ -103,9 +103,9 @@ public sealed class RecoverCreateDirectoryTests
         Directory.Delete(target, recursive: true);
         await File.WriteAllTextAsync(target, "file");
 
-        RecoverResult result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
-        Assert.Equal(RecoverResult.ConflictDetected, result);
+        Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.Equal("file", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }

@@ -79,7 +79,7 @@ public sealed class ProcessLockTests
         RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
             () => global::Txfio.Txfio.BeginAsync(work.Path));
         Assert.Equal(work.Path, required.Path);
-        Assert.Equal(RecoverResult.RolledBack, await global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
 
         await using ITransaction parent = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");
