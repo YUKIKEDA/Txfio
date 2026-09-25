@@ -161,9 +161,9 @@ public sealed class CommitMoveChainTests
 
         PendingChange pending = Assert.Single(tx.GetPendingChanges());
         Assert.Equal(PendingChangeKind.Move, pending.Kind);
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.bak")));
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
     }
@@ -187,9 +187,9 @@ public sealed class CommitMoveChainTests
         await tx.MoveAsync("c.txt", "a.txt");
         await tx.DeleteAsync("a.txt");
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("a", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "c.txt")));
@@ -219,9 +219,9 @@ public sealed class CommitMoveChainTests
         Assert.Equal(2, pending.Count);
         Assert.Contains(pending, change => change.Kind == PendingChangeKind.Add && change.Path.EndsWith("b.txt", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(pending, change => change.Kind == PendingChangeKind.Update && change.Path.EndsWith("a.txt", StringComparison.OrdinalIgnoreCase));
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("updated", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
         Assert.Equal("added", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
     }
@@ -246,9 +246,9 @@ public sealed class CommitMoveChainTests
         await tx.MoveAsync("a.txt", "c.txt");
 
         Assert.Equal("added", await tx.ReadAllTextAsync("c.txt"));
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
         Assert.Equal("added", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "c.txt")));
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
@@ -273,9 +273,9 @@ public sealed class CommitMoveChainTests
         await tx.MoveAsync("c.txt", "a.txt");
         await tx.MoveAsync("a.txt", "d.txt");
 
-        CommitResult result = await tx.CommitAsync();
+        CommitReport result = await tx.CommitAsync();
 
-        Assert.Equal(CommitResult.Succeeded, result);
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("a", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
         Assert.Equal("c", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "d.txt")));
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));

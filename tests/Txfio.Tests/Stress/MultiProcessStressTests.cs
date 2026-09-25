@@ -159,7 +159,7 @@ public sealed class MultiProcessStressTests
             Format(expected) == Format(actual),
             $"最終状態が違う（{summary}）{Environment.NewLine}期待 [{Format(expected)}]{Environment.NewLine}実際 [{Format(actual)}]");
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work, ".txfio"), "tx-*.journal"));
-        Assert.Equal(RecoverResult.NoPendingTransactions, await global::Txfio.Txfio.RecoverAsync(work));
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work)).Result);
     }
 
     private sealed record StressRecord(

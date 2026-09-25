@@ -141,14 +141,14 @@ internal static class RandomOperationRunner
             {
                 try
                 {
-                    CommitResult result = await tx.CommitAsync();
-                    trace.Append("  Commit -> ").Append(result).AppendLine();
-                    if (result == CommitResult.PartialConflict)
+                    CommitReport report = await tx.CommitAsync();
+                    trace.Append("  Commit -> ").Append(report.Result).AppendLine();
+                    if (report.Result == CommitResult.PartialConflict)
                     {
                         return "外から変えていないのに PartialConflict になった";
                     }
 
-                    if (result == CommitResult.Succeeded)
+                    if (report.Result == CommitResult.Succeeded)
                     {
                         expected = model.Files;
                     }

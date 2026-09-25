@@ -138,7 +138,7 @@ public static class StressWriter
             else
             {
                 timestamp = Stopwatch.GetTimestamp();
-                outcome = (await tx.CommitAsync()).ToString();
+                outcome = (await tx.CommitAsync()).Result.ToString();
             }
         }
         catch (LockContentionException)

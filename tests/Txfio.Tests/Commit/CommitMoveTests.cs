@@ -283,8 +283,8 @@ public sealed class CommitMoveTests
         await tx.AddAsync("sub/a.txt", added);
 
         Assert.Equal("updated", await tx.ReadAllTextAsync("a.txt"));
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("updated", await File.ReadAllTextAsync(dest));
         Assert.Equal("added", await File.ReadAllTextAsync(source));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew", SearchOption.AllDirectories));
@@ -309,8 +309,8 @@ public sealed class CommitMoveTests
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
         await tx.AddAsync("a.txt", second);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("first", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
         Assert.Equal("second", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
     }
@@ -336,8 +336,8 @@ public sealed class CommitMoveTests
         await using MemoryStream updated = LeftoverAddFiles.Utf8Stream("updated");
         await tx.UpdateAsync("d.txt", updated);
 
-        CommitResult result = await tx.CommitAsync();
-        Assert.Equal(CommitResult.Succeeded, result);
+        CommitReport result = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, result.Result);
         Assert.Equal("added", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "e.txt")));
         Assert.Equal("updated", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "d.txt")));
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
