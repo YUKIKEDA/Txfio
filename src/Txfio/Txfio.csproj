@@ -4,6 +4,7 @@
     <RootNamespace>Txfio</RootNamespace>
     <AssemblyName>Txfio</AssemblyName>
     <IsPackable>true</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <VersionPrefix>0.0.1</VersionPrefix>
     <PackageId>Txfio</PackageId>
     <Authors>YUKIKEDA</Authors>

@@ -432,7 +432,7 @@ internal static class StagingApplier
 
         try
         {
-            Directory.Move(sourcePath, destPath);
+            SameVolumeMove.MoveDirectory(sourcePath, destPath);
             return true;
         }
         catch (IOException exception)
@@ -481,7 +481,7 @@ internal static class StagingApplier
 
         try
         {
-            File.Move(sourcePath, destPath);
+            SameVolumeMove.MoveFile(sourcePath, destPath);
             return true;
         }
         catch (IOException exception)
