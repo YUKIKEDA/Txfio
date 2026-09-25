@@ -15,7 +15,24 @@ public static class Txfio
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
     public static Task<ITransaction> BeginAsync(string path, CancellationToken cancellationToken = default)
     {
-        return BeginAsync(path, TimeSpan.Zero, cancellationToken);
+        return BeginAsync(path, TimeSpan.Zero, detectExternalChanges: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// ワークフォルダに対するトランザクションを開始する（ロックの待ちはゼロ）
+    /// </summary>
+    /// <param name="path">既存のワークフォルダ</param>
+    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
+    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
+    /// <returns>開始したトランザクション</returns>
+    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    public static Task<ITransaction> BeginAsync(
+        string path,
+        bool detectExternalChanges,
+        CancellationToken cancellationToken = default)
+    {
+        return BeginAsync(path, TimeSpan.Zero, detectExternalChanges, cancellationToken);
     }
 
     /// <summary>
@@ -28,7 +45,27 @@ public static class Txfio
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
-    public static async Task<ITransaction> BeginAsync(string path, TimeSpan lockWait, CancellationToken cancellationToken = default)
+    public static Task<ITransaction> BeginAsync(string path, TimeSpan lockWait, CancellationToken cancellationToken = default)
+    {
+        return BeginAsync(path, lockWait, detectExternalChanges: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// ワークフォルダに対するトランザクションを開始する
+    /// </summary>
+    /// <param name="path">既存のワークフォルダ</param>
+    /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限（ゼロは待たない）</param>
+    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
+    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
+    /// <returns>開始したトランザクション</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
+    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    public static async Task<ITransaction> BeginAsync(
+        string path,
+        TimeSpan lockWait,
+        bool detectExternalChanges,
+        CancellationToken cancellationToken = default)
     {
         if (lockWait < TimeSpan.Zero && lockWait != Timeout.InfiniteTimeSpan)
         {
@@ -61,7 +98,7 @@ public static class Txfio
             throw;
         }
 
-        return new Transaction(workFolder, transactionId, journalPath, liveness, lockWait);
+        return new Transaction(workFolder, transactionId, journalPath, liveness, lockWait, detectExternalChanges);
     }
 
     /// <summary>

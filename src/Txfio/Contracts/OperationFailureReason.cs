@@ -39,4 +39,9 @@ public enum OperationFailureReason
     /// それ以外の IO 失敗
     /// </summary>
     IoFailure = 6,
+
+    /// <summary>
+    /// 記録した実ファイルのサイズか最終更新日時が違う
+    /// </summary>
+    ExternalChange = 7,
 }

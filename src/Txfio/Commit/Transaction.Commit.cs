@@ -24,7 +24,15 @@ internal sealed partial class Transaction
         // 開始後に落ちたトランザクションの残骸でも、確定したデータは消さない
         StaleJournals.ThrowIfAny(_workFolder);
 
-        if (!OperationOutcomes.TryStamp(_operations, _transactionId, out JournalOperation[] stamped, out OperationReport[] rejections))
+        Func<JournalOperation, bool>? isExternalChange = _externalChanges is null
+            ? null
+            : _externalChanges.IsMismatch;
+        if (!OperationOutcomes.TryStamp(
+                _operations,
+                _transactionId,
+                out JournalOperation[] stamped,
+                out OperationReport[] rejections,
+                isExternalChange))
         {
             return new CommitReport(CommitResult.Failed, rejections);
         }

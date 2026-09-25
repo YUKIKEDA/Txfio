@@ -12,6 +12,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly List<string> _createdDirectories = new List<string>();
     private readonly PathLockSet _locks = new PathLockSet();
     private readonly TimeSpan _lockWait;
+    private readonly ExternalChangeSet? _externalChanges;
     private FileStream? _liveness;
     private bool _committed;
     private bool _committingWritten;
@@ -26,13 +27,21 @@ internal sealed partial class Transaction : ITransaction
     /// <param name="journalPath">このトランザクションのジャーナルファイル</param>
     /// <param name="liveness">トランザクションが終わるまで持つ生存ロック</param>
     /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限</param>
-    internal Transaction(string workFolder, Guid transactionId, string journalPath, FileStream liveness, TimeSpan lockWait)
+    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
+    internal Transaction(
+        string workFolder,
+        Guid transactionId,
+        string journalPath,
+        FileStream liveness,
+        TimeSpan lockWait,
+        bool detectExternalChanges)
     {
         _workFolder = workFolder;
         _transactionId = transactionId;
         _journalPath = journalPath;
         _liveness = liveness;
         _lockWait = lockWait;
+        _externalChanges = detectExternalChanges ? new ExternalChangeSet() : null;
     }
 
     /// <inheritdoc />
