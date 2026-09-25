@@ -91,10 +91,11 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 移動元と移動先が同一ボリュームかを検証する
+    /// 移動元と移動先のルート（ドライブまたは共有）が同じかどうかを検証する
     /// </summary>
     /// <param name="sourcePath">移動元パス</param>
     /// <param name="destPath">移動先パス</param>
+    /// <remarks>マウントポイントは見ない（ワークフォルダ内側のリパースポイントはパス解決が拒否する）</remarks>
     internal static void EnsureSameVolume(string sourcePath, string destPath)
     {
         string? sourceRoot = System.IO.Path.GetPathRoot(sourcePath);
