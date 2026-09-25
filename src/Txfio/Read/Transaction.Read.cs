@@ -12,6 +12,17 @@ internal sealed partial class Transaction
         return Task.FromResult(ReadCore(path, cancellationToken));
     }
 
+    /// <inheritdoc />
+    public Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
+    {
+        using CallScope scope = EnterCall();
+        ThrowIfCannotMutate();
+        cancellationToken.ThrowIfCancellationRequested();
+        string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
+        return Task.FromResult(CommitView.Resolve(_operations, targetPath).Exists);
+    }
+
     private static FileStream OpenRead(string path, string reportedPath)
     {
         try
@@ -37,18 +48,18 @@ internal sealed partial class Transaction
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
-        string? stagingPath = FindStagingPath(targetPath);
-        if (!string.IsNullOrEmpty(stagingPath))
+        CommitAppearance appearance = CommitView.Resolve(_operations, targetPath);
+        if (!appearance.Exists)
         {
-            return OpenRead(stagingPath, targetPath);
+            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + targetPath, targetPath);
         }
 
-        if (Directory.Exists(targetPath))
+        if (appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
         {
             throw new UnsupportedOperationException("ディレクトリの読み取りは未対応です: " + targetPath);
         }
 
-        return OpenRead(targetPath, targetPath);
+        return OpenRead(appearance.ContentPath, targetPath);
     }
 
     private string? FindStagingPath(string targetPath)
