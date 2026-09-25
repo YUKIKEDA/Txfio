@@ -6,6 +6,9 @@ namespace Txfio;
 /// <summary>
 /// トランザクションの公開契約
 /// </summary>
+/// <remarks>
+/// 公開メンバーは重なって呼べず、重なった呼び出しは状態を変える前に <see cref="InvalidOperationException"/> になる
+/// </remarks>
 public interface ITransaction : IAsyncDisposable
 {
     /// <summary>
@@ -16,9 +19,9 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">対象が既にある、または親ディレクトリが無い</exception>
+    /// <exception cref="ExternalConflictException">対象が既にあり、ファイル Move の移動元ではない、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、ディレクトリ Move の移動元への追加、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task AddAsync(
         string path,
@@ -36,7 +39,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">対象が無い、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task UpdateAsync(
         string path,
@@ -52,7 +55,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>予約の完了</returns>
     /// <exception cref="ExternalConflictException">対象が無い、またはディレクトリ直下に予定外の子がある</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">メタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、メタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task DeleteAsync(string path, CancellationToken cancellationToken = default);
 
@@ -65,7 +68,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ExternalConflictException">対象ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">対象がファイルである</exception>
-    /// <exception cref="InvalidOperationException">配下にこのトランザクションの操作がある、ディレクトリ Move の配下である、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、配下にこのトランザクションの操作がある、ディレクトリ Move の配下である、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task DeleteTreeAsync(string path, CancellationToken cancellationToken = default);
 
@@ -76,10 +79,10 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>予約の完了</returns>
-    /// <exception cref="ExternalConflictException">移動元が無い、移動先が塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="ExternalConflictException">移動元が無い、移動先が別の Move の移動元でもなく塞がっている、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動である</exception>
-    /// <exception cref="InvalidOperationException">同じパスへの移動（大文字小文字だけの違いを含む）、別操作でステージング済み、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動（大文字小文字だけの違いを含む）、別操作でステージング済み、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
@@ -91,7 +94,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>作成の完了</returns>
     /// <exception cref="ExternalConflictException">対象が既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、配下に操作がある、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、配下に操作がある、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
 
@@ -105,7 +108,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションがコピー元、コピー先、またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、同じパスへのコピー、自分自身の配下へのコピー、シンボリックリンク、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、同じパスへのコピー、自分自身の配下へのコピー、シンボリックリンク、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task CopyAsync(
         string source,
@@ -123,7 +126,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションがコピー先またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、自分自身の配下への取り込み、シンボリックリンク、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、自分自身の配下への取り込み、シンボリックリンク、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">コピー元がワークフォルダの中、またはコピー先がワークフォルダの外である</exception>
     Task ImportAsync(
         string externalPath,
@@ -140,7 +143,7 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>コピーの完了</returns>
     /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="InvalidOperationException">シンボリックリンク、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、シンボリックリンク、メタデータ配下、またはコミット済みである</exception>
     /// <exception cref="ArgumentException">コピー元がワークフォルダの外、またはコピー先がワークフォルダの中である</exception>
     Task ExportAsync(
         string path,
@@ -160,7 +163,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが入力、ZIP のパス、またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、入力の配下に操作がある、ZIP のパスが入力の配下、シンボリックリンク、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、入力の配下に操作がある、ZIP のパスが入力の配下、シンボリックリンク、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task CreateArchiveAsync(
         string source,
@@ -182,7 +185,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException">組の列、要素、または要素のパスが null である</exception>
     /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが入力、ZIP のパス、またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">入力がステージング済み、入力の配下に操作がある、ZIP のパスが入力の配下、シンボリックリンク、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、入力がステージング済み、入力の配下に操作がある、ZIP のパスが入力の配下、シンボリックリンク、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外、またはエントリ名が不正、重複、ファイルとディレクトリの同名である</exception>
     Task CreateArchiveAsync(
         IEnumerable<ArchiveEntrySource> entries,
@@ -202,7 +205,7 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>書き出しの完了</returns>
     /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="InvalidOperationException">シンボリックリンク、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、シンボリックリンク、メタデータ配下、またはコミット済みである</exception>
     /// <exception cref="ArgumentException">入力がワークフォルダの外、または ZIP のパスがワークフォルダの中である</exception>
     Task ExportArchiveAsync(
         string source,
@@ -223,7 +226,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>書き出しの完了</returns>
     /// <exception cref="ArgumentNullException">組の列、要素、または要素のパスが null である</exception>
     /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="InvalidOperationException">シンボリックリンク、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、シンボリックリンク、メタデータ配下、またはコミット済みである</exception>
     /// <exception cref="ArgumentException">入力がワークフォルダの外、ZIP のパスがワークフォルダの中、またはエントリ名が不正、重複、ファイルとディレクトリの同名である</exception>
     Task ExportArchiveAsync(
         IEnumerable<ArchiveEntrySource> entries,
@@ -245,7 +248,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="LockContentionException">他のトランザクションが展開先またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ZIP のパスがディレクトリである</exception>
     /// <exception cref="InvalidDataException">展開先の外へ出る名前、Windows で使えない名前、`.txnew` で終わる名前、重複、またはファイルとディレクトリの同名がある。ZIP 自体が読めないときも同じ</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、展開先の配下に操作がある、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、展開先の配下に操作がある、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task ExtractArchiveAsync(
         string archivePath,
@@ -267,7 +270,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="LockContentionException">他のトランザクションが展開先またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ZIP のパスがディレクトリである</exception>
     /// <exception cref="InvalidDataException">展開先の外へ出る名前、Windows で使えない名前、`.txnew` で終わる名前、重複、またはファイルとディレクトリの同名がある。ZIP 自体が読めないときも同じ</exception>
-    /// <exception cref="InvalidOperationException">別操作でステージング済み、展開先の配下に操作がある、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、展開先の配下に操作がある、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">ZIP のパスがワークフォルダの中、または展開先がワークフォルダの外である</exception>
     Task ImportArchiveAsync(
         string externalArchivePath,
@@ -277,16 +280,26 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ステージング済みならその内容を、無ければ本物のファイルを開く
+    /// コミット後の姿のファイルを開く
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
     /// <returns>位置 0 の読み取りストリーム（呼び出し側が破棄する）</returns>
     /// <exception cref="ExternalConflictException">対象が無い</exception>
     /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
-    /// <exception cref="InvalidOperationException">メタデータ配下である、またはコミット済みである</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、メタデータ配下である、またはコミット済みである</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// コミット後の姿で、ファイルかディレクトリがあるかを返す
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
+    /// <returns>ファイルかディレクトリがあるなら <see langword="true"/></returns>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、メタデータ配下である、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// ステージングした変更をワークフォルダへ確定する
@@ -294,11 +307,13 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
     /// <returns>確定結果</returns>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている。実体には触れず、未コミットのまま残る</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、またはコミット済みである</exception>
     Task<CommitResult> CommitAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 現在のジャーナル上の未確定操作一覧を返す
     /// </summary>
     /// <returns>操作一覧（この時点では空になりうる）</returns>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている</exception>
     IReadOnlyList<PendingChange> GetPendingChanges();
 }

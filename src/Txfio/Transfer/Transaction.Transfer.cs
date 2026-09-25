@@ -12,6 +12,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);
@@ -39,25 +40,35 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         string destinationPath = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
-        if (Directory.Exists(sourcePath))
+        CommitAppearance appearance = CommitView.Resolve(_operations, sourcePath);
+        if (appearance.IsDirectory)
         {
-            await ExportDirectoryAsync(sourcePath, destinationPath, progress, cancellationToken)
+            await ExportDirectoryAsync(appearance.ContentPath ?? sourcePath, destinationPath, progress, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
 
-        if (File.Exists(sourcePath) && IsReparsePoint(sourcePath))
+        if (!appearance.Exists || string.IsNullOrEmpty(appearance.ContentPath))
+        {
+            throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
+        }
+
+        if (IsReparsePoint(appearance.ContentPath))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
         }
 
         EnsureExportDestination(destinationPath);
-        await using FileStream source = OpenExportSource(sourcePath);
+        await using FileStream source = OpenExternalFile(
+            appearance.ContentPath,
+            "コピー元のファイルが存在しません: " + sourcePath,
+            sourcePath);
         await StagingFile.CopyToNewFileAsync(source, destinationPath, progress, cancellationToken)
             .ConfigureAwait(false);
     }

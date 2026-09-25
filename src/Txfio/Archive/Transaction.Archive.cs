@@ -11,7 +11,7 @@ internal sealed partial class Transaction
     private static readonly DateTime _maximumEntryTime = new DateTime(2107, 12, 31, 23, 59, 58);
 
     /// <inheritdoc />
-    public Task CreateArchiveAsync(
+    public async Task CreateArchiveAsync(
         string source,
         string archivePath,
         CompressionLevel compressionLevel = CompressionLevel.Optimal,
@@ -19,41 +19,43 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
         ArchiveRoot root = ToSingleArchiveRoot(sourcePath, includeBaseDirectory);
-        return CreateArchiveCoreAsync(
+        await CreateArchiveCoreAsync(
             new[] { root },
             archivePath,
             compressionLevel,
             validateNames: false,
             progress,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public Task CreateArchiveAsync(
+    public async Task CreateArchiveAsync(
         IEnumerable<ArchiveEntrySource> entries,
         string archivePath,
         CompressionLevel compressionLevel = CompressionLevel.Optimal,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         IReadOnlyList<ArchiveRoot> roots = ToArchiveRoots(entries);
-        return CreateArchiveCoreAsync(
+        await CreateArchiveCoreAsync(
             roots,
             archivePath,
             compressionLevel,
             validateNames: true,
             progress,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public Task ExportArchiveAsync(
+    public async Task ExportArchiveAsync(
         string source,
         string externalArchivePath,
         CompressionLevel compressionLevel = CompressionLevel.Optimal,
@@ -61,37 +63,39 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
         ArchiveRoot root = ToSingleArchiveRoot(sourcePath, includeBaseDirectory);
-        return ExportArchiveCoreAsync(
+        await ExportArchiveCoreAsync(
             new[] { root },
             externalArchivePath,
             compressionLevel,
             validateNames: false,
             progress,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public Task ExportArchiveAsync(
+    public async Task ExportArchiveAsync(
         IEnumerable<ArchiveEntrySource> entries,
         string externalArchivePath,
         CompressionLevel compressionLevel = CompressionLevel.Optimal,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         IReadOnlyList<ArchiveRoot> roots = ToArchiveRoots(entries);
-        return ExportArchiveCoreAsync(
+        await ExportArchiveCoreAsync(
             roots,
             externalArchivePath,
             compressionLevel,
             validateNames: true,
             progress,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static ArchiveRoot ToSingleArchiveRoot(string sourcePath, bool includeBaseDirectory)

@@ -262,4 +262,106 @@ public sealed class TextExtensionTests
         await Assert.ThrowsAsync<ExternalConflictException>(() => tx.ReadAllTextAsync("missing.txt"));
         await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.ReadAllTextAsync("dir"));
     }
+
+    /// <summary>
+    /// Move 先への WriteAllText は移動先の Add と元の Delete になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を b.txt へ Move している</para>
+    /// <para>手順: b.txt へ WriteAllTextAsync する</para>
+    /// <para>期待: pending は b.txt の Add と a.txt の Delete で、b.txt の内容が読める。a.txt はディスクに残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAllTextAsync_Move先はAddとDeleteになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(source, "x");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+
+        await tx.WriteAllTextAsync("b.txt", "y");
+
+        IReadOnlyList<PendingChange> pending = tx.GetPendingChanges();
+        Assert.Equal(2, pending.Count);
+        Assert.Equal(PendingChangeKind.Add, pending[0].Kind);
+        Assert.EndsWith("b.txt", pending[0].Path, StringComparison.Ordinal);
+        Assert.Equal(PendingChangeKind.Delete, pending[1].Kind);
+        Assert.EndsWith("a.txt", pending[1].Path, StringComparison.Ordinal);
+        Assert.Equal("y", await tx.ReadAllTextAsync("b.txt"));
+        Assert.Equal("x", await File.ReadAllTextAsync(source));
+    }
+
+    /// <summary>
+    /// Move 先への WriteAllLines も移動先の Add と元の Delete になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を b.txt へ Move している</para>
+    /// <para>手順: b.txt へ WriteAllLinesAsync する</para>
+    /// <para>期待: pending は Add と Delete で、書いた行が読める</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAllLinesAsync_Move先はAddとDeleteになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "x");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+
+        await tx.WriteAllLinesAsync("b.txt", new[] { "y" });
+
+        IReadOnlyList<PendingChange> pending = tx.GetPendingChanges();
+        Assert.Equal(PendingChangeKind.Add, pending[0].Kind);
+        Assert.Equal(PendingChangeKind.Delete, pending[1].Kind);
+        Assert.Equal(new[] { "y" }, await tx.ReadAllLinesAsync("b.txt"));
+    }
+
+    /// <summary>
+    /// ディレクトリの Move 先への WriteAllText は失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: sub を other へ Move している</para>
+    /// <para>手順: other へ WriteAllTextAsync する</para>
+    /// <para>期待: InvalidOperationException で、pending は Move のままである</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAllTextAsync_ディレクトリのMove先はInvalidOperationExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("sub", "other");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.WriteAllTextAsync("other", "y"));
+
+        PendingChange pending = Assert.Single(tx.GetPendingChanges());
+        Assert.Equal(PendingChangeKind.Move, pending.Kind);
+    }
+
+    /// <summary>
+    /// Move の移動元への WriteAllText は Add になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を a.bak へ Move している</para>
+    /// <para>手順: a.txt へ WriteAllTextAsync する</para>
+    /// <para>期待: pending は Move と Add で、a.txt は新しい内容が読め、a.bak は旧内容が読める</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAllTextAsync_Moveの移動元はAddになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "a.bak");
+
+        await tx.WriteAllTextAsync("a.txt", "new");
+
+        IReadOnlyList<PendingChange> pending = tx.GetPendingChanges();
+        Assert.Equal(2, pending.Count);
+        Assert.Equal(PendingChangeKind.Move, pending[0].Kind);
+        Assert.Equal(PendingChangeKind.Add, pending[1].Kind);
+        Assert.Equal("new", await tx.ReadAllTextAsync("a.txt"));
+        Assert.Equal("old", await tx.ReadAllTextAsync("a.bak"));
+        Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
 }

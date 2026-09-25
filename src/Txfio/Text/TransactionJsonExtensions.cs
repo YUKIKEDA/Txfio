@@ -33,7 +33,7 @@ public static class TransactionJsonExtensions
     }
 
     /// <summary>
-    /// 値を JSON にして書く。ディスク上にファイルが無ければ Add、あれば Update
+    /// 値を JSON にして書く。コミット後の姿でファイルが無ければ Add、あれば Update
     /// </summary>
     /// <typeparam name="T">書き込む型</typeparam>
     /// <param name="transaction">対象のトランザクション</param>

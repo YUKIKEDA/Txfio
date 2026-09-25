@@ -61,9 +61,10 @@ CommitResult result = await tx.CommitAsync();
 | `ExportArchiveAsync`                       | 読み取りと同じバイトで、ワークフォルダの外に ZIP を作る。ジャーナルには残さず、ロックもしない                                                      |
 | `ExtractArchiveAsync`                      | ワークフォルダ内の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す                                                                   |
 | `ImportArchiveAsync`                       | ワークフォルダの外の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す。ZIP は消さない                                                 |
-| `ReadAsync`                                | `.txnew` があればそれ、無ければ本物のファイル。ロックは取らない                                                                                    |
+| `ReadAsync`                                | コミット後の姿のファイルを開く。ロックは取らない                                                                                                   |
+| `ExistsAsync`                              | コミット後の姿で、ファイルかディレクトリがあるかを返す。ロックは取らない                                                                           |
 | `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                                                 |
-| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                                       |
+| `WriteAllTextAsync` / `WriteAllLinesAsync` | コミット後の姿でファイルが無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                        |
 | `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                                  |
 | `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                                   |
 | `CommitAsync`                              | 検証してから rename と削除を適用する                                                                                                               |
@@ -161,13 +162,15 @@ flowchart TD
 
 このロックは、Txfio の利用者同士の協調です。素の `File` API やエクスプローラーは止めません。
 
+同じトランザクションの公開メンバーは、重なって呼べません。先に入った呼び出しは最後まで行い、後から重なった呼び出しは状態を変える前に `InvalidOperationException` です。進行中の progress から同じインスタンスを呼ぶのも同じです。呼び出しが終わったあとは、また 1 つずつ呼べます。別のトランザクションは、別のパスなら今までどおり並行できます。
+
 変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで持ちます。ふだんこの全体のロックは共有なので、別のパスを触るトランザクションは並行できます。ディレクトリの Move、`DeleteTreeAsync`、ディレクトリの `CopyAsync`、ディレクトリの `ImportAsync`、`CreateDirectoryAsync`、ディレクトリからの（組ならディレクトリを含む）`CreateArchiveAsync`、`ExtractArchiveAsync`、`ImportArchiveAsync` のあいだだけ、ワークフォルダ全体は排他になり、そのあいだのほかの変更は待たずに `LockContentionException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、何もせず `LockContentionException` です。`.lock` ファイルは消しません。
 
-ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
+ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExistsAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 
 ## AddAsync
 
-`AddAsync` は、ディスク上にまだ無いファイルの内容を、同じディレクトリの `.txnew` へ書きます。本物のパスはコミットまで存在せず、コミットするとそのパスへ rename します。破棄すると `.txnew` だけ消えます。印を書く前に落ちると `.txnew` を消し、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
+`AddAsync` は、ディスク上にまだ無いファイルの内容を、同じディレクトリの `.txnew` へ書きます。本物のパスはコミットまで存在せず、コミットするとそのパスへ rename します。破棄すると `.txnew` だけ消えます。印を書く前に落ちると `.txnew` を消し、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。ファイル Move の移動元なら、ディスク上にファイルがまだあっても Add できます。ディレクトリ Move の移動元への Add は失敗します。
 
 ワークフォルダ全体は共有で押さえ、そのファイルもロックします。81920 バイト書くたびに `TransferProgress` を通知し、空の内容は最後に 1 回、0 バイトです。null の progress は通知しません。渡したストリームは閉じません。
 
@@ -179,8 +182,10 @@ await tx.AddAsync("big.bin", content);
 ```mermaid
 flowchart TD
   add["AddAsync"] --> exists{"ディスク上にファイルがある?"}
-  exists -->|ある| ext["ExternalConflictException"]
-  exists -->|無い| parent{"親ディレクトリがある?"}
+  exists -->|ある| moved{"ファイル Move の移動元?"}
+  moved -->|いいえ| ext["ExternalConflictException"]
+  moved -->|はい| parent{"親ディレクトリがある?"}
+  exists -->|無い| parent
   parent -->|無い| ext
   parent -->|ある| ok[".txnew に書く"]
 ```
@@ -202,7 +207,7 @@ flowchart TD
 
 ## 文字列と JSON
 
-小さい文字列は `WriteAllTextAsync` です。ディスク上にファイルが無ければ Add、あれば Update です。未コミットの `.txnew` は、ディスク上のファイルには数えません。同じパスへ続けて書くと、予約は 1 件のまま内容だけ置き換わります。
+小さい文字列は `WriteAllTextAsync` です。コミット後の姿でファイルが無ければ Add、あれば Update です。ファイル `Move` の移動先は Update で、ファイルなら移動先の Add と元の Delete に畳みます。ファイル `Move` の移動元は Add です。ディレクトリ `Move` の移動先も移動元も失敗します。`Delete` のあとは、選ぶ時点では Add でも、記録は Update です。同じパスへ続けて書くと、予約は 1 件のまま内容だけ置き換わります。
 
 ```csharp
 await tx.WriteAllTextAsync("new.txt", "hello");
@@ -223,24 +228,26 @@ Note? note = await tx.ReadFromJsonAsync<Note>("note.json");
 
 ```mermaid
 flowchart TD
-  write["文字列または JSON を書く"] --> exists{"ディスク上にファイルがある?"}
+  write["文字列または JSON を書く"] --> exists{"コミット後の姿でファイルがある?"}
   exists -->|無い| add["Add"]
   exists -->|ある| upd["Update"]
 ```
 
 ## ReadAsync
 
-`ReadAsync` は、位置 0 の読み取りストリームを返します。破棄は呼び出し側です。`.txnew` があればそれを、無ければ本物を読みます。Delete の予約と Move の移動元は、新しいバイトが無いので本物を読みます。ロックは取りません。ジャーナルにも残りません。
+`ReadAsync` は、位置 0 の読み取りストリームを返します。破棄は呼び出し側です。このトランザクションの予約は、コミット後の姿で読みます。`Add` と `Update` は `.txnew`、ファイル `Move` の移動先は移動元のバイト、移動元と `Delete` の対象は無いです。`DeleteTree` の配下と、ディレクトリ `Move` の移動元の配下も無いです。移動先の配下は、移動元の対応するファイルです。ロックは取りません。ジャーナルにも残りません。
+
+`ExistsAsync` は、同じ姿でファイルかディレクトリがあるかを bool で返します。無いパスは false で、ディレクトリだから失敗することはありません。
 
 ストリームを閉じる前でも、コミットの rename は進みます。同じパスを、ストリームを開いたまま書き直すと失敗することがあります。`ReadAllTextAsync` と `ReadAllLinesAsync` は、この読み取りと同じバイトを文字列、または行の配列にします。
 
 ```mermaid
 flowchart TD
-  read["ReadAsync"] --> dir{"ディレクトリ?"}
+  read["ReadAsync"] --> dir{"コミット後の姿がディレクトリ?"}
   dir -->|はい| uns["UnsupportedOperationException"]
-  dir -->|いいえ| bytes{".txnew も本物も無い?"}
+  dir -->|いいえ| bytes{"コミット後の姿にファイルが無い?"}
   bytes -->|はい| ext["ExternalConflictException"]
-  bytes -->|いいえ| ok[".txnew があればそれ、無ければ本物"]
+  bytes -->|いいえ| ok["そのファイルを開く"]
 ```
 
 ## DeleteAsync
@@ -302,7 +309,7 @@ flowchart TD
 
 `MoveAsync` は、同一ボリューム内のファイルまたはディレクトリの移動を予約します。対象はコミットまで元の場所に残り、コミット時に 1 回 rename します。ディレクトリの中身はジャーナルに書かず、rename に付いていきます。破棄しても何も消えません。印が無ければディスクは変えず、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
 
-ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリのあいだはワークフォルダ全体を排他で押さえ、元と先をロックします。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。ジャーナルには載せず、ロックも取りません。
+ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリのあいだはワークフォルダ全体を排他で押さえ、元と先をロックします。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。ジャーナルには載せず、ロックも取りません。移動先は、空いているか、既にこのトランザクションの別の Move の移動元であるときだけ受け付けます。呼び出しは空いている端からで、空いている端が無い循環は受け付けません。適用もその端からで、ファイルの移動元への Add はその Move のあとです。存在するファイルを上書きする Move はしません。
 
 ```csharp
 await tx.MoveAsync("tree", "archive");
@@ -314,10 +321,12 @@ flowchart TD
   same -->|はい| invSame["InvalidOperationException"]
   same -->|いいえ| vol{"別ボリューム?"}
   vol -->|はい| uns["UnsupportedOperationException"]
-  vol -->|いいえ| place{"元が無い、または先がある?"}
+  vol -->|いいえ| place{"元が無い、または先が塞がっていて別の Move の移動元でもない?"}
   place -->|はい| ext["ExternalConflictException"]
-  place -->|いいえ| under{"配下、または自分自身の配下?"}
-  under -->|はい| inv["InvalidOperationException"]
+  place -->|いいえ| cycle{"空いている端が無い?"}
+  cycle -->|はい| inv["InvalidOperationException"]
+  cycle -->|いいえ| under{"配下、または自分自身の配下?"}
+  under -->|はい| inv
   under -->|いいえ| ok["移動を予約する"]
 ```
 

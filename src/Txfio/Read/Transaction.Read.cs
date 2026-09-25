@@ -8,22 +8,19 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
+        using CallScope scope = EnterCall();
+        return Task.FromResult(ReadCore(path, cancellationToken));
+    }
+
+    /// <inheritdoc />
+    public Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
+    {
+        using CallScope scope = EnterCall();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
-        string? stagingPath = FindStagingPath(targetPath);
-        if (!string.IsNullOrEmpty(stagingPath))
-        {
-            return Task.FromResult<Stream>(OpenRead(stagingPath, targetPath));
-        }
-
-        if (Directory.Exists(targetPath))
-        {
-            throw new UnsupportedOperationException("ディレクトリの読み取りは未対応です: " + targetPath);
-        }
-
-        return Task.FromResult<Stream>(OpenRead(targetPath, targetPath));
+        return Task.FromResult(CommitView.Resolve(_operations, targetPath).Exists);
     }
 
     private static FileStream OpenRead(string path, string reportedPath)
@@ -43,6 +40,26 @@ internal sealed partial class Transaction
             // 開く時点で無ければ、対象が無い契約として返す
             throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + reportedPath, reportedPath);
         }
+    }
+
+    private Stream ReadCore(string path, CancellationToken cancellationToken)
+    {
+        ThrowIfCannotMutate();
+        cancellationToken.ThrowIfCancellationRequested();
+        string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
+        StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
+        CommitAppearance appearance = CommitView.Resolve(_operations, targetPath);
+        if (!appearance.Exists)
+        {
+            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + targetPath, targetPath);
+        }
+
+        if (appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
+        {
+            throw new UnsupportedOperationException("ディレクトリの読み取りは未対応です: " + targetPath);
+        }
+
+        return OpenRead(appearance.ContentPath, targetPath);
     }
 
     private string? FindStagingPath(string targetPath)

@@ -90,6 +90,13 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #136: 設計: 大文字小文字だけが違う Move は InvalidOperationException にする（実装は含めない）
 - [x] Issue #87: 大文字小文字だけが違う Move は InvalidOperationException にする
 - [x] Issue #139: 設計: 同じトランザクションへの重なった呼び出しは InvalidOperationException にする（実装は含めない）
+- [x] Issue #88: 同じトランザクションへの重なった呼び出しは InvalidOperationException にする
+- [x] Issue #142: 設計: Move の移動先への文字列と JSON の書き込みは Update にする（実装は含めない）
+- [x] Issue #90: Move の移動先への文字列と JSON の書き込みは Update にする
+- [x] Issue #145: 設計: Move の連鎖は空いている端から適用する（実装は含めない）
+- [x] Issue #91: Move の連鎖は空いている端から適用する
+- [x] Issue #92: 設計: トランザクション内の見え方はコミット後の姿にする（実装は含めない）
+- [x] Issue #148: トランザクション内の見え方に Read と Exists と文字列の書き込みを合わせる
 
 ## 公開（Phase 3 完了後）
 
