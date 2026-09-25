@@ -30,7 +30,7 @@ CommitReport report = await tx.CommitAsync();
 | `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
 | `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
 
-落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。処理したジャーナルは `Journals` に載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。JSON として読めないジャーナルは消さないので、直すか消すまで同じ例外のままです。
+落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。処理したジャーナルは `Journals` に、パスの大文字小文字を無視した辞書順で載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。JSON として読めないジャーナルは消さないので、直すか消すまで同じ例外のままです。
 
 ## できないこと
 

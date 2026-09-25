@@ -6,12 +6,12 @@ namespace Txfio;
 internal static class RecoverService
 {
     /// <summary>
-    /// ワークフォルダ内の残骸ジャーナルを処理する
+    /// ワークフォルダ内の残骸ジャーナルを、パスの大文字小文字を無視した辞書順で処理する
     /// </summary>
     /// <param name="workFolder">既存のワークフォルダ</param>
     /// <param name="lockWait">ワークフォルダ全体のロックが取れないとき、この呼び出しで待つ上限</param>
     /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>全体の結果と、処理したジャーナル（JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
+    /// <returns>全体の結果と、処理したジャーナル（パスの大文字小文字を無視した辞書順であり、JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
     /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
     /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックを取れない</exception>
     /// <exception cref="OperationCanceledException">ワークフォルダ全体のロックを待っているあいだに取り消された</exception>
@@ -37,6 +37,9 @@ internal static class RecoverService
                 metadataFolder,
                 MetadataNames.JournalSearchPattern,
                 SearchOption.TopDirectoryOnly);
+
+            // パスの大文字小文字を無視した辞書順（報告と、読み取り失敗より前に確定する範囲を毎回同じにする）
+            Array.Sort(journals, static (left, right) => string.Compare(left, right, StringComparison.OrdinalIgnoreCase));
             return await RecoverJournalsAsync(workFolder, journals, cancellationToken).ConfigureAwait(false);
         }
         finally

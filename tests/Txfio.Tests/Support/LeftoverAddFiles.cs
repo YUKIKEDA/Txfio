@@ -22,17 +22,18 @@ internal sealed class LeftoverAddFiles
         string workFolder,
         bool committing,
         string fileName,
-        string content)
+        string content,
+        Guid? transactionId = null)
     {
         string metadata = System.IO.Path.Combine(workFolder, ".txfio");
         Directory.CreateDirectory(metadata);
-        Guid transactionId = Guid.NewGuid();
-        string journalPath = System.IO.Path.Combine(metadata, "tx-" + transactionId.ToString("D") + ".journal");
+        Guid id = transactionId ?? Guid.NewGuid();
+        string journalPath = System.IO.Path.Combine(metadata, "tx-" + id.ToString("D") + ".journal");
         string targetPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, fileName));
         string? directory = System.IO.Path.GetDirectoryName(targetPath);
         string stagingPath = System.IO.Path.Combine(
             directory!,
-            System.IO.Path.GetFileName(targetPath) + "." + transactionId.ToString("D") + ".txnew");
+            System.IO.Path.GetFileName(targetPath) + "." + id.ToString("D") + ".txnew");
         await File.WriteAllTextAsync(stagingPath, content);
 
         string states = string.Empty;
@@ -42,7 +43,7 @@ internal sealed class LeftoverAddFiles
         }
 
         string committingLiteral = committing ? "true" : "false";
-        string json = "{\"version\":1,\"transactionId\":\"" + transactionId.ToString("D") +
+        string json = "{\"version\":1,\"transactionId\":\"" + id.ToString("D") +
             "\",\"committing\":" + committingLiteral +
             ",\"operations\":[{\"kind\":\"Add\",\"path\":" + JsonSerializer.Serialize(targetPath) +
             ",\"stagingPath\":" + JsonSerializer.Serialize(stagingPath) + states + "}]}";
