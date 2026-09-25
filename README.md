@@ -63,7 +63,7 @@ CommitResult result = await tx.CommitAsync();
 | `ImportArchiveAsync`                       | ワークフォルダの外の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す。ZIP は消さない                                                 |
 | `ReadAsync`                                | `.txnew` があればそれ、無ければ本物のファイル。ロックは取らない                                                                                    |
 | `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                                                 |
-| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                                       |
+| `WriteAllTextAsync` / `WriteAllLinesAsync` | ディスク上に無ければ Add、あれば Update。Move の移動先も Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                  |
 | `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                                  |
 | `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                                   |
 | `CommitAsync`                              | 検証してから rename と削除を適用する                                                                                                               |
@@ -204,7 +204,7 @@ flowchart TD
 
 ## 文字列と JSON
 
-小さい文字列は `WriteAllTextAsync` です。ディスク上にファイルが無ければ Add、あれば Update です。未コミットの `.txnew` は、ディスク上のファイルには数えません。同じパスへ続けて書くと、予約は 1 件のまま内容だけ置き換わります。
+小さい文字列は `WriteAllTextAsync` です。ディスク上にファイルが無ければ Add、あれば Update です。このトランザクションの Move の移動先も Update です。ファイルなら移動先の Add と元の Delete に畳み、ディレクトリなら Update と同じく失敗します。未コミットの `.txnew` は、ディスク上のファイルには数えません。同じパスへ続けて書くと、予約は 1 件のまま内容だけ置き換わります。
 
 ```csharp
 await tx.WriteAllTextAsync("new.txt", "hello");
@@ -225,9 +225,11 @@ Note? note = await tx.ReadFromJsonAsync<Note>("note.json");
 
 ```mermaid
 flowchart TD
-  write["文字列または JSON を書く"] --> exists{"ディスク上にファイルがある?"}
+  write["文字列または JSON を書く"] --> moved{"Move の移動先?"}
+  moved -->|はい| upd["Update"]
+  moved -->|いいえ| exists{"ディスク上にファイルがある?"}
   exists -->|無い| add["Add"]
-  exists -->|ある| upd["Update"]
+  exists -->|ある| upd
 ```
 
 ## ReadAsync
