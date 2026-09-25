@@ -92,6 +92,7 @@ Phase 3 の実装（Issue #33、#35、#37、#39、#45、#47、#49、#51、#57、
 - [x] Issue #139: 設計: 同じトランザクションへの重なった呼び出しは InvalidOperationException にする（実装は含めない）
 - [x] Issue #88: 同じトランザクションへの重なった呼び出しは InvalidOperationException にする
 - [x] Issue #142: 設計: Move の移動先への文字列と JSON の書き込みは Update にする（実装は含めない）
+- [x] Issue #90: Move の移動先への文字列と JSON の書き込みは Update にする
 
 ## 公開（Phase 3 完了後）
 

@@ -92,6 +92,30 @@ public sealed class JsonExtensionTests
         Assert.Equal("hello", (await tx.ReadFromJsonAsync<Note>("note.json", options))!.Title);
     }
 
+    /// <summary>
+    /// Move 先への JSON 書き込みは移動先の Add と元の Delete になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.json を b.json へ Move している</para>
+    /// <para>手順: b.json へ WriteAsJsonAsync する</para>
+    /// <para>期待: pending は Add と Delete で、Title が読める</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAsJsonAsync_Move先はAddとDeleteになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.json"), "{}");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.json", "b.json");
+
+        await tx.WriteAsJsonAsync("b.json", new Note { Title = "y" });
+
+        IReadOnlyList<PendingChange> pending = tx.GetPendingChanges();
+        Assert.Equal(PendingChangeKind.Add, pending[0].Kind);
+        Assert.Equal(PendingChangeKind.Delete, pending[1].Kind);
+        Assert.Equal("y", (await tx.ReadFromJsonAsync<Note>("b.json"))!.Title);
+    }
+
     private sealed class Note
     {
         public string Title { get; set; } = string.Empty;
