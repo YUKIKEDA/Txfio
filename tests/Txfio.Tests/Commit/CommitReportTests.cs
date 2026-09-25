@@ -124,6 +124,51 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
+    /// ファイルがディレクトリにすり替わると ReplacedByFile になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Update、ファイルの Delete、ファイルの Move の対象を、それぞれディレクトリにしている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Failed で 3 件とも Rejected、理由は ReplacedByFile</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_ディレクトリにすり替わるとReplacedByFileになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string updated = System.IO.Path.Combine(work.Path, "a.txt");
+        string deleted = System.IO.Path.Combine(work.Path, "b.txt");
+        string moved = System.IO.Path.Combine(work.Path, "c.txt");
+        await File.WriteAllTextAsync(updated, "old");
+        await File.WriteAllTextAsync(deleted, "old");
+        await File.WriteAllTextAsync(moved, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("a.txt", "new");
+        await tx.DeleteAsync("b.txt");
+        await tx.MoveAsync("c.txt", "d.txt");
+        File.Delete(updated);
+        File.Delete(deleted);
+        File.Delete(moved);
+        Directory.CreateDirectory(updated);
+        Directory.CreateDirectory(deleted);
+        Directory.CreateDirectory(moved);
+
+        CommitReport report = await tx.CommitAsync();
+
+        Assert.Equal(CommitResult.Failed, report.Result);
+        Assert.Equal(3, report.Operations.Count);
+        Assert.All(
+            report.Operations,
+            operation =>
+            {
+                Assert.Equal(OperationDisposition.Rejected, operation.Disposition);
+                Assert.Equal(OperationFailureReason.ReplacedByFile, operation.Reason);
+            });
+        Assert.Contains(report.Operations, operation => operation.Kind == PendingChangeKind.Update);
+        Assert.Contains(report.Operations, operation => operation.Kind == PendingChangeKind.Delete);
+        Assert.Contains(report.Operations, operation => operation.Kind == PendingChangeKind.Move);
+    }
+
+    /// <summary>
     /// 消したファイルは Missing、直下に予定外の子があるディレクトリは DirectoryPreconditions になる
     /// </summary>
     /// <remarks>

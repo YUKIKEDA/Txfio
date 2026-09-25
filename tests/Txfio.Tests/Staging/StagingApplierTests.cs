@@ -86,7 +86,7 @@ public sealed class StagingApplierTests
     /// <remarks>
     /// <para>前提: ファイル移動の移動先がディレクトリ、ファイル移動の移動元がディレクトリかつ移動先がファイル、ディレクトリ移動の移動元がファイルかつ移動先がディレクトリ、ファイル削除の対象がディレクトリである</para>
     /// <para>手順: TryMove、TryMoveDirectory、TryDeleteFile を呼ぶ</para>
-    /// <para>期待: どれも失敗し、ファイル移動とファイル削除の理由は AlreadyExists、ディレクトリ移動の理由は ReplacedByFile、元のパスは残る</para>
+    /// <para>期待: どれも失敗し、ファイル移動の移動先がディレクトリなら AlreadyExists、それ以外は ReplacedByFile、元のパスは残る</para>
     /// </remarks>
     [Fact]
     public async Task TryApply_種類が違うと理由が付くこと()
@@ -106,7 +106,7 @@ public sealed class StagingApplierTests
         Directory.CreateDirectory(sourceDir);
         await File.WriteAllTextAsync(destFile, "block");
         Assert.False(InvokeMove("TryMove", sourceDir, destFile, out OperationFailureReason sourceReason));
-        Assert.Equal(OperationFailureReason.AlreadyExists, sourceReason);
+        Assert.Equal(OperationFailureReason.ReplacedByFile, sourceReason);
         Assert.True(Directory.Exists(sourceDir));
 
         string replaced = System.IO.Path.Combine(work.Path, "replaced");
@@ -120,7 +120,7 @@ public sealed class StagingApplierTests
         string deleteTarget = System.IO.Path.Combine(work.Path, "delete-me");
         Directory.CreateDirectory(deleteTarget);
         Assert.False(InvokePath("TryDeleteFile", deleteTarget, out OperationFailureReason deleteReason));
-        Assert.Equal(OperationFailureReason.AlreadyExists, deleteReason);
+        Assert.Equal(OperationFailureReason.ReplacedByFile, deleteReason);
         Assert.True(Directory.Exists(deleteTarget));
     }
 

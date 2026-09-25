@@ -300,7 +300,12 @@ internal static class OperationOutcomes
 
     private static OperationFailureReason ReasonWhenFileRequired(PathState state)
     {
-        return state.Exists ? OperationFailureReason.AlreadyExists : OperationFailureReason.Missing;
+        if (!state.Exists)
+        {
+            return OperationFailureReason.Missing;
+        }
+
+        return state.IsDirectory ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
     }
 
     private static OperationFailureReason ReasonWhenDirectoryRequired(PathState state)

@@ -436,7 +436,7 @@ internal static class StagingApplier
         {
             if (Directory.Exists(sourcePath))
             {
-                reason = OperationFailureReason.AlreadyExists;
+                reason = OperationFailureReason.ReplacedByFile;
                 return false;
             }
 
@@ -665,7 +665,7 @@ internal static class StagingApplier
         reason = OperationFailureReason.IoFailure;
         if (Directory.Exists(path))
         {
-            reason = OperationFailureReason.AlreadyExists;
+            reason = OperationFailureReason.ReplacedByFile;
             return false;
         }
 

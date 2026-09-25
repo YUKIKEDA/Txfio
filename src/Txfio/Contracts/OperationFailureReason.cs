@@ -16,7 +16,7 @@ public enum OperationFailureReason
     AlreadyExists = 1,
 
     /// <summary>
-    /// ファイルにすり替わった
+    /// ファイルかディレクトリにすり替わった
     /// </summary>
     ReplacedByFile = 2,
 
