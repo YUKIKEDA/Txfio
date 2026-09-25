@@ -66,8 +66,10 @@ tests/Txfio.Tests/
 - ライブラリプロジェクトは `GenerateDocumentationFile=true`。欠落は CS1591 としてエラーにする
 - テストプロジェクトは XML ドキュメントを生成しない（CS1591 は出さない）
 - XML ドキュメントおよび通常コメントは **日本語** とする（識別子・型名・公開 API 名は英語のまま）
-- 文末に **「。」や英語のピリオド `.` を付けない**（例外メッセージなどユーザー向け文言は対象外）
-- `src/` の XML コメントを足す・変える PR では、マージ前に **Gemini へ日本語の自然さをレビューさせる**（手順は `.cursor/rules/japanese-docs.mdc`）
+- 文末にも文の途中にも **「。」や英語のピリオド `.` を付けない**（例外メッセージと README の地の文は対象外）
+- 補足は（）、並列は、、状態の続きは「しており」でつなぐ。取り消しを「キャンセル」と書かない
+- 設計用語の「哨兵」は、XML・README・テストの説明では「ワークフォルダ全体のロック」と書く。繰り返された言い換えは [`.cursor/skills/japanese-writing/SKILL.md`](../.cursor/skills/japanese-writing/SKILL.md)
+- `src/` の XML コメントを足す・変える PR では、マージ前に **Gemini へ日本語の自然さをレビューさせる**（手順は `.cursor/rules/japanese-docs.mdc`）。新しい指摘は、文を直すのと同時にそのスキルへ一般則として足す
 
 ## テスト
 

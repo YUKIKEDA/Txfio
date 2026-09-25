@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// <see cref="Txfio.RecoverAsync"/> の結果
+/// <see cref="Txfio.RecoverAsync(string, CancellationToken)"/> の結果
 /// </summary>
 public sealed class RecoverReport
 {

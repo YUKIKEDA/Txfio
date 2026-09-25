@@ -31,7 +31,7 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 - StyleCop SA1101 / SA1306 / SA1309 / SA1310 / SA1311 are disabled so .NET field naming wins
 - Strict XML docs on public API **and** `public` members of internal types, plus internal types/members (`documentInternalElements`). Do not block tests/private on doc requirements
 - Interface names must be prefixed with `I`. SA1302 stays enabled
-- Comments (XML docs / inline) in **Japanese**; do not end them with `。` or `.` (SA1629 disabled)
+- Comments (XML docs / inline) in **Japanese**; no `。` or `.` mid-sentence or at the end (SA1629 disabled). Follow [`.cursor/skills/japanese-writing/SKILL.md`](../skills/japanese-writing/SKILL.md), and append a new general rule there when a review finds one
 - New or changed Japanese XML docs in `src/` must be reviewed by Gemini for natural wording before the PR is ready (`.cursor/rules/japanese-docs.mdc`)
 - Test method names: natural Japanese, plus 前提 / 手順 / 期待 in remarks
 - Library `await` uses `ConfigureAwait(false)`. Do not Dispose caller-owned `Stream`s
