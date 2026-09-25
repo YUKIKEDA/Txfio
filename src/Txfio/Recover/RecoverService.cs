@@ -74,17 +74,16 @@ internal static class RecoverService
 
                 if (document is null)
                 {
-                    // 文書が読めないので作ったディレクトリは特定できない。そのトランザクション ID の .txnew だけ消す
-                    MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId);
-                    if (transactionId != Guid.Empty)
+                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew だけ消す
+                    if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
                     {
                         StagingApplier.DeleteStagingFiles(workFolder, transactionId);
+                        reports.Add(new JournalReport(
+                            transactionId,
+                            RecoverResult.JournalUnreadable,
+                            Array.Empty<OperationReport>()));
                     }
 
-                    reports.Add(new JournalReport(
-                        transactionId,
-                        RecoverResult.JournalUnreadable,
-                        Array.Empty<OperationReport>()));
                     journalUnreadable = true;
                     continue;
                 }

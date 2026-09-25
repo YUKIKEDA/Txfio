@@ -117,4 +117,28 @@ public sealed class RecoverReportTests
         Assert.Empty(journal.Operations);
         Assert.Empty(live.GetPendingChanges());
     }
+
+    /// <summary>
+    /// ファイル名から ID を取れない、読めないジャーナルは、空の ID で一覧に入れない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル名が tx-*.journal に合うが GUID ではない、壊れたジャーナルがある</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: 全体は JournalUnreadable、一覧は空、ジャーナルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_IDを取れない読めないジャーナルは一覧に入れないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string metadata = System.IO.Path.Combine(work.Path, ".txfio");
+        Directory.CreateDirectory(metadata);
+        string journal = System.IO.Path.Combine(metadata, "tx-not-a-guid.journal");
+        await File.WriteAllTextAsync(journal, "{\"version\":1,\"transac");
+
+        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.JournalUnreadable, report.Result);
+        Assert.Empty(report.Journals);
+        Assert.True(File.Exists(journal));
+    }
 }

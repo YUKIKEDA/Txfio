@@ -197,7 +197,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 `Failed` は実体に触れない（`CreateDirectory` がすでに作ったディレクトリを除く。失敗時の破棄は未コミットの Dispose と同じ）。ジャーナルは残り、コミット済みにはしない。同じトランザクションで、状態を直したあと `CommitAsync` を再度呼べる。`PartialConflict` はジャーナルと、適用しなかった操作の `.txnew` を消して確定する。同じインスタンスではやり直せない。共有違反で飛ばしたパスは、新しいトランザクションでやり直せる。`BeforeAfterMismatch` は、同じ書き込みを繰り返しても意図どおりには戻らない。ライブラリは共有違反を自動では再試行しない。
 
-`RecoverReport` は `Result`（今の優先順位の `RecoverResult`）と `Journals`（`JournalReport` の一覧）を持つ。処理した順に載せる。`JournalReport` はトランザクション ID、そのジャーナルの `RecoverResult`、競合して飛ばした操作の一覧を持つ。競合が無いジャーナルと、読めないジャーナルの操作一覧は空である。生きているジャーナルは一覧に入れない。`ConflictDetected` の詳細はこの戻り値に載せ、ジャーナルは今どおり消す。次の `RecoverAsync` はそのジャーナルを処理し直さない。読み取りが `IOException` のときは、これまでどおり例外を再送出し、`RecoverReport` は返さない。
+`RecoverReport` は `Result`（今の優先順位の `RecoverResult`）と `Journals`（`JournalReport` の一覧）を持つ。処理した順に載せる。`JournalReport` はトランザクション ID、そのジャーナルの `RecoverResult`、競合して飛ばした操作の一覧を持つ。競合が無いジャーナルと、読めないジャーナルの操作一覧は空である。ファイル名からトランザクション ID を取れない読めないジャーナルは、全体を `JournalUnreadable` にし、一覧には入れない。生きているジャーナルは一覧に入れない。`ConflictDetected` の詳細はこの戻り値に載せ、ジャーナルは今どおり消す。次の `RecoverAsync` はそのジャーナルを処理し直さない。読み取りが `IOException` のときは、これまでどおり例外を再送出し、`RecoverReport` は返さない。
 
 ## スコープと非対応範囲
 
