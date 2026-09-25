@@ -18,12 +18,12 @@ Human-readable source of truth: [`CONTRIBUTING.md`](CONTRIBUTING.md). Coding det
 
 ## Environment
 
-If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. Do not stop the session to ask the user. TFM is `net8.0`.
+If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. Do not stop the session to ask the user. TFM is `net8.0`, so running tests also needs the **.NET 8 runtime** (`dotnet --list-runtimes` shows `Microsoft.NETCore.App 8.x`).
 
 | Host | Verify |
 | --- | --- |
 | Windows | `./build.ps1` (full gate: restore → format verify → build → test) |
-| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx`. **Do not run `./build.ps1`.** Do not treat `dotnet test` as Done |
+| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx` then `dotnet test Txfio.slnx`. **Do not run `./build.ps1`.** Before opening a PR, every test must pass except the ones skipped as `Windows 専用` (`WindowsFact`). This is a pre-PR check, not the merge gate: the merge gate stays `./build.ps1` on Windows |
 
 ## Always-apply rules
 

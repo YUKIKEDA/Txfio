@@ -193,7 +193,7 @@ public sealed class CommitApplyTests
     /// <para>手順: CommitAsync し、そのあと別のトランザクションを開始する</para>
     /// <para>期待: PartialConflict で、journal と .txnew は残らず、対象は元の内容。次のトランザクションは開始できる</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("開いたファイルは rename できない")]
     public async Task CommitAsync_適用に失敗するとPartialConflictでjournalを消すこと()
     {
         await using TempDirectory work = TempDirectory.Create();

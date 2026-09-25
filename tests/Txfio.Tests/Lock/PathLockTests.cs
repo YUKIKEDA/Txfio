@@ -144,7 +144,7 @@ public sealed class PathLockTests
     /// <para>手順: DisposeAsync し、BeginAsync する。ジャーナルを閉じてから RecoverAsync し、別トランザクションが同じパスを Add する</para>
     /// <para>期待: Dispose は IOException になり、BeginAsync は RecoveryRequiredException（Path はワークフォルダ）。Recover は RolledBack で、そのあと Add できる</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("開いたファイルは削除できない")]
     public async Task DisposeAsync_ジャーナル削除に失敗してもロックを閉じること()
     {
         await using TempDirectory work = TempDirectory.Create();

@@ -123,7 +123,7 @@ public sealed class CopyTests
     /// <para>手順: そのディレクトリを CopyAsync する</para>
     /// <para>期待: コピー先には本物のファイルだけで、ジャンクションの先は無い</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("ジャンクション（mklink /J）")]
     public async Task CopyAsync_ジャンクションは辿らないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
@@ -160,7 +160,7 @@ public sealed class CopyTests
     /// <para>手順: そのジャンクションを CopyAsync する</para>
     /// <para>期待: コピー先は空のディレクトリで、pending は空、ジャンクションの先は残る</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("ジャンクション（mklink /J）")]
     public async Task CopyAsync_コピー元がジャンクションなら中をコピーしないこと()
     {
         await using TempDirectory work = TempDirectory.Create();

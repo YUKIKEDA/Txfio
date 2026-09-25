@@ -176,7 +176,7 @@ public sealed class DirectoryImportExportTests
     /// <para>手順: そのディレクトリを ImportAsync する</para>
     /// <para>期待: コピー先には本物のファイルだけで、ジャンクションの先は無い</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("ジャンクション（mklink /J）")]
     public async Task ImportAsync_ジャンクションは辿らないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
@@ -429,7 +429,7 @@ public sealed class DirectoryImportExportTests
     /// <para>手順: そのディレクトリを ExportAsync する</para>
     /// <para>期待: 外には本物のファイルだけで、ジャンクションの先は無い</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("ジャンクション（mklink /J）")]
     public async Task ExportAsync_ジャンクションは辿らないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
