@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// ファイル操作で起きる例外の見分けと、失敗の理由への振り分け
+/// ディスク操作で起きる例外の見分けと、失敗の理由への振り分け
 /// </summary>
 internal static class IoErrors
 {
@@ -16,7 +16,7 @@ internal static class IoErrors
     }
 
     /// <summary>
-    /// ディスク操作の例外を、操作の失敗の理由にする
+    /// ディスク操作の例外を、操作の失敗の理由へ振り分ける
     /// </summary>
     /// <param name="exception"><see cref="IsIo"/> が <see langword="true"/> になる例外</param>
     /// <returns>共有違反なら <see cref="OperationFailureReason.SharingViolation"/>、それ以外は <see cref="OperationFailureReason.IoFailure"/></returns>
@@ -28,7 +28,7 @@ internal static class IoErrors
     }
 
     /// <summary>
-    /// 1 件消す
+    /// パスを 1 件消す
     /// </summary>
     /// <param name="ignoreIoFailures"><see langword="true"/> なら、ディスク操作の失敗を投げずに <see langword="false"/> を返す</param>
     /// <param name="delete">消す処理</param>
