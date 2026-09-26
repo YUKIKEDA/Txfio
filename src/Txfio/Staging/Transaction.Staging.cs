@@ -13,6 +13,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         BeginLockAttempt(cancellationToken);
         await StageAsync(PendingChangeKind.Add, path, content, progress, cancellationToken)
             .ConfigureAwait(false);
@@ -26,6 +27,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         BeginLockAttempt(cancellationToken);
         await StageAsync(PendingChangeKind.Update, path, content, progress, cancellationToken)
             .ConfigureAwait(false);
@@ -35,6 +37,7 @@ internal sealed partial class Transaction
     public async Task DeleteAsync(string path, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
@@ -166,6 +169,7 @@ internal sealed partial class Transaction
     public async Task DeleteTreeAsync(string path, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
@@ -225,6 +229,7 @@ internal sealed partial class Transaction
     public async Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, oldPath);

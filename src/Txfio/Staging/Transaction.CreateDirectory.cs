@@ -9,6 +9,7 @@ internal sealed partial class Transaction
     public async Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
