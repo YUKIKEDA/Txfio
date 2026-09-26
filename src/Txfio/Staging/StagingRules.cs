@@ -22,6 +22,15 @@ internal static class StagingRules
             return;
         }
 
+        if (Directory.Exists(targetPath))
+        {
+            // ディレクトリへファイルを書くと、コミットの検証まで失敗が分からない
+            string message = kind == PendingChangeKind.Add
+                ? "追加対象のパスにディレクトリが既に存在します: "
+                : "更新対象のパスはディレクトリです: ";
+            throw new ExternalConflictException(message + targetPath, targetPath);
+        }
+
         bool exists = File.Exists(targetPath);
         if (kind == PendingChangeKind.Add && exists)
         {
@@ -35,7 +44,7 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ディレクトリの入れ替えで、移動元と移動先の配下の操作を確かめる（移動元が作成ディレクトリなら、配下の Add だけを許す）
+    /// ディレクトリの入れ替えで、移動元と移動先の配下に重なる操作を拒否する（移動元が作成ディレクトリなら、配下の Add だけを許す）
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="createdDirectories">このトランザクションが作ったディレクトリ</param>
@@ -72,7 +81,7 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 置き換えの Move の移動元か移動先なら、続けて操作させない
+    /// 置き換えまたは入れ替えの Move の移動元か移動先、または入れ替えの移動先の配下なら、続けて操作できない
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="path">操作するパス</param>
@@ -86,7 +95,7 @@ internal static class StagingRules
                     || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)
                     || (operation.NewPath is not null && IsInsideDirectory(operation.NewPath, path))))
             {
-                throw new InvalidOperationException("置き換えの Move の移動元と移動先へは、続けて操作できません: " + path);
+                throw new InvalidOperationException("置き換えまたは入れ替えの Move の移動元、移動先、または入れ替えの移動先の配下へは、続けて操作できません: " + path);
             }
         }
     }

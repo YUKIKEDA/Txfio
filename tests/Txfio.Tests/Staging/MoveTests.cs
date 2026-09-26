@@ -581,7 +581,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt がある</para>
     /// <para>手順: Move(a.txt→b.txt, overwrite: true) を予約し、コミット前後のディスクを見る</para>
-    /// <para>期待: コミット前は両方とも元のまま、コミット後は b.txt が旧 a.txt の中身で a.txt は無く、.txnew も無い</para>
+    /// <para>期待: コミット前は両方とも元のまま、コミット後は b.txt が旧 a.txt の中身であり、a.txt は無く、.txnew も無い</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_overwriteなら移動先を置き換えること()
@@ -610,7 +610,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt がある</para>
     /// <para>手順: Delete(b.txt) のあと Move(a.txt→b.txt, overwrite: true) してコミットする</para>
-    /// <para>期待: 未確定の操作は Move 1 件で、コミット後の b.txt は旧 a.txt の中身</para>
+    /// <para>期待: 未確定の操作は Move 1 件であり、コミット後の b.txt は旧 a.txt の中身</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_移動先のDeleteを置き換えのMoveに畳むこと()
@@ -653,12 +653,12 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move で、ディレクトリをファイルに入れ替える
+    /// ディレクトリをファイルに入れ替える
     /// </summary>
     /// <remarks>
     /// <para>前提: a.txt と、子 old.txt を持つディレクトリ d がある</para>
     /// <para>手順: Move(a.txt→d, overwrite: true) し、コミット後の姿を見てからコミットする</para>
-    /// <para>期待: 姿では d は a.txt の中身で d/old.txt は無い。コミット後の d はファイルで、a.txt も .txold も無い</para>
+    /// <para>期待: 姿では d は a.txt の中身であり、d/old.txt は無く、コミット後の d はファイルであり、a.txt も .txold も無い</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_overwriteでディレクトリをファイルに入れ替えること()
@@ -681,7 +681,7 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move で、ファイルをディレクトリに入れ替える
+    /// ファイルをディレクトリに入れ替える
     /// </summary>
     /// <remarks>
     /// <para>前提: ファイル x と、子 new.txt を持つディレクトリ d がある</para>
@@ -712,7 +712,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: ファイル x と空ディレクトリ e がある</para>
     /// <para>手順: Delete(x) のあと CreateDirectory(x)、Delete(e) のあと e へ Add する</para>
-    /// <para>期待: どちらも InvalidOperationException で、操作は Delete 2 件のまま</para>
+    /// <para>期待: どちらも InvalidOperationException であり、操作は Delete 2 件のまま</para>
     /// </remarks>
     [Fact]
     public async Task DeleteAsync_同じパスの種類はDeleteのあとで変えられないこと()
@@ -736,7 +736,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
     /// <para>手順: b.txt への書き込み、a.txt への書き込み、b.txt の Delete、b.txt の Move をする</para>
-    /// <para>期待: どれも InvalidOperationException で、操作は Move 1 件のまま</para>
+    /// <para>期待: どれも InvalidOperationException であり、操作は Move 1 件のまま</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_置き換えのMoveの元と先へは続けて操作できないこと()
@@ -761,7 +761,7 @@ public sealed class MoveTests
     /// <remarks>
     /// <para>前提: b.txt がある</para>
     /// <para>手順: a.txt を Add し、Move(a.txt→b.txt, overwrite: true) してコミットする</para>
-    /// <para>期待: 未確定の操作は b.txt の Update 1 件で、コミット後の b.txt は Add した中身</para>
+    /// <para>期待: 未確定の操作は b.txt の Update 1 件であり、コミット後の b.txt は Add した中身</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_ステージ済みのAddを置き換えると移動先のUpdateになること()
@@ -779,6 +779,59 @@ public sealed class MoveTests
         Assert.Equal(dest, change.Path);
         Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(dest));
+    }
+
+    /// <summary>
+    /// Move 先への Update は、移動先の .txnew を書く前にジャーナルへ載せる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt があり、Move(a.txt→b.txt) を予約した</para>
+    /// <para>手順: b.txt を UpdateAsync し、書き込み中の進捗でジャーナルを読む</para>
+    /// <para>期待: 進捗が届いたどの時点でも、ジャーナルに b.txt の .txnew が書いてあり、最後は Add と Delete に畳まれる</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_Move先への書き込みはtxnewより先にジャーナルへ載せること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        JournalProbeProgress probe = new JournalProbeProgress(work.Path, "b.txt.");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+
+        await tx.UpdateAsync("b.txt", content, probe);
+
+        Assert.True(probe.Reported);
+        Assert.True(probe.AlwaysJournaled);
+        Assert.Equal(
+            new[] { PendingChangeKind.Add, PendingChangeKind.Delete },
+            tx.GetPendingChanges().Select(static change => change.Kind).OrderBy(static kind => kind).ToArray());
+    }
+
+    /// <summary>
+    /// ステージ済みの Add を Move すると、.txnew は移動先の名前に付け替わり、ジャーナルもそれを指す
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を Add した</para>
+    /// <para>手順: Move(a.txt→c.txt) する</para>
+    /// <para>期待: .txnew は c.txt の名前の 1 つだけで、ジャーナルは c.txt の .txnew を指し、a.txt の .txnew を指さない</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_ステージ済みのAddはtxnewとジャーナルを移動先へ付け替えること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.AddAsync("a.txt", content);
+
+        await tx.MoveAsync("a.txt", "c.txt");
+
+        string staging = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.StartsWith("c.txt.", System.IO.Path.GetFileName(staging), StringComparison.Ordinal);
+        string journal = Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal").Single();
+        string text = await File.ReadAllTextAsync(journal);
+        Assert.Contains(System.IO.Path.GetFileName(staging), text, StringComparison.Ordinal);
+        Assert.DoesNotContain("a.txt.", text, StringComparison.Ordinal);
     }
 
     private static FileStream LockJournal(string workFolder)

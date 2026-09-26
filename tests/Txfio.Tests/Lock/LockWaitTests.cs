@@ -225,15 +225,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// しるしが期限までに空かなければ、ワークフォルダで失敗する
+    /// しるしが使用中でも、ディレクトリ作成はワークフォルダ全体のロックを待たない
     /// </summary>
     /// <remarks>
-    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちは 300ms</para>
+    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちはゼロ</para>
     /// <para>手順: sub を CreateDirectory する</para>
-    /// <para>期待: LockContentionException で Path はワークフォルダ、sub はできない</para>
+    /// <para>期待: sub ができる（ワークフォルダ全体を排他にするのは Recover だけ）</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_しるしが空かないとワークフォルダで失敗すること()
+    public async Task CreateDirectoryAsync_しるしが使用中でもワークフォルダ全体のロックを待たないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
@@ -242,13 +242,11 @@ public sealed class LockWaitTests
             FileMode.OpenOrCreate,
             FileAccess.ReadWrite,
             FileShare.ReadWrite);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromMilliseconds(300));
+        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path);
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => waiter.CreateDirectoryAsync("sub"));
+        await waiter.CreateDirectoryAsync("sub");
 
-        Assert.Equal(System.IO.Path.GetFullPath(work.Path), contention.Path);
-        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
+        Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
         _ = held;
     }
 
@@ -320,5 +318,37 @@ public sealed class LockWaitTests
         await using ITransaction started = await global::Txfio.Txfio.BeginAsync(work.Path, Timeout.InfiniteTimeSpan);
 
         Assert.NotNull(started);
+    }
+
+    /// <summary>
+    /// ロックを待っているあいだ、呼び出したスレッドは止まらない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 一方が a.txt を Add しており、もう一方の待ちは 5 秒</para>
+    /// <para>手順: 同じパスへの Add を呼び、戻った Task を待たずに経過時間と状態を見る。そのあと先のトランザクションを破棄する</para>
+    /// <para>期待: 呼び出しは 1 秒未満で戻り、Task は未完了のまま待っており、相手の破棄後に成功する</para>
+    /// </remarks>
+    [Fact]
+    public async Task AddAsync_待っているあいだ呼び出したスレッドを止めないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using (holder)
+        {
+            await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
+            await holder.AddAsync("a.txt", held);
+            await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(5));
+            await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");
+
+            long started = Environment.TickCount64;
+            Task waiting = waiter.AddAsync("a.txt", content);
+            long returned = Environment.TickCount64 - started;
+
+            Assert.True(returned < 1000, "呼び出しが " + returned + "ms 止まった");
+            Assert.False(waiting.IsCompleted);
+            await holder.DisposeAsync();
+            await waiting;
+            Assert.Single(waiter.GetPendingChanges());
+        }
     }
 }
