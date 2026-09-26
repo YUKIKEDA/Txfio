@@ -104,15 +104,20 @@ internal static class RecoverService
 
                 // 落ちた上書きの一時ファイルは、読む前に消す
                 JournalStore.DeleteTemp(journalPath);
-                JournalDocument? document = await JournalStore.TryReadAsync(journalPath, cancellationToken)
+                JournalReadResult read = await JournalStore.ReadAsync(journalPath, cancellationToken)
                     .ConfigureAwait(false);
-
+                JournalDocument? document = read.Document;
                 if (document is null)
                 {
                     // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew と再ステージの退避だけ消す
+                    // 版が違うときは新しい版のライブラリが残したものかもしれないので、.txnew にも再ステージの退避にも触れない
                     if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
                     {
-                        StagingApplier.DeleteStagingFiles(workFolder, transactionId);
+                        if (!read.UnsupportedVersion)
+                        {
+                            StagingApplier.DeleteStagingFiles(workFolder, transactionId);
+                        }
+
                         reports.Add(new JournalReport(
                             transactionId,
                             RecoverResult.JournalUnreadable,
