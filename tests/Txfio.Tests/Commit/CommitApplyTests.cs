@@ -218,8 +218,8 @@ public sealed class CommitApplyTests
     /// Update の適用は、対象ファイルの属性と作成日時を保つ
     /// </summary>
     /// <remarks>
-    /// <para>前提: 隠し属性で、作成日時を 2001-01-01 にした a.txt がある</para>
-    /// <para>手順: a.txt へ書いて CommitAsync する</para>
+    /// <para>前提: 隠し属性であり、作成日時を 2001-01-01 にした a.txt がある</para>
+    /// <para>手順: a.txt を Update して CommitAsync する</para>
     /// <para>期待: Succeeded で中身は新しく、隠し属性と作成日時は元のまま、.txnew は無い</para>
     /// </remarks>
     [WindowsFact("ReplaceFileW が属性と作成日時を移すこと")]
