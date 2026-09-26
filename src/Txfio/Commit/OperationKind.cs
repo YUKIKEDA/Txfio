@@ -899,7 +899,18 @@ internal abstract class OperationKind
                 return true;
             }
 
-            return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true));
+            if (operation.DirectoryCreated)
+            {
+                return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true));
+            }
+
+            // 作る前後で落ちたので、このトランザクションが作ったとは言えない（空のときだけ消し、中身があれば残す）
+            if (Directory.EnumerateFileSystemEntries(operation.Path).Any())
+            {
+                return true;
+            }
+
+            return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path));
         }
     }
 }
