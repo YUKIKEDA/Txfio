@@ -170,6 +170,8 @@ flowchart TD
 
 変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで共有で持ちます。別のパスを触るトランザクションは並行できます。パスの親ディレクトリ（ワークフォルダ自身は除く）には、共有の意図ロックを終わりまで取ります。ワークフォルダ全体を排他にするのは `RecoverAsync` だけで、ディレクトリの操作も共有のまま、別のパスを触るトランザクションと並行できます。配下を予約するのは、`DeleteTreeAsync`（そのディレクトリ）、ディレクトリの Move（元と先）、ディレクトリの `CopyAsync` とディレクトリの `ImportAsync`（先だけ）、`ExtractArchiveAsync` と `ImportArchiveAsync`（展開先）、ディレクトリの `DeleteAsync`（そのディレクトリ）です。予約は排他の意図ロックで、トランザクションが終わるまで残ります。配下をステージしようとすると `LockContentionException` で、`Path` はそのディレクトリです。`CreateDirectoryAsync` と `CreateArchiveAsync` は配下を予約しません。ディレクトリの `CopyAsync` のコピー元と、`CreateArchiveAsync` の入力ディレクトリは、呼び出しのあいだだけ排他の意図ロックで押さえ、呼び出しが終わると閉じます（読んでいるあいだに配下が変わらないようにするため）。`BeginAsync` か `RecoverAsync` に待ち時間を渡すと、その呼び出しの開始からその時間まで、共有違反のときだけ 100ms 間隔で開き直します。時間切れは同じ例外で、待ちの取り消しは `OperationCanceledException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、待ち時間を渡さないときは何もせず `LockContentionException` です。しるしが空いていることを確かめたあと、ジャーナルを処理する前に `.txfio/locks/` の `.lock` を消します。消せないものは残します。生存ロックとしるしは消しません。
 
+UI スレッドから `await` しても、画面は止まりません。公開の非同期メソッドは、UI スレッドなどから呼ばれたとき、最初の IO の前にスレッドプールへ移ります。rename やロックファイルのオープンなど、非同期 API が無い IO もそこで行います。`await` のあとは呼び出し元のスレッドへ戻ります。サーバーやコンソールでは移りません。
+
 ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExistsAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 
 ## AddAsync
