@@ -19,9 +19,8 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
+        using CallScope scope = EnterCall(cancellationToken);
         await CallerContext.LeaveAsync();
-        BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
@@ -43,9 +42,8 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
+        using CallScope scope = EnterCall(cancellationToken);
         await CallerContext.LeaveAsync();
-        BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         IReadOnlyList<ArchiveRoot> roots = ToArchiveRoots(entries);
@@ -170,7 +168,7 @@ internal sealed partial class Transaction
                 FileAccess.Write,
                 FileShare.None,
                 bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough);
+                FileOptions.Asynchronous);
         }
         catch (IOException exception) when (exception is DirectoryNotFoundException || File.Exists(destinationPath))
         {
@@ -227,7 +225,7 @@ internal sealed partial class Transaction
     }
 
     private static async Task WriteArchiveAsync(
-        Stream output,
+        FileStream output,
         List<PlannedArchiveEntry> planned,
         CompressionLevel compressionLevel,
         Func<string, FileStream> openFile,
@@ -257,7 +255,7 @@ internal sealed partial class Transaction
             progress?.Report(new TransferProgress(0, null));
         }
 
-        await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+        await StagingFile.FlushToDiskAsync(output, cancellationToken).ConfigureAwait(false);
     }
 
     private IReadOnlyList<ArchiveRoot> ToArchiveRoots(IEnumerable<ArchiveEntrySource> entries)
@@ -318,12 +316,14 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(archive);
-        bool directoryInput = roots.Any(static root => root.IsDirectory);
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray()).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = directoryInput
-            ? await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false)
-            : default;
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
+                _workFolder,
+                roots.Select(static root => root.SourcePath).Append(archive).ToArray(),
+                Array.Empty<string>(),
+                roots.Where(static root => root.IsDirectory).Select(static root => root.SourcePath).ToArray(),
+                _lockAttempt)
+            .ConfigureAwait(false);
         foreach (ArchiveRoot root in roots)
         {
             if (root.IsDirectory ? !Directory.Exists(root.SourcePath) : !File.Exists(root.SourcePath))
@@ -340,12 +340,12 @@ internal sealed partial class Transaction
         }
 
         string stagingPath = WorkPath.StagingFilePath(archive, _transactionId);
-        int operationCount = _paths.Rows.Count;
+        int operationCount = _paths.Count;
         bool journalUpdated = false;
         try
         {
             // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
+            _paths.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
             journalUpdated = true;
             await using (FileStream output = new FileStream(
@@ -354,7 +354,7 @@ internal sealed partial class Transaction
                 FileAccess.Write,
                 FileShare.None,
                 bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough))
+                FileOptions.Asynchronous))
             {
                 await WriteArchiveAsync(
                         output,
@@ -396,7 +396,7 @@ internal sealed partial class Transaction
                 continue;
             }
 
-            if (File.Exists(root.SourcePath) && IsReparsePoint(root.SourcePath))
+            if (File.Exists(root.SourcePath) && WorkPath.IsReparsePoint(root.SourcePath))
             {
                 throw new InvalidOperationException("シンボリックリンクは ZIP に入れられません: " + root.SourcePath);
             }
@@ -448,7 +448,7 @@ internal sealed partial class Transaction
             }
 
             string prefix = root.EntryName.Length > 0 ? root.EntryName + "/" : string.Empty;
-            bool plannedChild = !IsReparsePoint(root.SourcePath)
+            bool plannedChild = !WorkPath.IsReparsePoint(root.SourcePath)
                 && PlanArchivedTree(root.SourcePath, root.SourcePath, prefix, planned, cancellationToken);
             if (!plannedChild && prefix.Length > 0)
             {

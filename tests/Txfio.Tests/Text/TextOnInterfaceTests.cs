@@ -99,6 +99,11 @@ public sealed class TextOnInterfaceTests
             return Pending(oldPath, newPath, cancellationToken);
         }
 
+        public Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default)
+        {
+            return Pending(oldPath, newPath, overwrite, cancellationToken);
+        }
+
         public Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
         {
             return Pending(path, cancellationToken);
@@ -177,20 +182,22 @@ public sealed class TextOnInterfaceTests
             string archivePath,
             string destinationDir,
             Encoding? entryNameEncoding = null,
+            long? maxExtractedBytes = null,
             IProgress<TransferProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Pending(archivePath, destinationDir, entryNameEncoding, progress, cancellationToken);
+            return Pending(archivePath, destinationDir, entryNameEncoding, maxExtractedBytes, progress, cancellationToken);
         }
 
         public Task ImportArchiveAsync(
             string externalArchivePath,
             string destinationDir,
             Encoding? entryNameEncoding = null,
+            long? maxExtractedBytes = null,
             IProgress<TransferProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Pending(externalArchivePath, destinationDir, entryNameEncoding, progress, cancellationToken);
+            return Pending(externalArchivePath, destinationDir, entryNameEncoding, maxExtractedBytes, progress, cancellationToken);
         }
 
         public Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default)
@@ -201,6 +208,31 @@ public sealed class TextOnInterfaceTests
         public Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
         {
             return Pending<bool>(path, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<DirectoryEntry>> GetEntriesAsync(string directoryPath, CancellationToken cancellationToken = default)
+        {
+            return Pending<IReadOnlyList<DirectoryEntry>>(directoryPath, cancellationToken);
+        }
+
+        public Task AppendAllTextAsync(string path, string? contents, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, cancellationToken);
+        }
+
+        public Task AppendAllTextAsync(string path, string? contents, Encoding encoding, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, encoding, cancellationToken);
+        }
+
+        public Task AppendAllLinesAsync(string path, IEnumerable<string> contents, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, cancellationToken);
+        }
+
+        public Task AppendAllLinesAsync(string path, IEnumerable<string> contents, Encoding encoding, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, encoding, cancellationToken);
         }
 
         public Task<string> ReadAllTextAsync(

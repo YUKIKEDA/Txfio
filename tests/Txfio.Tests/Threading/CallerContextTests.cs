@@ -39,8 +39,8 @@ public sealed class CallerContextTests
     /// </summary>
     /// <remarks>
     /// <para>前提: SynchronizationContext が無く、既定の TaskScheduler の上にいる</para>
-    /// <para>手順: CallerContext.LeaveAsync の待ち先を見る</para>
-    /// <para>期待: 既に完了していて、移らない</para>
+    /// <para>手順: CallerContext.LeaveAsync の await 先を見る</para>
+    /// <para>期待: 既に完了しており、移らない</para>
     /// </remarks>
     [Fact]
     public async Task LeaveAsync_コンテキストが無ければ移らないこと()

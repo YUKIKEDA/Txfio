@@ -8,9 +8,8 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
+        using CallScope scope = EnterCall(cancellationToken);
         await CallerContext.LeaveAsync();
-        BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
@@ -25,9 +24,8 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
         }
 
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, targetPath).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (File.Exists(targetPath) || Directory.Exists(targetPath))
         {
@@ -38,20 +36,17 @@ internal sealed partial class Transaction
             PendingChangeKind.CreateDirectory,
             targetPath,
             isDirectory: true);
-        _paths.Rows.Add(operation);
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _paths.Rows.Remove(operation);
-            throw;
-        }
+        await RecordAsync(() => _paths.Add(operation), cancellationToken).ConfigureAwait(false);
 
         try
         {
             Directory.CreateDirectory(targetPath);
+
+            // 作ったあとで作成済みを書く（未作成のまま落ちたときは、他が作った同じ名前のディレクトリを Recover が中身ごと消さない）
+            JournalOperation created = operation.WithDirectoryCreated();
+            _paths.Set(_paths.IndexOf(operation), created);
+            operation = created;
+            await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {
@@ -69,27 +64,19 @@ internal sealed partial class Transaction
                 Directory.Delete(operation.Path, recursive: true);
             }
         }
-        catch (IOException)
-        {
-            // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
         }
 
-        _paths.Rows.Remove(operation);
+        _paths.Remove(operation);
         try
         {
             await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (IOException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            _paths.Rows.Add(operation);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            _paths.Rows.Add(operation);
+            _paths.Add(operation);
         }
     }
 }
