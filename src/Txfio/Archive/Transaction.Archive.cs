@@ -438,7 +438,7 @@ internal sealed partial class Transaction
 
             string prefix = root.EntryName.Length > 0 ? root.EntryName + "/" : string.Empty;
             bool plannedChild = !IsReparsePoint(root.SourcePath)
-                && PlanDirectoryEntries(root.SourcePath, root.SourcePath, prefix, planned, cancellationToken);
+                && PlanArchivedTree(root.SourcePath, root.SourcePath, prefix, planned, cancellationToken);
             if (!plannedChild && prefix.Length > 0)
             {
                 planned.Add(new PlannedArchiveEntry(prefix, null));
@@ -446,48 +446,6 @@ internal sealed partial class Transaction
         }
 
         return planned;
-    }
-
-    private bool PlanDirectoryEntries(
-        string sourceRoot,
-        string current,
-        string prefix,
-        List<PlannedArchiveEntry> planned,
-        CancellationToken cancellationToken)
-    {
-        bool plannedAny = false;
-        foreach (string entry in Directory.EnumerateFileSystemEntries(current))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (IsReparsePoint(entry) || WorkPath.IsThisTransactionStagingFile(entry, _transactionId))
-            {
-                continue;
-            }
-
-            string entryName = prefix
-                + System.IO.Path.GetRelativePath(sourceRoot, entry)
-                    .Replace(System.IO.Path.DirectorySeparatorChar, '/');
-            if (Directory.Exists(entry))
-            {
-                if (!PlanDirectoryEntries(sourceRoot, entry, prefix, planned, cancellationToken))
-                {
-                    planned.Add(new PlannedArchiveEntry(entryName + "/", null));
-                }
-
-                plannedAny = true;
-                continue;
-            }
-
-            if (!File.Exists(entry))
-            {
-                continue;
-            }
-
-            planned.Add(new PlannedArchiveEntry(entryName, entry));
-            plannedAny = true;
-        }
-
-        return plannedAny;
     }
 
     private sealed record ArchiveRoot(string SourcePath, bool IsDirectory, string EntryName);

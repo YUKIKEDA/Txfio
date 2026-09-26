@@ -178,13 +178,13 @@ internal sealed partial class Transaction
 
         EnsureCopyDestinationFree(target);
         List<string> directories = new List<string> { target };
-        List<PlannedCopyFile> files = new List<PlannedCopyFile>();
+        List<PlannedTreeFile> files = new List<PlannedTreeFile>();
         if (!IsReparsePoint(external))
         {
-            PlanDirectoryEntries(external, external, target, directories, files, cancellationToken);
+            PlanCopiedTree(external, external, target, directories, files, cancellationToken);
         }
 
-        await ApplyPlannedDirectoryCopyAsync(directories, files, progress, cancellationToken)
+        await ApplyCopiedTreeAsync(directories, files, progress, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -245,7 +245,7 @@ internal sealed partial class Transaction
         foreach (string entry in Directory.EnumerateFileSystemEntries(current))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (IsReparsePoint(entry) || WorkPath.IsThisTransactionStagingFile(entry, _transactionId))
+            if (SkipIntakeEntry(entry))
             {
                 continue;
             }
