@@ -24,7 +24,7 @@ internal static class JournalPaths
     /// <param name="document">読んだ文書（null ならそのまま返す）</param>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <returns>絶対パスの文書</returns>
-    /// <exception cref="JsonException">結合した結果がワークフォルダの外、ワークフォルダ自身、またはメタデータフォルダの配下である</exception>
+    /// <exception cref="JsonException">結合した結果がワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下である</exception>
     internal static JournalDocument? ToAbsolute(JournalDocument? document, string workFolder)
     {
         if (document is null)
@@ -45,7 +45,7 @@ internal static class JournalPaths
         string fullPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, path));
         if (!PathTable.IsUnder(workFolder, fullPath) || WorkPath.IsInMetadataFolder(workFolder, fullPath))
         {
-            throw new JsonException("ジャーナルのパスがワークフォルダの外を指しています: " + path);
+            throw new JsonException("ジャーナルのパスがワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下を指しています: " + path);
         }
 
         return fullPath;

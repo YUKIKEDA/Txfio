@@ -364,4 +364,23 @@ public sealed class TextExtensionTests
         Assert.Equal("old", await tx.ReadAllTextAsync("a.bak"));
         Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
     }
+
+    /// <summary>
+    /// 既存ディレクトリへの文字列の書き込みはその場で失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 対象パスに空ディレクトリがある</para>
+    /// <para>手順: WriteAllTextAsync する</para>
+    /// <para>期待: ExternalConflictException になり、.txnew も操作も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAllTextAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await Assert.ThrowsAsync<ExternalConflictException>(() => tx.WriteAllTextAsync("d", "text"));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(tx.GetPendingChanges());
+    }
 }

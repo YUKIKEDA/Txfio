@@ -11,7 +11,7 @@ public sealed class JournalPathsTests
     /// <remarks>
     /// <para>前提: サブフォルダ sub がある</para>
     /// <para>手順: sub/a.txt を Add し、ジャーナルを読む</para>
-    /// <para>期待: ジャーナルにワークフォルダの絶対パスは無く、sub と a.txt の相対パスがある</para>
+    /// <para>期待: ジャーナルにワークフォルダの絶対パスは無く、sub/a.txt の相対パスがある</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_ジャーナルには相対パスを書くこと()
@@ -36,7 +36,7 @@ public sealed class JournalPathsTests
     /// <remarks>
     /// <para>前提: a.txt の Update を Committing の直後に止めた</para>
     /// <para>手順: ワークフォルダごと別の名前へ移し、移した先で RecoverAsync する</para>
-    /// <para>期待: RolledForward で、移した先の a.txt が新しい内容になる</para>
+    /// <para>期待: RolledForward であり、移した先の a.txt が新しい内容になる</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_ワークフォルダを移したあとでもロールフォワードできること()
@@ -64,15 +64,15 @@ public sealed class JournalPathsTests
     }
 
     /// <summary>
-    /// ワークフォルダの外を指すジャーナルは読めないとし、外のファイルを消さない
+    /// ワークフォルダの外を指すジャーナルは読めない扱いとし、外のファイルを消さない
     /// </summary>
     /// <remarks>
-    /// <para>前提: 未コミットの Add のジャーナルで、stagingPath をワークフォルダの外のファイルに書き換えている</para>
+    /// <para>前提: 未コミットの Add のジャーナルで、stagingPath をワークフォルダの外のファイルに書き換えてある</para>
     /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable で、ジャーナルと外のファイルは残る</para>
+    /// <para>期待: JournalUnreadable であり、ジャーナルと外のファイルは残る</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_外を指すジャーナルは読めないとし外のファイルを消さないこと()
+    public async Task RecoverAsync_外を指すジャーナルは読めない扱いとし外のファイルを消さないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
