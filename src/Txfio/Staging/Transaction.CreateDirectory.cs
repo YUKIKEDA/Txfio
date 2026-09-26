@@ -26,7 +26,6 @@ internal sealed partial class Transaction
 
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
         await _locks.AcquireAsync(_workFolder, targetPath).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (File.Exists(targetPath) || Directory.Exists(targetPath))
         {

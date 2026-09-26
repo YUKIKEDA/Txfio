@@ -265,30 +265,44 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// ワークフォルダ全体を排他にし、しるし（`.txfio/share-lost.lock`）が空いていることを確かめる
+    /// パスをロックし、読んでいるあいだだけ守るディレクトリの意図ロックを排他で取る
     /// </summary>
+    /// <remarks>
+    /// ディレクトリのコピー元と ZIP の入力を読むあいだ、他のトランザクションが配下をステージしたりコミットしたりしないようにする
+    /// 既に排他で持っていた意図ロックは閉じない
+    /// </remarks>
     /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>呼び出しの終わりに排他を共有へ戻す</returns>
-    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックが取れない、またはしるしが空かない</exception>
-    /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
-    internal async Task<WorkFolderExclusive> EnterExclusiveAsync(string workFolder)
+    /// <param name="fullPaths">ロックする正規化した絶対パス</param>
+    /// <param name="reservedPaths">トランザクションの終わりまで意図ロックを排他で持つディレクトリ</param>
+    /// <param name="readDirectories">呼び出しのあいだだけ意図ロックを排他で持つディレクトリ</param>
+    /// <returns>読み終えたら、この呼び出しで取った排他の意図ロックを閉じる</returns>
+    internal async Task<ReadingScope> AcquireForReadingAsync(
+        string workFolder,
+        string[] fullPaths,
+        string[] reservedPaths,
+        string[] readDirectories)
     {
-        await AcquireExclusiveAsync(workFolder).ConfigureAwait(false);
+        List<string> scoped = new List<string>();
+        foreach (string directory in readDirectories)
+        {
+            if (!_exclusiveIntents.Contains(directory))
+            {
+                scoped.Add(directory);
+            }
+        }
+
         try
         {
-            await RejectForeignLocksAsync(workFolder).ConfigureAwait(false);
+            await AcquireCoreAsync(workFolder, fullPaths, reservedPaths.Concat(readDirectories).ToArray())
+                .ConfigureAwait(false);
         }
         catch
         {
-            if (_workFolderExclusive)
-            {
-                await ReleaseWorkFolderExclusiveAsync(workFolder).ConfigureAwait(false);
-            }
-
+            ReleaseIntents(scoped);
             throw;
         }
 
-        return new WorkFolderExclusive(this, workFolder);
+        return new ReadingScope(this, scoped);
     }
 
     /// <summary>
@@ -842,69 +856,45 @@ internal sealed class PathLockSet
         }
     }
 
-    private async Task ReleaseWorkFolderExclusiveAsync(string workFolder)
+    private void ReleaseIntents(IReadOnlyList<string> directories)
     {
-        if (!_workFolderExclusive)
+        foreach (string directory in directories)
         {
-            return;
-        }
+            if (_intents.Remove(directory, out FileStream? handle))
+            {
+                handle.Dispose();
+            }
 
-        HoldShareLostBeforeDrop(workFolder);
-        ReleaseHandle(workFolder);
-        try
-        {
-            await RestoreSharedAsync(workFolder).ConfigureAwait(false);
-        }
-        catch (LockContentionException)
-        {
-            _workFolderShareLost = true;
-        }
-        catch (OperationCanceledException)
-        {
-            _workFolderShareLost = true;
-        }
-        catch (IOException)
-        {
-            _workFolderShareLost = true;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            _workFolderShareLost = true;
-            throw;
+            _exclusiveIntents.Remove(directory);
         }
     }
 
     /// <summary>
-    /// ワークフォルダ全体の排他を、破棄するときに共有へ戻す
+    /// 読んでいるあいだだけ排他で持つ意図ロックを、破棄するときに閉じる
     /// </summary>
-    internal readonly struct WorkFolderExclusive : IAsyncDisposable
+    internal readonly struct ReadingScope : IDisposable
     {
-        private readonly PathLockSet? _locks;
+        private readonly PathLockSet _locks;
 
-        private readonly string? _workFolder;
+        private readonly IReadOnlyList<string> _directories;
 
         /// <summary>
-        /// 戻す対象を覚える
+        /// 閉じる対象を覚える
         /// </summary>
         /// <param name="locks">ロックの集合</param>
-        /// <param name="workFolder">ワークフォルダ</param>
-        internal WorkFolderExclusive(PathLockSet locks, string workFolder)
+        /// <param name="directories">この呼び出しで意図ロックを排他にしたディレクトリ</param>
+        internal ReadingScope(PathLockSet locks, IReadOnlyList<string> directories)
         {
             _locks = locks;
-            _workFolder = workFolder;
+            _directories = directories;
         }
 
         /// <summary>
-        /// ワークフォルダ全体の排他を共有へ戻す
+        /// この呼び出しで排他にした意図ロックを閉じる
         /// </summary>
-        /// <returns>共有へ戻し終えたこと</returns>
-        public async ValueTask DisposeAsync()
+        public void Dispose()
         {
-            if (_locks is not null && _workFolder is not null)
-            {
-                await _locks.ReleaseWorkFolderExclusiveAsync(_workFolder).ConfigureAwait(false);
-            }
+            _locks?.ReleaseIntents(_directories);
         }
     }
 }
