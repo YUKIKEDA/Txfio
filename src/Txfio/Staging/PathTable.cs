@@ -10,7 +10,7 @@ internal sealed class PathTable
     private readonly Dictionary<string, int> _moveDestination = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 表の行（ジャーナルに書く順）。変えるときは表のメソッドを通す（索引を合わせるため）
+    /// 表の行（ジャーナルに書く順、変えるときは表のメソッドを通す（位置を合わせるため））
     /// </summary>
     internal IReadOnlyList<JournalOperation> Rows => _rows;
 
@@ -151,6 +151,13 @@ internal sealed class PathTable
             if (SamePath(operation.NewPath, current))
             {
                 current = operation.Path;
+                continue;
+            }
+
+            // ファイルで入れ替えた移動先の配下は、コミット後には無い
+            if (operation.Overwrite && IsUnder(operation.NewPath, current))
+            {
+                return CommitAppearance.Absent();
             }
         }
 

@@ -14,6 +14,10 @@ internal sealed partial class Transaction : ITransaction
     private readonly PathLockSet _locks;
     private readonly TimeSpan _lockWait;
     private readonly ExternalChangeSet? _externalChanges;
+
+    // ジャーナルに書いてあると分かっている行と作成ディレクトリ（分からなくなったら null にして全体を書き直す）
+    private JournalOperation[]? _persistedRows = Array.Empty<JournalOperation>();
+    private string[]? _persistedDirectories = Array.Empty<string>();
     private FileStream? _liveness;
     private bool _committed;
     private bool _committingWritten;
@@ -104,7 +108,7 @@ internal sealed partial class Transaction : ITransaction
                 cleanupSucceeded = false;
             }
 
-            if (!StagingApplier.DeleteStagingBackups(_workFolder, _transactionId, ignoreIoFailures: true))
+            if (!StagingApplier.DeleteStagingBackups(_paths.Rows, ignoreIoFailures: true))
             {
                 cleanupSucceeded = false;
             }
@@ -144,6 +148,25 @@ internal sealed partial class Transaction : ITransaction
         {
             return false;
         }
+    }
+
+    private static bool StartsWith<T>(T[] items, T[] prefix)
+        where T : class
+    {
+        if (items.Length < prefix.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < prefix.Length; i++)
+        {
+            if (!ReferenceEquals(items[i], prefix[i]) && !Equals(items[i], prefix[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void BeginLockAttempt(CancellationToken cancellationToken)
@@ -216,15 +239,49 @@ internal sealed partial class Transaction : ITransaction
         _liveness = null;
     }
 
-    private Task PersistAsync(bool committing, CancellationToken cancellationToken)
+    // 表の末尾に足しただけなら 1 行追記し、それ以外（途中が変わった、Committing）は全体を書き直す
+    private async Task PersistAsync(bool committing, CancellationToken cancellationToken)
     {
+        JournalOperation[] rows = _paths.ToArray();
+        string[] directories = _createdDirectories.ToArray();
+        JournalOperation[]? persistedRows = _persistedRows;
+        string[]? persistedDirectories = _persistedDirectories;
+        if (!committing
+            && persistedRows is not null
+            && persistedDirectories is not null
+            && StartsWith(rows, persistedRows)
+            && StartsWith(directories, persistedDirectories))
+        {
+            if (rows.Length == persistedRows.Length && directories.Length == persistedDirectories.Length)
+            {
+                return;
+            }
+
+            // 追記の途中で失敗したら、書きかけの行が残りうるので次は全体を書き直す
+            _persistedRows = null;
+            _persistedDirectories = null;
+            await JournalStore.AppendAsync(
+                    _journalPath,
+                    rows.AsSpan(persistedRows.Length).ToArray(),
+                    directories.AsSpan(persistedDirectories.Length).ToArray(),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            _persistedRows = rows;
+            _persistedDirectories = directories;
+            return;
+        }
+
         JournalDocument document = new JournalDocument(
             JournalStore.CurrentVersion,
             _transactionId,
             committing,
-            _paths.ToArray(),
-            _createdDirectories.ToArray());
-        return JournalStore.SaveAsync(_journalPath, document, cancellationToken);
+            rows,
+            directories);
+        _persistedRows = null;
+        _persistedDirectories = null;
+        await JournalStore.SaveAsync(_journalPath, document, cancellationToken).ConfigureAwait(false);
+        _persistedRows = rows;
+        _persistedDirectories = directories;
     }
 
     private async Task TryPersistUndoAsync()
