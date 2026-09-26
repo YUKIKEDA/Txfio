@@ -31,8 +31,8 @@ internal static class RecoverService
         try
         {
             sentinel.BeginAttempt(lockWait, cancellationToken);
-            sentinel.AcquireExclusive(workFolder);
-            sentinel.RejectForeignLocks(workFolder);
+            await sentinel.AcquireExclusiveAsync(workFolder).ConfigureAwait(false);
+            await sentinel.RejectForeignLocksAsync(workFolder).ConfigureAwait(false);
             string[] journals = Directory.GetFiles(
                 metadataFolder,
                 MetadataNames.JournalSearchPattern,
