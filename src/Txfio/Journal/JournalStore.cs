@@ -18,7 +18,7 @@ internal static class JournalStore
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         WriteIndented = false,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(namingPolicy: null, allowIntegerValues: false) },
     };
 
     /// <summary>
@@ -64,23 +64,44 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// ジャーナルを読む（JSON として読めないときは <see langword="null"/>）
+    /// ジャーナルを読み、版と種別と必須の欄を確かめる
     /// </summary>
     /// <param name="journalPath">読み取り元</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>読めた文書（JSON として読めないときと、値が JSON の null のときは <see langword="null"/>）</returns>
+    /// <returns>読めた文書、または読めない理由（JSON として読めない、値が JSON の null、種別が名前に無い、path か Move の newPath が空、版が違う）</returns>
     /// <exception cref="IOException">読み取りに失敗した</exception>
-    internal static async Task<JournalDocument?> TryReadAsync(string journalPath, CancellationToken cancellationToken)
+    internal static async Task<JournalReadResult> ReadAsync(string journalPath, CancellationToken cancellationToken)
     {
+        byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
+        JournalDocument? document;
         try
         {
-            byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
+            document = JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
         }
         catch (JsonException)
         {
-            return null;
+            return JournalReadResult.Corrupt();
         }
+
+        if (document is null)
+        {
+            return JournalReadResult.Corrupt();
+        }
+
+        if (document.Version != CurrentVersion)
+        {
+            return JournalReadResult.OtherVersion();
+        }
+
+        foreach (JournalOperation operation in document.Operations)
+        {
+            if (operation is null || !IsComplete(operation))
+            {
+                return JournalReadResult.Corrupt();
+            }
+        }
+
+        return JournalReadResult.Readable(document);
     }
 
     /// <summary>
@@ -134,6 +155,17 @@ internal static class JournalStore
         {
             await stream.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    // 種別が名前に無い、または path と Move の newPath が空の操作は、適用も巻き戻しもできない
+    private static bool IsComplete(JournalOperation operation)
+    {
+        if (!Enum.IsDefined(operation.Kind) || string.IsNullOrEmpty(operation.Path))
+        {
+            return false;
+        }
+
+        return operation.Kind != PendingChangeKind.Move || !string.IsNullOrEmpty(operation.NewPath);
     }
 
     private static void EnsureReplaceable(string journalPath)

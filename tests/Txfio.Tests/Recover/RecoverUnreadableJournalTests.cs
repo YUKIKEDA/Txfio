@@ -158,4 +158,90 @@ public sealed class RecoverUnreadableJournalTests
         Assert.Contains("\"committing\":false", json, StringComparison.Ordinal);
         Assert.Contains("Add", json, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 版の違うジャーナルは読めないとし、.txnew にも触れない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Add のジャーナルの version を 2 に書き換え、その .txnew がある</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: JournalUnreadable で、ジャーナルも .txnew も残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_版の違うジャーナルは何にも触れずJournalUnreadableになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
+            work.Path,
+            committing: true,
+            "a.txt",
+            "staged");
+        string json = await File.ReadAllTextAsync(leftover.JournalPath);
+        Assert.Contains("\"version\":1", json, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(leftover.JournalPath, json.Replace("\"version\":1", "\"version\":2", StringComparison.Ordinal));
+
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
+        Assert.True(File.Exists(leftover.JournalPath));
+        Assert.True(File.Exists(leftover.StagingPath));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
+
+    /// <summary>
+    /// 数値で書いた種別のジャーナルは読めないとする
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Committing の Add のジャーナルで、種別を数値の 99 に書き換えている</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: JournalUnreadable で、ジャーナルは残り、.txnew は消え、a.txt は作られない</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_数値の種別は読めないジャーナルになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
+            work.Path,
+            committing: true,
+            "a.txt",
+            "staged");
+        string json = await File.ReadAllTextAsync(leftover.JournalPath);
+        Assert.Contains("\"kind\":\"Add\"", json, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(leftover.JournalPath, json.Replace("\"kind\":\"Add\"", "\"kind\":99", StringComparison.Ordinal));
+
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
+        Assert.True(File.Exists(leftover.JournalPath));
+        Assert.False(File.Exists(leftover.StagingPath));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
+
+    /// <summary>
+    /// path の無い操作があるジャーナルは読めないとする
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: Committing の Add のジャーナルで、path を空文字列に書き換えている</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: JournalUnreadable で、ジャーナルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_pathの無い操作は読めないジャーナルになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
+            work.Path,
+            committing: true,
+            "a.txt",
+            "staged");
+        string json = await File.ReadAllTextAsync(leftover.JournalPath);
+        string target = System.Text.Json.JsonSerializer.Serialize(System.IO.Path.Combine(work.Path, "a.txt"));
+        Assert.Contains("\"path\":" + target, json, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(leftover.JournalPath, json.Replace("\"path\":" + target, "\"path\":\"\"", StringComparison.Ordinal));
+
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
+        Assert.True(File.Exists(leftover.JournalPath));
+    }
 }
