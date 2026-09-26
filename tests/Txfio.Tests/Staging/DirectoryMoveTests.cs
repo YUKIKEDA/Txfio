@@ -251,7 +251,7 @@ public sealed class DirectoryMoveTests
     /// 別のトランザクションが無関係なパスを押さえていても、ディレクトリ Move は積める
     /// </summary>
     /// <remarks>
-    /// <para>前提: 別トランザクションが a.txt を Add し、sub がある</para>
+    /// <para>前提: 別トランザクションが a.txt を Add しており、sub がある</para>
     /// <para>手順: sub を Move する</para>
     /// <para>期待: Move は成功し、pending は 1 件である</para>
     /// </remarks>

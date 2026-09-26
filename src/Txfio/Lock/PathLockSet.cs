@@ -265,7 +265,7 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// パスをロックし、読んでいるあいだ守るディレクトリの意図ロックを排他で取る（破棄すると、この呼び出しで取った排他の意図ロックを閉じる）
+    /// パスをロックし、読んでいるあいだだけ守るディレクトリの意図ロックを排他で取る
     /// </summary>
     /// <remarks>
     /// ディレクトリのコピー元と ZIP の入力を読むあいだ、他のトランザクションが配下をステージしたりコミットしたりしないようにする
@@ -275,7 +275,7 @@ internal sealed class PathLockSet
     /// <param name="fullPaths">ロックする正規化した絶対パス</param>
     /// <param name="reservedPaths">トランザクションの終わりまで意図ロックを排他で持つディレクトリ</param>
     /// <param name="readDirectories">呼び出しのあいだだけ意図ロックを排他で持つディレクトリ</param>
-    /// <returns>読み終えたら破棄する範囲</returns>
+    /// <returns>読み終えたら、この呼び出しで取った排他の意図ロックを閉じる</returns>
     internal async Task<ReadingScope> AcquireForReadingAsync(
         string workFolder,
         string[] fullPaths,
@@ -882,7 +882,7 @@ internal sealed class PathLockSet
         /// 閉じる対象を覚える
         /// </summary>
         /// <param name="locks">ロックの集合</param>
-        /// <param name="directories">この呼び出しで排他にした意図ロックのディレクトリ</param>
+        /// <param name="directories">この呼び出しで意図ロックを排他にしたディレクトリ</param>
         internal ReadingScope(PathLockSet locks, IReadOnlyList<string> directories)
         {
             _locks = locks;
