@@ -96,9 +96,13 @@ internal abstract class OperationKind
     /// Before と一致する操作を適用する（適用済みならステージングファイルを消して成功）
     /// </summary>
     /// <param name="operation">適用する操作</param>
+    /// <param name="changedLater">適用順であとの操作も変えるパスなら <see langword="true"/>（そのパスでは適用済みかどうかを判定しない）</param>
     /// <param name="reason">飛ばした理由（成功時は使わない）</param>
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
-    internal abstract bool TryApply(JournalOperation operation, out OperationFailureReason reason);
+    internal abstract bool TryApply(
+        JournalOperation operation,
+        Func<string, bool> changedLater,
+        out OperationFailureReason reason);
 
     /// <summary>
     /// この操作のステージングファイルを消す
@@ -345,11 +349,12 @@ internal abstract class OperationKind
 
     private static bool TryApplyWhenBeforeMatches(
         JournalOperation operation,
+        Func<string, bool> changedLater,
         out OperationFailureReason reason,
         ApplyWhenBefore apply)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
-        if (Matches(operation, after: true))
+        if (MatchesAfter(operation, changedLater))
         {
             return TryDeleteStaging(operation.StagingPath, out reason);
         }
@@ -360,6 +365,29 @@ internal abstract class OperationKind
         }
 
         return apply(operation, out reason);
+    }
+
+    // 適用済みかどうかは、あとの操作が変えないパスだけで判定する（どのパスもあとで変わるときは全部を見る）
+    private static bool MatchesAfter(JournalOperation operation, Func<string, bool> changedLater)
+    {
+        if (operation.Kind != PendingChangeKind.Move || operation.NewPath is null)
+        {
+            return Matches(operation, after: true);
+        }
+
+        bool sourceChanged = changedLater(operation.Path);
+        bool destChanged = changedLater(operation.NewPath);
+        if (sourceChanged == destChanged)
+        {
+            return Matches(operation, after: true);
+        }
+
+        if (sourceChanged)
+        {
+            return operation.DestAfter is not null && operation.DestAfter.Matches(operation.NewPath);
+        }
+
+        return operation.After is not null && operation.After.Matches(operation.Path);
     }
 
     private static bool Matches(JournalOperation operation, bool after)
@@ -381,7 +409,10 @@ internal abstract class OperationKind
             && dest.Matches(operation.NewPath);
     }
 
-    private static bool TryApplyStagedFile(JournalOperation operation, out OperationFailureReason reason)
+    private static bool TryApplyStagedFile(
+        JournalOperation operation,
+        Func<string, bool> changedLater,
+        out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (string.IsNullOrEmpty(operation.StagingPath))
@@ -411,7 +442,7 @@ internal abstract class OperationKind
             }
         }
 
-        if (Matches(operation, after: true))
+        if (MatchesAfter(operation, changedLater))
         {
             return TryDeleteStaging(operation.StagingPath, out reason);
         }
@@ -673,9 +704,12 @@ internal abstract class OperationKind
             return TryProjectAdd(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
-            return TryApplyStagedFile(operation, out reason);
+            return TryApplyStagedFile(operation, changedLater, out reason);
         }
     }
 
@@ -696,9 +730,12 @@ internal abstract class OperationKind
             return TryProjectUpdate(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
-            return TryApplyStagedFile(operation, out reason);
+            return TryApplyStagedFile(operation, changedLater, out reason);
         }
     }
 
@@ -719,10 +756,14 @@ internal abstract class OperationKind
             return TryProjectDelete(operation, operations, transactionId, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     current.IsDirectory
@@ -748,10 +789,14 @@ internal abstract class OperationKind
             return TryProjectMove(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     current.IsDirectory
@@ -777,10 +822,14 @@ internal abstract class OperationKind
             return TryProjectDeleteTree(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     TryDeleteTree(current.Path, out failure));
@@ -804,10 +853,14 @@ internal abstract class OperationKind
             return TryProjectCreateDirectory(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation _, out OperationFailureReason failure) =>
                 {
