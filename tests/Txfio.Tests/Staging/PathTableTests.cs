@@ -3,15 +3,15 @@ namespace Txfio.Tests.Staging;
 public sealed class PathTableTests
 {
     /// <summary>
-    /// 行を変えるメソッドのあとも、パスと Move の移動先の索引が表と合う
+    /// 行を変えるメソッドを呼んだあとも、パスの位置と Move の移動先の位置が表と合う
     /// </summary>
     /// <remarks>
     /// <para>前提: 空の表</para>
-    /// <para>手順: Add、Set、Insert、Remove、RemoveAt、Load の順に行を変え、そのたびに検索する</para>
+    /// <para>手順: Add、Set、Insert、Remove、RemoveAt、Load の順に行を変え、そのたびに探す</para>
     /// <para>期待: FindOperationIndex と FindMoveToIndex は、そのときの表の位置を返す</para>
     /// </remarks>
     [Fact]
-    public void Find_行を変えるたびに索引が合うこと()
+    public void Find_行を変えるたびに位置が合うこと()
     {
         PathTable table = new PathTable();
         JournalOperation a = new JournalOperation(PendingChangeKind.Add, "/w/a");
