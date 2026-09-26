@@ -385,7 +385,7 @@ internal sealed partial class Transaction
                 continue;
             }
 
-            if (File.Exists(root.SourcePath) && IsReparsePoint(root.SourcePath))
+            if (File.Exists(root.SourcePath) && WorkPath.IsReparsePoint(root.SourcePath))
             {
                 throw new InvalidOperationException("シンボリックリンクは ZIP に入れられません: " + root.SourcePath);
             }
@@ -437,7 +437,7 @@ internal sealed partial class Transaction
             }
 
             string prefix = root.EntryName.Length > 0 ? root.EntryName + "/" : string.Empty;
-            bool plannedChild = !IsReparsePoint(root.SourcePath)
+            bool plannedChild = !WorkPath.IsReparsePoint(root.SourcePath)
                 && PlanArchivedTree(root.SourcePath, root.SourcePath, prefix, planned, cancellationToken);
             if (!plannedChild && prefix.Length > 0)
             {

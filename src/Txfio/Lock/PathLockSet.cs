@@ -211,16 +211,7 @@ internal sealed class PathLockSet
 
             throw Contention(workFolder);
         }
-        catch (IOException)
-        {
-            if (restoreSharedOnFailure)
-            {
-                RestoreOrMarkLost(workFolder);
-            }
-
-            throw;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             if (restoreSharedOnFailure)
             {
@@ -624,12 +615,7 @@ internal sealed class PathLockSet
         {
             _workFolderShareLost = true;
         }
-        catch (IOException)
-        {
-            _workFolderShareLost = true;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             _workFolderShareLost = true;
             throw;
@@ -647,12 +633,7 @@ internal sealed class PathLockSet
             _workFolderShareLost = true;
             throw;
         }
-        catch (IOException)
-        {
-            _workFolderShareLost = true;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             _workFolderShareLost = true;
             throw;
@@ -778,12 +759,7 @@ internal sealed class PathLockSet
                 {
                     _workFolderShareLost = true;
                 }
-                catch (IOException)
-                {
-                    _workFolderShareLost = true;
-                    throw;
-                }
-                catch (UnauthorizedAccessException)
+                catch (Exception exception) when (IoErrors.IsIo(exception))
                 {
                     _workFolderShareLost = true;
                     throw;
@@ -828,11 +804,7 @@ internal sealed class PathLockSet
         {
             _intents.Add(directory, OpenLockFile(IntentFilePath(workFolder, directory), FileShare.ReadWrite));
         }
-        catch (IOException)
-        {
-            // 共有へ戻せなくても、呼び出し側が元の例外を返す
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // 共有へ戻せなくても、呼び出し側が元の例外を返す
         }
@@ -859,12 +831,7 @@ internal sealed class PathLockSet
         {
             _workFolderShareLost = true;
         }
-        catch (IOException)
-        {
-            _workFolderShareLost = true;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             _workFolderShareLost = true;
             throw;

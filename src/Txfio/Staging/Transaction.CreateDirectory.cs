@@ -68,11 +68,7 @@ internal sealed partial class Transaction
                 Directory.Delete(operation.Path, recursive: true);
             }
         }
-        catch (IOException)
-        {
-            // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
         }
@@ -82,11 +78,7 @@ internal sealed partial class Transaction
         {
             await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (IOException)
-        {
-            _paths.Rows.Add(operation);
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             _paths.Rows.Add(operation);
         }

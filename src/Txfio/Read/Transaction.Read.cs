@@ -63,15 +63,4 @@ internal sealed partial class Transaction
         _externalChanges?.NoteRead(_paths.Rows, targetPath, appearance.ContentPath, _transactionId);
         return stream;
     }
-
-    private string? FindStagingPath(string targetPath)
-    {
-        int index = FindOperationIndex(targetPath);
-        if (index < 0)
-        {
-            return null;
-        }
-
-        return _paths.Rows[index].StagingPath;
-    }
 }

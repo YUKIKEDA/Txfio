@@ -61,7 +61,7 @@ internal static class WorkPath
     /// <returns>メタデータフォルダそのもの、またはその配下なら <see langword="true"/></returns>
     internal static bool IsInMetadataFolder(string workFolder, string fullPath)
     {
-        return IsEqualOrUnder(MetadataNames.FolderPath(workFolder), fullPath);
+        return PathMath.IsEqualOrUnder(MetadataNames.FolderPath(workFolder), fullPath);
     }
 
     /// <summary>
@@ -133,6 +133,16 @@ internal static class WorkPath
         }
     }
 
+    /// <summary>
+    /// パスがリパースポイント（シンボリックリンクやジャンクション）かどうかを判定する
+    /// </summary>
+    /// <param name="path">調べるパス（存在しなければ例外）</param>
+    /// <returns>リパースポイントなら <see langword="true"/></returns>
+    internal static bool IsReparsePoint(string path)
+    {
+        return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+    }
+
     private static bool TryQueryLongPath(string path, out string longPath)
     {
         var buffer = new StringBuilder(Math.Max(path.Length + 1, 260));
@@ -177,7 +187,7 @@ internal static class WorkPath
                 return;
             }
 
-            if (IsReparsePoint(trimmed))
+            if (IsExistingReparsePoint(trimmed))
             {
                 throw new InvalidOperationException("リパースポイントは操作できません: " + trimmed);
             }
@@ -186,11 +196,11 @@ internal static class WorkPath
         }
     }
 
-    private static bool IsReparsePoint(string path)
+    private static bool IsExistingReparsePoint(string path)
     {
         try
         {
-            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+            return IsReparsePoint(path);
         }
         catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -200,12 +210,6 @@ internal static class WorkPath
 
     private static bool IsInsideWorkFolder(string workFolder, string fullPath)
     {
-        return !string.Equals(workFolder, fullPath, StringComparison.OrdinalIgnoreCase)
-            && IsEqualOrUnder(workFolder, fullPath);
-    }
-
-    private static bool IsEqualOrUnder(string parent, string fullPath)
-    {
-        return PathTable.IsEqualOrUnder(parent, fullPath);
+        return PathMath.IsUnder(workFolder, fullPath);
     }
 }

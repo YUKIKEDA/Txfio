@@ -348,7 +348,7 @@ internal static class StagingRules
 
     private static bool IsInsideDirectory(string directoryPath, string path)
     {
-        return PathTable.IsUnder(directoryPath, path);
+        return PathMath.IsUnder(directoryPath, path);
     }
 
     private static bool IsPendingDirectoryDelete(IReadOnlyList<JournalOperation> operations, string? path)

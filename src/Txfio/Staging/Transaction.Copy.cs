@@ -44,21 +44,6 @@ internal sealed partial class Transaction
         await CopyFileAsync(sourcePath, destinationPath, progress, cancellationToken).ConfigureAwait(false);
     }
 
-    private static int DirectoryDepth(string path)
-    {
-        int depth = 0;
-        foreach (char character in path)
-        {
-            if (character == System.IO.Path.DirectorySeparatorChar
-                || character == System.IO.Path.AltDirectorySeparatorChar)
-            {
-                depth++;
-            }
-        }
-
-        return depth;
-    }
-
     private static void EnsureCopySourceAvailable(string sourcePath)
     {
         if (Directory.Exists(sourcePath))
@@ -71,7 +56,7 @@ internal sealed partial class Transaction
             throw new ExternalConflictException("コピー元が存在しません: " + sourcePath, sourcePath);
         }
 
-        if (IsReparsePoint(sourcePath))
+        if (WorkPath.IsReparsePoint(sourcePath))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
         }
@@ -110,7 +95,7 @@ internal sealed partial class Transaction
             throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
         }
 
-        if (IsReparsePoint(sourcePath))
+        if (WorkPath.IsReparsePoint(sourcePath))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
         }
@@ -150,7 +135,7 @@ internal sealed partial class Transaction
         EnsureCopyDestinationFree(destinationPath);
         List<string> directories = new List<string> { destinationPath };
         List<PlannedTreeFile> files = new List<PlannedTreeFile>();
-        if (!IsReparsePoint(sourcePath))
+        if (!WorkPath.IsReparsePoint(sourcePath))
         {
             PlanCopiedTree(sourcePath, sourcePath, destinationPath, directories, files, cancellationToken);
         }
@@ -194,16 +179,7 @@ internal sealed partial class Transaction
         }
 
         List<string> pending = _createdDirectories.GetRange(start, _createdDirectories.Count - start);
-        pending.Sort(static (left, right) =>
-        {
-            int byDepth = DirectoryDepth(right).CompareTo(DirectoryDepth(left));
-            if (byDepth != 0)
-            {
-                return byDepth;
-            }
-
-            return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
-        });
+        PathMath.SortDeepestFirst(pending);
 
         bool succeeded = true;
         foreach (string path in pending)
@@ -217,12 +193,7 @@ internal sealed partial class Transaction
 
                 _createdDirectories.Remove(path);
             }
-            catch (IOException) when (ignoreIoFailures)
-            {
-                // 失敗したコピーの後始末では、元の例外を残す
-                succeeded = false;
-            }
-            catch (UnauthorizedAccessException) when (ignoreIoFailures)
+            catch (Exception exception) when (ignoreIoFailures && IoErrors.IsIo(exception))
             {
                 // 失敗したコピーの後始末では、元の例外を残す
                 succeeded = false;

@@ -5,11 +5,6 @@ namespace Txfio;
 /// </content>
 internal sealed partial class Transaction
 {
-    private static bool IsReparsePoint(string path)
-    {
-        return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
-    }
-
     private static string MapTreeDestination(string sourceRoot, string destinationRoot, string entry)
     {
         string relative = System.IO.Path.GetRelativePath(sourceRoot, entry);
@@ -25,7 +20,7 @@ internal sealed partial class Transaction
 
     private bool SkipIntakeEntry(string entry)
     {
-        return IsReparsePoint(entry) || WorkPath.IsThisTransactionStagingFile(entry, _transactionId);
+        return WorkPath.IsReparsePoint(entry) || WorkPath.IsThisTransactionStagingFile(entry, _transactionId);
     }
 
     private void ForEachTreeChild(
