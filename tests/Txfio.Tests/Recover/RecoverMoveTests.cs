@@ -89,7 +89,7 @@ public sealed class RecoverMoveTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
     /// <para>手順: Committing の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward で、b.txt は旧 a.txt の中身、a.txt は無い</para>
+    /// <para>期待: RolledForward であり、b.txt は旧 a.txt の中身、a.txt は無い</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_置き換えのMoveを完了すること()
@@ -117,7 +117,7 @@ public sealed class RecoverMoveTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
     /// <para>手順: 適用の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward で飛ばした操作は無く、b.txt は旧 a.txt の中身</para>
+    /// <para>期待: RolledForward であり、飛ばした操作は無く、b.txt は旧 a.txt の中身</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_適用済みの置き換えのMoveはRolledForwardになること()
