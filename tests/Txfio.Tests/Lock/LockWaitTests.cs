@@ -225,15 +225,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// しるしが期限までに空かなければ、ワークフォルダで失敗する
+    /// しるしが使われていても、ディレクトリ作成はワークフォルダ全体を待たない
     /// </summary>
     /// <remarks>
-    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちは 300ms</para>
+    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちはゼロ</para>
     /// <para>手順: sub を CreateDirectory する</para>
-    /// <para>期待: LockContentionException で Path はワークフォルダ、sub はできない</para>
+    /// <para>期待: sub ができる（ワークフォルダ全体を排他にするのは Recover だけ）</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_しるしが空かないとワークフォルダで失敗すること()
+    public async Task CreateDirectoryAsync_しるしがあってもワークフォルダ全体を待たないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
@@ -242,13 +242,11 @@ public sealed class LockWaitTests
             FileMode.OpenOrCreate,
             FileAccess.ReadWrite,
             FileShare.ReadWrite);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromMilliseconds(300));
+        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path);
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => waiter.CreateDirectoryAsync("sub"));
+        await waiter.CreateDirectoryAsync("sub");
 
-        Assert.Equal(System.IO.Path.GetFullPath(work.Path), contention.Path);
-        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
+        Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
         _ = held;
     }
 

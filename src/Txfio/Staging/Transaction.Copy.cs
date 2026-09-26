@@ -140,8 +140,12 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken)
     {
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { sourcePath, destinationPath }, destinationPath).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
+        using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
+                _workFolder,
+                new[] { sourcePath, destinationPath },
+                new[] { destinationPath },
+                new[] { sourcePath })
+            .ConfigureAwait(false);
         if (!Directory.Exists(sourcePath))
         {
             throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);

@@ -436,7 +436,6 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfDirectoryMoveConflicts(_paths.Rows, root, destPath);
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
         await _locks.AcquireReservingAsync(_workFolder, new[] { root, destPath }, root, destPath).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!destIsMoveSource)
         {
@@ -524,7 +523,6 @@ internal sealed partial class Transaction
     {
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
         await _locks.AcquireReservingAsync(_workFolder, new[] { directoryPath }, directoryPath).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
         if (!Directory.Exists(directoryPath))
         {
             throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + directoryPath, directoryPath);

@@ -23,7 +23,7 @@ internal sealed partial class Transaction
         string archive = WorkPath.ResolveInWorkFolder(_workFolder, archivePath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, archive);
         string destination = ValidateExtractDestination(destinationDir);
-        await using PathLockSet.WorkFolderExclusive exclusive = await AcquireExtractLocksAsync(destination).ConfigureAwait(false);
+        await AcquireExtractLocksAsync(destination).ConfigureAwait(false);
         await using Stream content = ReadCore(archive, cancellationToken);
         await ExtractAsync(content, destination, entryNameEncoding, progress, cancellationToken)
             .ConfigureAwait(false);
@@ -48,7 +48,7 @@ internal sealed partial class Transaction
             throw new UnsupportedOperationException("ディレクトリは ZIP として開けません: " + external);
         }
 
-        await using PathLockSet.WorkFolderExclusive exclusive = await AcquireExtractLocksAsync(destination).ConfigureAwait(false);
+        await AcquireExtractLocksAsync(destination).ConfigureAwait(false);
         await using FileStream content = OpenExternalFile(
             external,
             "ZIP が存在しません: " + external,
@@ -70,11 +70,10 @@ internal sealed partial class Transaction
         return destination;
     }
 
-    private async Task<PathLockSet.WorkFolderExclusive> AcquireExtractLocksAsync(string destination)
+    private async Task AcquireExtractLocksAsync(string destination)
     {
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
         await _locks.AcquireReservingAsync(_workFolder, new[] { destination }, destination).ConfigureAwait(false);
-        return await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
     }
 
     private async Task ExtractAsync(

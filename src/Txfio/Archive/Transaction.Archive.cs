@@ -314,12 +314,13 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(archive);
-        bool directoryInput = roots.Any(static root => root.IsDirectory);
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray()).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = directoryInput
-            ? await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false)
-            : default;
+        using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
+                _workFolder,
+                roots.Select(static root => root.SourcePath).Append(archive).ToArray(),
+                Array.Empty<string>(),
+                roots.Where(static root => root.IsDirectory).Select(static root => root.SourcePath).ToArray())
+            .ConfigureAwait(false);
         foreach (ArchiveRoot root in roots)
         {
             if (root.IsDirectory ? !Directory.Exists(root.SourcePath) : !File.Exists(root.SourcePath))

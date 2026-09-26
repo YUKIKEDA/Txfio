@@ -248,15 +248,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 先にパスを押さえているとディレクトリ Move は積まない
+    /// 別のトランザクションが無関係なパスを押さえていても、ディレクトリ Move は積める
     /// </summary>
     /// <remarks>
     /// <para>前提: 別トランザクションが a.txt を Add し、sub がある</para>
     /// <para>手順: sub を Move する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダ、pending は空である</para>
+    /// <para>期待: Move は成功し、pending は 1 件である</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_他のトランザクションがパスを押さえるとLockContentionExceptionになること()
+    public async Task MoveAsync_無関係なパスが押さえられていてもディレクトリMoveを積めること()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -265,11 +265,9 @@ public sealed class DirectoryMoveTests
         await holder.AddAsync("a.txt", content);
         await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path);
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => mover.MoveAsync("sub", "other"));
+        await mover.MoveAsync("sub", "other");
 
-        Assert.Equal(work.Path, contention.Path);
-        Assert.Empty(mover.GetPendingChanges());
+        Assert.Single(mover.GetPendingChanges());
     }
 
     /// <summary>
