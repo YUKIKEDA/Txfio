@@ -40,6 +40,26 @@ internal static class StressContent
     }
 
     /// <summary>
+    /// 文字列の列が使うテキスト。既定の上限では空、数文字、数十 KB までで、数 MB は上限を既定より上げたときだけ使う
+    /// </summary>
+    /// <param name="random">長さと中身を決める乱数</param>
+    /// <param name="maxBytes">長さの上限。0 以上</param>
+    /// <returns>ASCII の文字列</returns>
+    public static string CreateText(Random random, int maxBytes)
+    {
+        int limit = maxBytes > DefaultMaxBytes ? maxBytes : Math.Min(maxBytes, TensOfKilobytesMax);
+        int length = Length(random, limit);
+        int salt = random.Next(26);
+        char[] chars = new char[length];
+        for (int i = 0; i < length; i++)
+        {
+            chars[i] = (char)('a' + ((salt + i) % 26));
+        }
+
+        return new string(chars);
+    }
+
+    /// <summary>
     /// 失敗メッセージに出す長さ
     /// </summary>
     /// <param name="content">中身</param>

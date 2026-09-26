@@ -114,7 +114,7 @@ API ごとに節を分け、次の見出しをこの順番で置く。当ては�
 - 単体テストのフィクスチャは `tests/Txfio.Tests/Support/` に置く。Fact は置かない
 - テストごとに一意の一時ディレクトリを作り、破棄時に消す。並列実行を前提にする
 - 乱数で約束を確かめる耐久テストは `tests/Txfio.Stress/` に置く。対応する `src/` のフォルダは無い
-  - ランダム操作列はメモリ上のモデルと比べ、失敗したら手を外して縮めた列を出す。ファイルの Add / Update / Delete / Move / Read の列、ディレクトリの作成、空の削除、木の削除、上書きしない Move の列、移動先を置き換える Move の列、ファイルとディレクトリの Copy / Import / Export の列を持つ
+  - ランダム操作列はメモリ上のモデルと比べ、失敗したら手を外して縮めた列を出す。ファイルの Add / Update / Delete / Move / Read の列、ディレクトリの作成、空の削除、木の削除、上書きしない Move の列、移動先を置き換える Move の列、ファイルとディレクトリの Copy / Import / Export の列、文字列と JSON の読み書きの列を持つ
   - 多プロセスの耐久は、耐久プロジェクトの実行ファイル自身を子プロセスとして起動する（`Program.cs` の入口）
   - 関門（`./build.ps1` と Linux の PR 前確認）の `dotnet test` は `tests/Txfio.Tests/Txfio.Tests.csproj` だけを実行する。耐久は `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。既定はその実行で短く終わる規模にする。長く、または大きく回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES`、`TXFIO_STRESS_FILES`、`TXFIO_STRESS_MAX_BYTES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
   - 多プロセスの耐久は、少数のファイルを待たずに奪い合う版（競合の組み合わせを増やす）と、多めのファイルを競合したらやり直す版（使い方に近い負荷）の 2 つを持つ。結果の件数はテストの出力に出る
