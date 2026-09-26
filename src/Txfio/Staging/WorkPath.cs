@@ -206,15 +206,6 @@ internal static class WorkPath
 
     private static bool IsEqualOrUnder(string parent, string fullPath)
     {
-        if (string.Equals(parent, fullPath, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        string prefix = parent.TrimEnd(
-            System.IO.Path.DirectorySeparatorChar,
-            System.IO.Path.AltDirectorySeparatorChar)
-            + System.IO.Path.DirectorySeparatorChar;
-        return fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        return PathTable.IsEqualOrUnder(parent, fullPath);
     }
 }

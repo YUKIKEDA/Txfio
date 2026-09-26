@@ -21,14 +21,14 @@ internal sealed partial class Transaction
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, destinationPath);
         StagingRules.ThrowIfCopyDestinationInsideSource(sourcePath, destinationPath);
-        StagingRules.ThrowIfInsideDeleteTree(_operations, sourcePath);
-        StagingRules.ThrowIfInsideDeleteTree(_operations, destinationPath);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, sourcePath);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, destinationPath);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, sourcePath);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, destinationPath);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, sourcePath);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, destinationPath);
+        StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, sourcePath);
+        StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, destinationPath);
+        StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, sourcePath);
+        StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, destinationPath);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_paths.Rows, sourcePath);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_paths.Rows, destinationPath);
+        StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, sourcePath);
+        StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, destinationPath);
         ThrowIfCopyPathIsStaged(sourcePath);
         ThrowIfCopyPathIsStaged(destinationPath);
         EnsureCopySourceAvailable(sourcePath);
@@ -95,7 +95,7 @@ internal sealed partial class Transaction
     private void ThrowIfCopyPathIsStaged(string path)
     {
         int index = FindOperationIndex(path);
-        if ((index >= 0 && _operations[index].Kind != PendingChangeKind.CreateDirectory)
+        if ((index >= 0 && _paths.Rows[index].Kind != PendingChangeKind.CreateDirectory)
             || FindMoveToIndex(path) >= 0)
         {
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
@@ -121,9 +121,9 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(destinationPath);
-        int operationCount = _operations.Count;
+        int operationCount = _paths.Rows.Count;
         string stagingPath = WorkPath.StagingFilePath(destinationPath, _transactionId);
-        _operations.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
+        _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
@@ -202,7 +202,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        int operationCount = _operations.Count;
+        int operationCount = _paths.Rows.Count;
         int directoryCount = _createdDirectories.Count;
         foreach (string directory in directories)
         {
@@ -212,7 +212,7 @@ internal sealed partial class Transaction
         foreach (PlannedCopyFile file in files)
         {
             string stagingPath = WorkPath.StagingFilePath(file.DestinationPath, _transactionId);
-            _operations.Add(new JournalOperation(PendingChangeKind.Add, file.DestinationPath, stagingPath));
+            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, file.DestinationPath, stagingPath));
         }
 
         try
@@ -269,10 +269,10 @@ internal sealed partial class Transaction
 
     private void RollbackAddedOperations(int operationCount)
     {
-        while (_operations.Count > operationCount)
+        while (_paths.Rows.Count > operationCount)
         {
-            JournalOperation operation = _operations[_operations.Count - 1];
-            _operations.RemoveAt(_operations.Count - 1);
+            JournalOperation operation = _paths.Rows[_paths.Rows.Count - 1];
+            _paths.Rows.RemoveAt(_paths.Rows.Count - 1);
             StagingFile.TryDelete(operation.StagingPath);
         }
     }

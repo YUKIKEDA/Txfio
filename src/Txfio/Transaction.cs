@@ -8,7 +8,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly string _workFolder;
     private readonly Guid _transactionId;
     private readonly string _journalPath;
-    private readonly List<JournalOperation> _operations = new List<JournalOperation>();
+    private readonly PathTable _paths = new PathTable();
     private readonly List<string> _createdDirectories = new List<string>();
     private readonly PathLockSet _locks = new PathLockSet();
     private readonly TimeSpan _lockWait;
@@ -49,10 +49,10 @@ internal sealed partial class Transaction : ITransaction
     {
         using CallScope scope = EnterCall();
         ObjectDisposedException.ThrowIf(_disposed, this);
-        PendingChange[] result = new PendingChange[_operations.Count];
-        for (int i = 0; i < _operations.Count; i++)
+        PendingChange[] result = new PendingChange[_paths.Count];
+        for (int i = 0; i < _paths.Count; i++)
         {
-            JournalOperation operation = _operations[i];
+            JournalOperation operation = _paths[i];
             result[i] = new PendingChange(operation.Kind, operation.Path, operation.NewPath);
         }
 
@@ -86,7 +86,7 @@ internal sealed partial class Transaction : ITransaction
         try
         {
             bool cleanupSucceeded = true;
-            foreach (JournalOperation operation in _operations)
+            foreach (JournalOperation operation in _paths.Rows)
             {
                 if (!TryCleanup(() => OperationKind.DeleteStaging(operation)))
                 {
@@ -94,7 +94,7 @@ internal sealed partial class Transaction : ITransaction
                 }
             }
 
-            if (!StagingApplier.DeleteCreateDirectoryTrees(_operations, ignoreIoFailures: true))
+            if (!StagingApplier.DeleteCreateDirectoryTrees(_paths.Rows, ignoreIoFailures: true))
             {
                 cleanupSucceeded = false;
             }
@@ -175,75 +175,33 @@ internal sealed partial class Transaction : ITransaction
 
     private int FindOperationIndex(string path)
     {
-        for (int i = 0; i < _operations.Count; i++)
-        {
-            if (string.Equals(_operations[i].Path, path, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return -1;
+        return _paths.FindOperationIndex(path);
     }
 
     private int FindLaterOperationIndex(string path, int afterIndex)
     {
-        for (int i = afterIndex + 1; i < _operations.Count; i++)
-        {
-            if (string.Equals(_operations[i].Path, path, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return -1;
+        return _paths.FindLaterOperationIndex(path, afterIndex);
     }
 
     private bool IsFileMoveOut(int index)
     {
-        return index >= 0
-            && _operations[index].Kind == PendingChangeKind.Move
-            && !_operations[index].IsDirectory;
+        return _paths.IsFileMoveOut(index);
     }
 
     // ファイル Move の移動元のパスで、そのあとの中身を決める操作（移動元へ書き直した操作か、別の Move で入ってくる操作）
     private int FindContentAfterMoveOut(string path, int moveOutIndex)
     {
-        int later = FindLaterOperationIndex(path, moveOutIndex);
-        return later >= 0 ? later : FindMoveToIndex(path);
+        return _paths.FindContentAfterMoveOut(path, moveOutIndex);
     }
 
     private void ThrowIfMoveChainCloses(JournalOperation replacement, int replaceIndex)
     {
-        List<JournalOperation> prospective = new List<JournalOperation>(_operations);
-        if (replaceIndex >= 0)
-        {
-            prospective[replaceIndex] = replacement;
-        }
-        else
-        {
-            prospective.Add(replacement);
-        }
-
-        if (!StagingApplier.MovesReachFreeEnd(prospective))
-        {
-            throw new InvalidOperationException("空いている端が無い移動は受け付けられません");
-        }
+        _paths.ThrowIfMoveChainCloses(replacement, replaceIndex);
     }
 
     private int FindMoveToIndex(string destPath)
     {
-        for (int i = 0; i < _operations.Count; i++)
-        {
-            JournalOperation operation = _operations[i];
-            if (operation.Kind == PendingChangeKind.Move
-                && string.Equals(operation.NewPath, destPath, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return -1;
+        return _paths.FindMoveToIndex(destPath);
     }
 
     // ジャーナルを消したあとで呼ぶ（先に閉じると、Recover が生きているトランザクションを巻き戻しうる）
@@ -259,7 +217,7 @@ internal sealed partial class Transaction : ITransaction
             JournalStore.CurrentVersion,
             _transactionId,
             committing,
-            _operations.ToArray(),
+            _paths.ToArray(),
             _createdDirectories.ToArray());
         return JournalStore.SaveAsync(_journalPath, document, cancellationToken);
     }

@@ -47,7 +47,7 @@ internal sealed partial class Transaction
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         string destinationPath = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
-        CommitAppearance appearance = CommitView.Resolve(_operations, sourcePath);
+        CommitAppearance appearance = CommitView.Resolve(_paths.Rows, sourcePath);
         if (appearance.IsDirectory)
         {
             await ExportDirectoryAsync(appearance.ContentPath ?? sourcePath, destinationPath, progress, cancellationToken)
@@ -161,11 +161,11 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken)
     {
         StagingRules.ThrowIfCopyDestinationInsideSource(external, target);
-        StagingRules.ThrowIfInsideDeleteTree(_operations, target);
-        StagingRules.ThrowIfInsideDirectoryMove(_operations, target);
-        StagingRules.ThrowIfTouchesDeletedDirectory(_operations, target);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, external);
-        StagingRules.ThrowIfOperationUnderDirectory(_operations, target);
+        StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, target);
+        StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, target);
+        StagingRules.ThrowIfTouchesDeletedDirectory(_paths.Rows, target);
+        StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, external);
+        StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, target);
         ThrowIfCopyPathIsStaged(target);
         EnsureCopyDestinationFree(target);
         _locks.AcquireShared(_workFolder);

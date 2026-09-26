@@ -20,7 +20,7 @@ internal sealed partial class Transaction
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
-        return Task.FromResult(CommitView.Resolve(_operations, targetPath).Exists);
+        return Task.FromResult(CommitView.Resolve(_paths.Rows, targetPath).Exists);
     }
 
     private static FileStream OpenRead(string path, string reportedPath)
@@ -48,7 +48,7 @@ internal sealed partial class Transaction
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
-        CommitAppearance appearance = CommitView.Resolve(_operations, targetPath);
+        CommitAppearance appearance = CommitView.Resolve(_paths.Rows, targetPath);
         if (!appearance.Exists)
         {
             throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + targetPath, targetPath);
@@ -60,7 +60,7 @@ internal sealed partial class Transaction
         }
 
         Stream stream = OpenRead(appearance.ContentPath, targetPath);
-        _externalChanges?.NoteRead(_operations, targetPath, appearance.ContentPath, _transactionId);
+        _externalChanges?.NoteRead(_paths.Rows, targetPath, appearance.ContentPath, _transactionId);
         return stream;
     }
 
@@ -72,6 +72,6 @@ internal sealed partial class Transaction
             return null;
         }
 
-        return _operations[index].StagingPath;
+        return _paths.Rows[index].StagingPath;
     }
 }
