@@ -312,7 +312,7 @@ internal abstract class OperationKind
         return true;
     }
 
-    // Windows では読み取り専用のファイルを置き換えも削除もできないので、適用の前に拒む
+    // Windows では読み取り専用のファイルは置き換えも削除もできないので、適用の前に拒む
     private static bool IsReadOnlyFile(string path)
     {
         try

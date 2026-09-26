@@ -46,7 +46,7 @@ public enum OperationFailureReason
     ExternalChange = 7,
 
     /// <summary>
-    /// Update の対象、またはファイルの Delete の対象に読み取り専用属性が付いている
+    /// Update かファイルの Delete の対象に読み取り専用属性が付いている
     /// </summary>
     ReadOnly = 8,
 }

@@ -275,9 +275,9 @@ public sealed class CommitReportTests
     /// 読み取り専用のファイルへの Update は、検証で ReadOnly として拒み、属性を外せばやり直せる
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt へ書いたあと、a.txt を読み取り専用にしている</para>
+    /// <para>前提: Update したあと、a.txt を読み取り専用にしている</para>
     /// <para>手順: CommitAsync し、属性を外してからもう一度 CommitAsync する</para>
-    /// <para>期待: 1 回目は Failed で理由は ReadOnly、扱いは Rejected、a.txt は元の内容。2 回目は Succeeded で新しい内容</para>
+    /// <para>期待: 1 回目は Failed で理由は ReadOnly、扱いは Rejected、a.txt は元の内容であり、2 回目は Succeeded で新しい内容</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_読み取り専用へのUpdateはReadOnlyで拒みやり直せること()
@@ -365,6 +365,11 @@ public sealed class CommitReportTests
         }
         finally
         {
+            if (File.Exists(source))
+            {
+                File.SetAttributes(source, FileAttributes.Normal);
+            }
+
             if (File.Exists(dest))
             {
                 File.SetAttributes(dest, FileAttributes.Normal);
