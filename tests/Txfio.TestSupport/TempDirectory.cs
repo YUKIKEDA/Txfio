@@ -3,7 +3,7 @@ namespace Txfio.Tests.Support;
 /// <summary>
 /// テストごとに一意な一時ディレクトリを作り、破棄時に削除する
 /// </summary>
-internal sealed class TempDirectory : IAsyncDisposable
+public sealed class TempDirectory : IAsyncDisposable
 {
     private readonly string _path;
 

@@ -30,7 +30,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 dotnet build $slnPath --no-restore -c Release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-dotnet test $slnPath --no-build -c Release
+# Stress tests (tests/Txfio.Stress) are outside this gate. Run that project with dotnet test explicitly.
+$testProject = Join-Path $PSScriptRoot "tests\Txfio.Tests\Txfio.Tests.csproj"
+dotnet test $testProject --no-build -c Release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "build.ps1 completed successfully."

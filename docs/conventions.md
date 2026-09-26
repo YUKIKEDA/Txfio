@@ -4,11 +4,11 @@
 
 ## リポジトリ配置
 
-- ライブラリは `src/Txfio/`、テストは `tests/Txfio.Tests/`
+- ライブラリは `src/Txfio/`、単体テストは `tests/Txfio.Tests/`、耐久テストは `tests/Txfio.Stress/`、両方が使う一時ディレクトリと `WindowsFact` は `tests/Txfio.TestSupport/`
 - `.csproj` は各プロジェクトのルートに置く。リポジトリ直下にプロジェクトを並べない
 - `.cs` は機能フォルダに置く。プロジェクト直下はエントリ（静的 `Txfio`）と実装の根と `.csproj` だけ。新しい機能は新しいフォルダを足し、直下へバラまかない
 - テストは `src/Txfio/<Area>/` と同じ `<Area>/` を `tests/Txfio.Tests/` に作る。ファイル名は `Foo.cs` → `FooTests.cs`
-- 名前空間はフォルダに連動させない。ライブラリは `Txfio`、テストは `Txfio.Tests`
+- 名前空間はフォルダに連動させない。ライブラリは `Txfio`、単体テストと耐久テストは `Txfio.Tests`、共有ヘルパーは `Txfio.Tests.Support`
 - ソリューションは **`Txfio.slnx` をコミット**する。`.sln` は置かない
 
 公開面は契約（`Txfio`、`ITransaction`、結果型、例外、進捗）だけとする。実装型は `internal` とする。テストアセンブリへ `InternalsVisibleTo` を付ける。
@@ -26,11 +26,16 @@ src/Txfio/
   Commit/
   Recover/
 
+tests/Txfio.TestSupport/
+  TempDirectory.cs         一時ディレクトリ。Fact は置かない
+  WindowsFactAttribute.cs
 tests/Txfio.Tests/
   TxfioTests.cs
-  Support/                 TempDirectory など。Fact は置かない
+  Support/                 単体テストのフィクスチャ。Fact は置かない
   Contracts/
   Journal/
+tests/Txfio.Stress/
+  耐久テスト。関門の dotnet test では回さない
 ```
 
 ## partial クラス
@@ -105,22 +110,23 @@ API ごとに節を分け、次の見出しをこの順番で置く。当ては�
 
 - テストメソッド名は日本語の自然文にする。推奨形式は `{対象}_〜すると／したとき〜こと`
 - 各 `[Fact]` / `[Theory]` には XML コメントで **前提**・**手順**・**期待** を残す。ヘルパーには不要
-- `tests/Txfio.Tests/Support/` に一時フォルダヘルパーを置く。Fact は置かない
+- `tests/Txfio.TestSupport/` に一時ディレクトリと `WindowsFact` を置く。Fact は置かない
+- 単体テストのフィクスチャは `tests/Txfio.Tests/Support/` に置く。Fact は置かない
 - テストごとに一意の一時ディレクトリを作り、破棄時に消す。並列実行を前提にする
-- 乱数で約束を確かめる耐久テストは `tests/Txfio.Tests/Stress/` に置く。対応する `src/` のフォルダは無い
+- 乱数で約束を確かめる耐久テストは `tests/Txfio.Stress/` に置く。対応する `src/` のフォルダは無い
   - ランダム操作列はメモリ上のモデルと比べ、失敗したら手を外して縮めた列を出す
-  - 多プロセスの耐久は、テストの実行ファイル自身を子プロセスとして起動する（`Program.cs` の入口）
-  - 既定は通常の `dotnet test` で短く終わる規模にする。長く回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES`、`TXFIO_STRESS_FILES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
+  - 多プロセスの耐久は、耐久プロジェクトの実行ファイル自身を子プロセスとして起動する（`Program.cs` の入口）
+  - 関門（`./build.ps1` と Linux の PR 前確認）の `dotnet test` は `tests/Txfio.Tests/Txfio.Tests.csproj` だけを実行する。耐久は `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。既定はその実行で短く終わる規模にする。長く回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES`、`TXFIO_STRESS_FILES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
   - 多プロセスの耐久は、少数のファイルを待たずに奪い合う版（競合の組み合わせを増やす）と、多めのファイルを競合したらやり直す版（使い方に近い負荷）の 2 つを持つ。結果の件数はテストの出力に出る
   - 見つかった不具合はテストで隠さず、別 Issue にする
 
 ### Windows 専用のテストと Linux での実行
 
-実行時に保証するのは Windows だけである（`docs/design.md`「対象プラットフォーム」）。ただし開発環境として、Linux でも `dotnet test` を回せるようにしておく。
+実行時に保証するのは Windows だけである（`docs/design.md`「対象プラットフォーム」）。ただし開発環境として、Linux でも単体テストの `dotnet test` を回せるようにしておく。
 
-- Windows の挙動そのものに頼るテストは `[WindowsFact("理由")]`（`tests/Txfio.Tests/Support/`）にする。対象は、ジャンクション、ドライブ文字のパス、開いたままのファイルを rename や削除できないこと。Windows 以外では `Windows 専用: 理由` として Skip になる
+- Windows の挙動そのものに頼るテストは `[WindowsFact("理由")]`（`tests/Txfio.TestSupport/`）にする。対象は、ジャンクション、ドライブ文字のパス、開いたままのファイルを rename や削除できないこと。Windows 以外では `Windows 専用: 理由` として Skip になる
 - パスの区切りはテストでも `/` か `Path.Combine` を使う。`\` は Linux ではファイル名の一部になる
-- Linux では、PR を出す前に `WindowsFact` 以外のテストがすべて通っていること。マージの関門は Windows の `./build.ps1` のままで、Windows では Skip は 0 件である
+- Linux では、PR を出す前に `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行し、`WindowsFact` 以外のテストがすべて通っていること。耐久テストはこの確認に含めない。マージの関門は Windows の `./build.ps1` のままで、Windows では Skip は 0 件である
 - ロック競合の判定（`PathLockSet.IsSharingViolation`）は、Linux の EAGAIN（`HResult` = 11）も共有違反とみなす。テストを回すためのもので、実行時の保証ではない。macOS は実機で確かめるまで足さない
 
 ## 書式

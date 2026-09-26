@@ -23,7 +23,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 | Host | Verify |
 | --- | --- |
 | Windows | `./build.ps1` (full gate: restore → format verify → build → test) |
-| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx` then `dotnet test Txfio.slnx`. **Do not run `./build.ps1`.** Before opening a PR, every test must pass except the ones skipped as `Windows 専用` (`WindowsFact`). This is a pre-PR check, not the merge gate: the merge gate stays `./build.ps1` on Windows |
+| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx` then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. **Do not run `./build.ps1`.** Before opening a PR, every test in `Txfio.Tests` must pass except the ones skipped as `Windows 専用` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. This is a pre-PR check, not the merge gate: the merge gate stays `./build.ps1` on Windows |
 
 ## Always-apply rules
 
@@ -44,7 +44,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - Branch: `type/<issue-number>-<slug>`
 - Commits / PR titles: Conventional Commits (Japanese subject OK)
 - Local verification gate: `./build.ps1` against **`Txfio.slnx`** on Windows
-- Layout: `src/Txfio` ↔ `tests/Txfio.Tests`, TFM `net8.0`, namespace `Txfio`
+- Layout: `src/Txfio` ↔ `tests/Txfio.Tests`, shared helpers in `tests/Txfio.TestSupport`, stress tests in `tests/Txfio.Stress` (explicit `dotnet test` only, not the merge gate), TFM `net8.0`, namespace `Txfio`
 - Private fields: `_camelCase`. Do not prefix members with `this.` unless needed for disambiguation
 - Comments (XML docs / inline) in **Japanese**; no `。` or `.` mid-sentence or at the end. Wording that Gemini or a human already corrected lives in [`.cursor/skills/japanese-writing/SKILL.md`](.cursor/skills/japanese-writing/SKILL.md). Read it before writing comments, and add a new general rule there in the same change when a review finds one
 - New or changed `src/` XML docs: Gemini reviews natural Japanese before the PR is ready (`.cursor/rules/japanese-docs.mdc`)

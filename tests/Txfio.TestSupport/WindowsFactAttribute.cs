@@ -1,3 +1,5 @@
+using Xunit;
+
 namespace Txfio.Tests.Support;
 
 /// <summary>

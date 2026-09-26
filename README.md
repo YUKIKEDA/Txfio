@@ -565,7 +565,7 @@ TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`�
 
 ## ローカル検証
 
-Windows では `./build.ps1` がゲートです。Linux ではこのスクリプトを実行せず、restore / format / build / `dotnet test` を回します。Linux では Windows 専用のテストが Skip になります。
+Windows では `./build.ps1` がゲートです。restore / format / build はソリューション全体、テストは単体テストだけです。耐久テストは `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回します。Linux ではこのスクリプトを実行せず、ソリューションに対して restore / format / build を回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行します。Linux では Windows 専用のテストが Skip になります。
 
 ```powershell
 ./build.ps1
