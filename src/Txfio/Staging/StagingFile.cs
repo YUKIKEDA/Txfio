@@ -16,8 +16,8 @@ internal static class StagingFile
     /// <param name="content">内容（Dispose しない）</param>
     /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>書き込みの完了</returns>
-    internal static async Task WriteAsync(
+    /// <returns>書いたバイト数</returns>
+    internal static async Task<long> WriteAsync(
         string stagingPath,
         Stream content,
         IProgress<TransferProgress>? progress,
@@ -34,8 +34,10 @@ internal static class StagingFile
                 FileShare.None,
                 bufferSize: 4096,
                 FileOptions.Asynchronous | FileOptions.WriteThrough);
-            await CopyAsync(content, stream, totalBytes, progress, cancellationToken).ConfigureAwait(false);
+            long written = await CopyAsync(content, stream, totalBytes, progress, cancellationToken)
+                .ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return written;
         }
         catch
         {
@@ -117,8 +119,8 @@ internal static class StagingFile
     /// <param name="destinationPath">新しいファイルのパス</param>
     /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>コピーの完了</returns>
-    internal static async Task CopyToNewFileAsync(
+    /// <returns>書いたバイト数</returns>
+    internal static async Task<long> CopyToNewFileAsync(
         Stream content,
         string destinationPath,
         IProgress<TransferProgress>? progress,
@@ -149,8 +151,10 @@ internal static class StagingFile
 
         try
         {
-            await CopyAsync(content, stream, totalBytes, progress, cancellationToken).ConfigureAwait(false);
+            long written = await CopyAsync(content, stream, totalBytes, progress, cancellationToken)
+                .ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return written;
         }
         catch
         {
@@ -176,8 +180,8 @@ internal static class StagingFile
     /// <param name="totalBytes">通知に載せる全体のバイト数（分からなければ null）</param>
     /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>コピーの完了</returns>
-    internal static async Task CopyAsync(
+    /// <returns>コピーしたバイト数</returns>
+    internal static async Task<long> CopyAsync(
         Stream source,
         Stream destination,
         long? totalBytes,
@@ -206,6 +210,8 @@ internal static class StagingFile
             {
                 progress?.Report(new TransferProgress(0, totalBytes));
             }
+
+            return copied;
         }
         finally
         {

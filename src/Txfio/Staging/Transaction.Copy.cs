@@ -172,8 +172,7 @@ internal sealed partial class Transaction
             FileShare.Read | FileShare.Delete,
             bufferSize: 4096,
             FileOptions.Asynchronous);
-        await StagingFile.WriteAsync(stagingPath, source, progress, cancellationToken).ConfigureAwait(false);
-        return new FileInfo(stagingPath).Length;
+        return await StagingFile.WriteAsync(stagingPath, source, progress, cancellationToken).ConfigureAwait(false);
     }
 
     private void RollbackAddedOperations(int operationCount)

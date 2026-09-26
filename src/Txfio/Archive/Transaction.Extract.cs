@@ -170,15 +170,16 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken)
     {
         string stagingPath = WorkPath.StagingFilePath(path, _transactionId);
+        long written;
         Stream entryStream = entry.Open();
         await using (entryStream.ConfigureAwait(false))
         {
-            await StagingFile.WriteAsync(stagingPath, entryStream, progress, cancellationToken)
+            written = await StagingFile.WriteAsync(stagingPath, entryStream, progress, cancellationToken)
                 .ConfigureAwait(false);
         }
 
         File.SetLastWriteTimeUtc(stagingPath, entry.LastWriteTime.UtcDateTime);
-        return new FileInfo(stagingPath).Length;
+        return written;
     }
 
     private sealed class PlannedExtractFile
