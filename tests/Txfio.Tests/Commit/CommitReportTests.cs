@@ -211,7 +211,7 @@ public sealed class CommitReportTests
     /// <para>手順: CommitAsync し、同じトランザクションでもう一度 CommitAsync する</para>
     /// <para>期待: PartialConflict で理由は SharingViolation、2 回目は InvalidOperationException</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("開いているファイルを消せないのは Windows の挙動（Linux の unlink は開いたハンドルを気にしない）")]
     public async Task CommitAsync_共有違反はPartialConflictで同じインスタンスではやり直せないこと()
     {
         await using TempDirectory work = TempDirectory.Create();

@@ -233,7 +233,7 @@ public sealed class StagingApplierTests
     /// <para>手順: TryDeleteFile と TryDeleteStaging を呼ぶ</para>
     /// <para>期待: どちらも失敗し、理由は IoFailure、ファイルは残る</para>
     /// </remarks>
-    [Fact]
+    [WindowsFact("読み取り専用のファイルを消せないのは Windows の挙動（Linux の unlink はファイルの権限を見ない）")]
     public async Task TryDelete_読み取り専用はIoFailureになること()
     {
         await using TempDirectory work = TempDirectory.Create();
