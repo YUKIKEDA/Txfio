@@ -33,9 +33,9 @@ internal static class StagingFile
                 FileAccess.Write,
                 FileShare.None,
                 bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough);
+                FileOptions.Asynchronous);
             await CopyAsync(content, stream, totalBytes, progress, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await FlushToDiskAsync(stream, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -134,7 +134,7 @@ internal static class StagingFile
                 FileAccess.Write,
                 FileShare.None,
                 bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough);
+                FileOptions.Asynchronous);
         }
         catch (IOException exception) when (exception is DirectoryNotFoundException || File.Exists(destinationPath))
         {
@@ -150,7 +150,7 @@ internal static class StagingFile
         try
         {
             await CopyAsync(content, stream, totalBytes, progress, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await FlushToDiskAsync(stream, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -211,6 +211,22 @@ internal static class StagingFile
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+    }
+
+    /// <summary>
+    /// 書いた内容をディスクまで書き出す
+    /// </summary>
+    /// <remarks>
+    /// 書き込みのたびに完了を待つ WriteThrough ではなく、書き終えたあと 1 回だけディスクまでフラッシュする
+    /// ジャーナルの Committing より前に、中身がディスクにあることを保証する
+    /// </remarks>
+    /// <param name="stream">書き終えたストリーム</param>
+    /// <param name="cancellationToken">バッファを書き出すあいだの取り消し</param>
+    /// <returns>書き出したこと</returns>
+    internal static async Task FlushToDiskAsync(FileStream stream, CancellationToken cancellationToken)
+    {
+        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        stream.Flush(flushToDisk: true);
     }
 
     private static long? TryGetRemaining(Stream content)
