@@ -31,6 +31,9 @@ internal sealed class PathLockSet
     // 共有へ戻せなかったとき、次の取得で開き直す
     private bool _workFolderShareLost;
 
+    // パスか意図ロックを持ったまま、ワークフォルダ全体のロックを持っていないあいだ開く
+    private FileStream? _shareLost;
+
     private bool _waitArmed;
 
     private bool _waitForever;
@@ -185,6 +188,7 @@ internal sealed class PathLockSet
         bool restoreSharedOnFailure = _handles.ContainsKey(workFolder);
         if (restoreSharedOnFailure)
         {
+            HoldShareLostBeforeDrop(workFolder);
             ReleaseHandle(workFolder);
         }
 
@@ -192,6 +196,7 @@ internal sealed class PathLockSet
         {
             OpenWaiting(workFolder, workFolder, FileShare.None);
             _workFolderExclusive = true;
+            CloseShareLost();
         }
         catch (OperationCanceledException)
         {
@@ -232,19 +237,20 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 自分以外の `.lock` が使用中なら、排他をやめて共有に戻す
+    /// しるし（`.txfio/share-lost.lock`）が使用中なら、排他をやめて共有に戻す
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
-    /// <exception cref="LockContentionException">期限までにほかのロックが空かない</exception>
+    /// <exception cref="LockContentionException">期限までにしるしが空かない</exception>
     /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
     internal void RejectForeignLocks(string workFolder)
     {
         try
         {
-            while (ForeignLocksBusy(workFolder))
+            while (ShareLostBusy(workFolder))
             {
                 if (!WaitForRetry())
                 {
+                    HoldShareLostBeforeDrop(workFolder);
                     ReleaseHandle(workFolder);
                     RestoreOrMarkLost(workFolder);
                     throw Contention(workFolder);
@@ -253,6 +259,7 @@ internal sealed class PathLockSet
         }
         catch (OperationCanceledException)
         {
+            HoldShareLostBeforeDrop(workFolder);
             ReleaseHandle(workFolder);
             RestoreAfterCancel(workFolder);
             throw;
@@ -260,11 +267,11 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// ワークフォルダ全体を排他にし、自分以外の `.lock` が空いていることを確かめる
+    /// ワークフォルダ全体を排他にし、しるし（`.txfio/share-lost.lock`）が空いていることを確かめる
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <returns>呼び出しの終わりに排他を共有へ戻す</returns>
-    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロック、またはほかのロックが空かない</exception>
+    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックが取れない、またはしるしが空かない</exception>
     /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
     internal WorkFolderExclusive EnterExclusive(string workFolder)
     {
@@ -327,6 +334,7 @@ internal sealed class PathLockSet
         _exclusiveIntents.Clear();
         _workFolderExclusive = false;
         _workFolderShareLost = false;
+        CloseShareLost();
     }
 
     private static string RelativeKey(string workFolder, string fullPath)
@@ -486,11 +494,13 @@ internal sealed class PathLockSet
     {
         if (_handles.ContainsKey(workFolder))
         {
+            CloseShareLost();
             return;
         }
 
         _workFolderExclusive = false;
         _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.ReadWrite));
+        CloseShareLost();
     }
 
     private void OpenWaiting(string workFolder, string fullPath, FileShare share)
@@ -512,51 +522,77 @@ internal sealed class PathLockSet
         }
     }
 
-    private bool ForeignLocksBusy(string workFolder)
+    private bool ShareLostBusy(string workFolder)
     {
-        string directory = MetadataNames.LockFolderPath(workFolder);
-        if (!Directory.Exists(directory))
+        string path = MetadataNames.ShareLostLockPath(workFolder);
+        if (!File.Exists(path))
         {
             return false;
         }
 
-        HashSet<string> owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string fullPath in _handles.Keys)
+        try
         {
-            owned.Add(FilePath(workFolder, fullPath));
+            using FileStream probe = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.None);
+        }
+        catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return false;
+        }
+        catch (IOException exception) when (IsSharingViolation(exception))
+        {
+            return true;
         }
 
-        foreach (string intentPath in _intents.Keys)
+        return false;
+    }
+
+    private void HoldShareLostBeforeDrop(string workFolder)
+    {
+        if (_shareLost is not null || !HoldsPathOrIntent(workFolder))
         {
-            owned.Add(IntentFilePath(workFolder, intentPath));
+            return;
         }
 
-        foreach (string lockFile in Directory.GetFiles(directory, "*.lock"))
-        {
-            if (owned.Contains(lockFile))
-            {
-                continue;
-            }
+        Directory.CreateDirectory(MetadataNames.FolderPath(workFolder));
+        _shareLost = new FileStream(
+            MetadataNames.ShareLostLockPath(workFolder),
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.ReadWrite,
+            bufferSize: 1);
+    }
 
-            try
-            {
-                using FileStream probe = new FileStream(
-                    lockFile,
-                    FileMode.Open,
-                    FileAccess.ReadWrite,
-                    FileShare.None);
-            }
-            catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
-            {
-                continue;
-            }
-            catch (IOException exception) when (IsSharingViolation(exception))
+    private bool HoldsPathOrIntent(string workFolder)
+    {
+        if (_intents.Count > 0)
+        {
+            return true;
+        }
+
+        foreach (string path in _handles.Keys)
+        {
+            if (!string.Equals(path, workFolder, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private void CloseShareLost()
+    {
+        if (_shareLost is null)
+        {
+            return;
+        }
+
+        _shareLost.Dispose();
+        _shareLost = null;
     }
 
     private bool WaitForRetry()
@@ -710,6 +746,7 @@ internal sealed class PathLockSet
                 {
                     if (!releasedShared && !_workFolderExclusive && _handles.ContainsKey(workFolder))
                     {
+                        HoldShareLostBeforeDrop(workFolder);
                         ReleaseHandle(workFolder);
                         releasedShared = true;
                     }
@@ -824,6 +861,7 @@ internal sealed class PathLockSet
             return;
         }
 
+        HoldShareLostBeforeDrop(workFolder);
         ReleaseHandle(workFolder);
         try
         {

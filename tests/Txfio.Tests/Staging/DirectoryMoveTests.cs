@@ -273,20 +273,23 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 使用中の別ロックがあると排他をやめて共有に戻す
+    /// しるしが使用中だと排他をやめて共有に戻す
     /// </summary>
     /// <remarks>
-    /// <para>前提: 哨兵を排他で持ち、別の .lock を共有なしで開いている</para>
-    /// <para>手順: 自分以外のロックを確認する</para>
-    /// <para>期待: LockContentionException で Path はワークフォルダ、そのあと別の集合は共有を取れ、排他は取れない</para>
+    /// <para>前提: ワークフォルダ全体のロックを排他で持ち、しるしを共有で開いている</para>
+    /// <para>手順: しるしが使用中かどうかを確認する</para>
+    /// <para>期待: LockContentionException で Path はワークフォルダ、確認が失敗したあと別の集合は共有を取れ、排他は取れない</para>
     /// </remarks>
     [Fact]
-    public async Task RejectForeignLocks_使用中なら共有に戻ること()
+    public async Task RejectForeignLocks_しるしが使用中なら共有に戻ること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        string foreign = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(foreign)!);
-        using FileStream held = new FileStream(foreign, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
+        using FileStream held = new FileStream(
+            MetadataNames.ShareLostLockPath(work.Path),
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.ReadWrite);
         PathLockSet mover = new PathLockSet();
         mover.AcquireExclusive(work.Path);
 
@@ -298,6 +301,49 @@ public sealed class DirectoryMoveTests
         Assert.Throws<LockContentionException>(() => other.AcquireExclusive(work.Path));
         mover.Release();
         other.Release();
+    }
+
+    /// <summary>
+    /// パスを持ったまま共有へ戻せないと、しるしが残って排他を止める
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: パスロックを持っており、排他への開き直しと共有への戻しが共有違反で失敗する</para>
+    /// <para>手順: 排他を取り、別の集合が排他を取ったあと、しるしを確認し、先の集合を破棄する</para>
+    /// <para>期待: 確認は LockContentionException で Path はワークフォルダ、破棄したあとはしるしを共有なしで開ける</para>
+    /// </remarks>
+    [Fact]
+    public async Task AcquireExclusive_パスを持ったまま共有を失うとしるしが残ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        PathLockSet holder = new PathLockSet();
+        holder.AcquireShared(work.Path);
+        holder.Acquire(work.Path, target);
+        PathLockSet.FailNextOpen(FileShare.None, SharingViolation());
+        PathLockSet.FailNextOpen(FileShare.ReadWrite, SharingViolation());
+        try
+        {
+            Assert.Throws<LockContentionException>(() => holder.AcquireExclusive(work.Path));
+        }
+        finally
+        {
+            PathLockSet.ClearOpenFailures();
+        }
+
+        string marker = MetadataNames.ShareLostLockPath(work.Path);
+        Assert.True(File.Exists(marker));
+        PathLockSet mover = new PathLockSet();
+        mover.AcquireExclusive(work.Path);
+        LockContentionException contention = Assert.Throws<LockContentionException>(
+            () => mover.RejectForeignLocks(work.Path));
+        Assert.Equal(work.Path, contention.Path);
+        holder.Release();
+        using (FileStream free = new FileStream(marker, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            _ = free;
+        }
+
+        mover.Release();
     }
 
     /// <summary>
