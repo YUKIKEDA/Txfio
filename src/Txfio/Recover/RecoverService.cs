@@ -30,9 +30,10 @@ internal static class RecoverService
         PathLockSet sentinel = new PathLockSet();
         try
         {
-            sentinel.BeginAttempt(lockWait, cancellationToken);
-            sentinel.AcquireExclusive(workFolder);
-            sentinel.RejectForeignLocks(workFolder);
+            LockAttempt attempt = LockAttempt.Start(lockWait, cancellationToken);
+            await sentinel.AcquireExclusiveAsync(workFolder, attempt).ConfigureAwait(false);
+            await sentinel.RejectForeignLocksAsync(workFolder, attempt).ConfigureAwait(false);
+            DeleteLockFiles(workFolder);
             string[] journals = Directory.GetFiles(
                 metadataFolder,
                 MetadataNames.JournalSearchPattern,
@@ -40,11 +41,58 @@ internal static class RecoverService
 
             // パスの大文字小文字を無視した辞書順（報告と、読み取り失敗より前に確定する範囲を毎回同じにする）
             Array.Sort(journals, static (left, right) => string.Compare(left, right, StringComparison.OrdinalIgnoreCase));
-            return await RecoverJournalsAsync(workFolder, journals, cancellationToken).ConfigureAwait(false);
+            RecoverReport report = await RecoverJournalsAsync(workFolder, journals, cancellationToken).ConfigureAwait(false);
+            DeleteOrphanJournalTemps(metadataFolder);
+            return report;
         }
         finally
         {
             sentinel.Release();
+        }
+    }
+
+    // ワークフォルダ全体を排他にしているあいだは、他のトランザクションはパスロックも意図ロックも持っていない（持つには共有のワークフォルダ全体のロックが要るか、しるしが要る）
+    private static void DeleteLockFiles(string workFolder)
+    {
+        string lockFolder = MetadataNames.LockFolderPath(workFolder);
+        if (!Directory.Exists(lockFolder))
+        {
+            return;
+        }
+
+        foreach (string path in Directory.EnumerateFiles(lockFolder, "*.lock", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // 消せないものは残す（次の Recover でまた試す）
+            }
+        }
+    }
+
+    // 初回のジャーナルを rename する前に落ちると、一時ファイルだけが残る（持ち主が生きていれば触らない）
+    private static void DeleteOrphanJournalTemps(string metadataFolder)
+    {
+        string[] temps = Directory.GetFiles(
+            metadataFolder,
+            MetadataNames.JournalTempSearchPattern,
+            SearchOption.TopDirectoryOnly);
+        foreach (string tempPath in temps)
+        {
+            if (!MetadataNames.TryGetJournalPathFromTemp(tempPath, out string journalPath)
+                || File.Exists(journalPath))
+            {
+                continue;
+            }
+
+            using FileStream? liveness = LivenessLock.TryOpenStale(MetadataNames.LivenessLockPath(journalPath));
+            if (liveness is not null && !File.Exists(journalPath) && File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
         }
     }
 
@@ -79,15 +127,20 @@ internal static class RecoverService
 
                 // 落ちた上書きの一時ファイルは、読む前に消す
                 JournalStore.DeleteTemp(journalPath);
-                JournalDocument? document = await JournalStore.TryReadAsync(journalPath, cancellationToken)
+                JournalReadResult read = await JournalStore.ReadAsync(journalPath, cancellationToken)
                     .ConfigureAwait(false);
-
+                JournalDocument? document = read.Document;
                 if (document is null)
                 {
-                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew だけ消す
+                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew と再ステージの退避だけ消す
+                    // 版が違うときは新しい版のライブラリが残したものかもしれないので、.txnew にも再ステージの退避にも触れない
                     if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
                     {
-                        StagingApplier.DeleteStagingFiles(workFolder, transactionId);
+                        if (!read.UnsupportedVersion)
+                        {
+                            StagingApplier.DeleteStagingFiles(workFolder, transactionId);
+                        }
+
                         reports.Add(new JournalReport(
                             transactionId,
                             RecoverResult.JournalUnreadable,
@@ -123,7 +176,7 @@ internal static class RecoverService
 
                 StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
                 StagingApplier.DeleteStagingFiles(document.Operations);
-                StagingApplier.DeleteStagingBackups(workFolder, document.TransactionId);
+                StagingApplier.DeleteStagingBackups(document.Operations);
                 StagingApplier.DeleteCreatedDirectories(document.CreatedDirectories);
                 await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
                 reports.Add(new JournalReport(
