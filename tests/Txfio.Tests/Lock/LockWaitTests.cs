@@ -194,20 +194,23 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// ほかの .lock が空くと、排他の操作は成功する
+    /// しるしが空くと、ディレクトリ作成は成功する
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の .lock を共有なしで開いており、待ちは 2 秒</para>
+    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちは 2 秒</para>
     /// <para>手順: 200ms 後にそのハンドルを閉じ、sub を CreateDirectory する</para>
     /// <para>期待: sub ができる</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_ほかのロックが空くと成功すること()
+    public async Task CreateDirectoryAsync_しるしが空くとディレクトリ作成が成功すること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        string foreign = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(foreign)!);
-        FileStream held = new FileStream(foreign, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
+        FileStream held = new FileStream(
+            MetadataNames.ShareLostLockPath(work.Path),
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.ReadWrite);
         await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(2));
         Task release = Task.Run(async () =>
         {
@@ -222,20 +225,23 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// ほかの .lock が期限までに空かなければ、ワークフォルダで失敗する
+    /// しるしが期限までに空かなければ、ワークフォルダで失敗する
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の .lock を共有なしで開いており、待ちは 300ms</para>
+    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちは 300ms</para>
     /// <para>手順: sub を CreateDirectory する</para>
     /// <para>期待: LockContentionException で Path はワークフォルダ、sub はできない</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_ほかのロックが空かないとワークフォルダで失敗すること()
+    public async Task CreateDirectoryAsync_しるしが空かないとワークフォルダで失敗すること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        string foreign = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(foreign)!);
-        await using FileStream held = new FileStream(foreign, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
+        await using FileStream held = new FileStream(
+            MetadataNames.ShareLostLockPath(work.Path),
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.ReadWrite);
         await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromMilliseconds(300));
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
@@ -243,6 +249,29 @@ public sealed class LockWaitTests
 
         Assert.Equal(System.IO.Path.GetFullPath(work.Path), contention.Path);
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
+        _ = held;
+    }
+
+    /// <summary>
+    /// パスのロックファイルを開いていても、ディレクトリ作成は失敗しない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt の .lock を共有なしで開いている</para>
+    /// <para>手順: sub を CreateDirectory する</para>
+    /// <para>期待: sub ができる</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateDirectoryAsync_パスのロックファイルだけでは失敗しないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string foreign = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(foreign)!);
+        await using FileStream held = new FileStream(foreign, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await waiter.CreateDirectoryAsync("sub");
+
+        Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
         _ = held;
     }
 

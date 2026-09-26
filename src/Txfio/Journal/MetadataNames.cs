@@ -41,6 +41,16 @@ internal static class MetadataNames
     }
 
     /// <summary>
+    /// ワークフォルダ全体のロックを持たないあいだに開くしるしのパスを返す
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <returns>しるし（`.txfio/share-lost.lock`）のパス</returns>
+    internal static string ShareLostLockPath(string workFolder)
+    {
+        return System.IO.Path.Combine(FolderPath(workFolder), "share-lost.lock");
+    }
+
+    /// <summary>
     /// トランザクションに対応するジャーナルファイルのパスを返す
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
