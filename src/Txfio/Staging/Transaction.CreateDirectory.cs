@@ -50,6 +50,12 @@ internal sealed partial class Transaction
         try
         {
             Directory.CreateDirectory(targetPath);
+
+            // 作ったあとで作成済みを書く（未作成のまま落ちたときは、他が作った同じ名前のディレクトリを Recover が中身ごと消さない）
+            JournalOperation created = operation.WithDirectoryCreated();
+            _paths.Rows[_paths.Rows.IndexOf(operation)] = created;
+            operation = created;
+            await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {

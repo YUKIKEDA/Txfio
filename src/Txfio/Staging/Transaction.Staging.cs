@@ -594,33 +594,54 @@ internal sealed partial class Transaction
     {
         JournalOperation existing = _paths.Rows[sourceIndex];
         JournalOperation[] previous = _paths.Rows.ToArray();
+        string sourcePath = existing.Path;
 
         // .txnew は移動先の名前に付け替える（元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする）
         string? stagingPath = existing.StagingPath is null
             ? null
             : WorkPath.StagingFilePath(destPath, _transactionId);
+        JournalOperation retargeted = new JournalOperation(PendingChangeKind.Add, destPath, stagingPath);
         bool journalUpdated = false;
+        bool moved = false;
         try
         {
-            string sourcePath = existing.Path;
+            if (existing.StagingPath is not null)
+            {
+                // 付け替えの前後どちらで落ちても、両方の .txnew がジャーナルに載っているようにする
+                _paths.Rows.Add(retargeted);
+                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+                journalUpdated = true;
+                File.Move(existing.StagingPath, stagingPath!);
+                moved = true;
+                _paths.Rows.Remove(retargeted);
+            }
+
             _paths.Rows.RemoveAt(sourceIndex);
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
+            _paths.Rows.Add(retargeted);
             if (deleteSource)
             {
                 _paths.Rows.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
             }
 
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            journalUpdated = true;
-            if (existing.StagingPath is not null)
-            {
-                File.Move(existing.StagingPath, stagingPath!);
-            }
         }
         catch
         {
             _paths.Rows.Clear();
             _paths.Rows.AddRange(previous);
+            if (moved)
+            {
+                try
+                {
+                    File.Move(stagingPath!, existing.StagingPath!);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // 戻せなくても、両方の .txnew が載ったジャーナルが残れば次の Recover が消す
+                    journalUpdated = false;
+                }
+            }
+
             if (journalUpdated)
             {
                 await TryPersistUndoAsync().ConfigureAwait(false);
@@ -652,20 +673,28 @@ internal sealed partial class Transaction
             folded,
             moveIndex,
             new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
-        await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
 
+        // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
         JournalOperation[] previous = _paths.Rows.ToArray();
+        bool journalUpdated = false;
         try
         {
             _paths.Rows.Clear();
             _paths.Rows.AddRange(folded);
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journalUpdated = true;
+            await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             _paths.Rows.Clear();
             _paths.Rows.AddRange(previous);
             StagingFile.TryDelete(stagingPath);
+            if (journalUpdated)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
             throw;
         }
     }
@@ -771,7 +800,7 @@ internal sealed partial class Transaction
                 && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase)
                 && File.Exists(stagingPath))
             {
-                backupPath = stagingPath + ".prev";
+                backupPath = WorkPath.StagingBackupPath(stagingPath);
                 StagingFile.MoveReplacing(stagingPath, backupPath);
             }
 
