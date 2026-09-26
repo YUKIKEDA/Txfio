@@ -12,7 +12,7 @@ internal sealed partial class Transaction
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_paths.Rows.Count == 0)
+        if (_paths.Count == 0)
         {
             await JournalStore.DeleteAsync(_journalPath).ConfigureAwait(false);
             _locks.Release();
@@ -37,8 +37,7 @@ internal sealed partial class Transaction
             return new CommitReport(CommitResult.Failed, rejections);
         }
 
-        _paths.Rows.Clear();
-        _paths.Rows.AddRange(stamped);
+        _paths.Load(stamped);
         await PersistAsync(committing: true, CancellationToken.None).ConfigureAwait(false);
         _committingWritten = true;
         _faults.CheckPoint(IFaultInjector.AfterCommitting);
@@ -57,7 +56,7 @@ internal sealed partial class Transaction
         _locks.Release();
         ReleaseLiveness();
         _committed = true;
-        _paths.Rows.Clear();
+        _paths.Clear();
         CommitResult result = conflict ? CommitResult.PartialConflict : CommitResult.Succeeded;
         IReadOnlyList<OperationReport> operations = conflict ? skipped : Array.Empty<OperationReport>();
         return new CommitReport(result, operations);
