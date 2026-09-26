@@ -31,6 +31,7 @@ internal sealed class StressProcess : IAsyncDisposable
     /// <param name="retry">ロック競合のあとやり直すなら true</param>
     /// <param name="logFile">結果を書く記録ファイル</param>
     /// <param name="startFile">できるまで待つ開始ファイル</param>
+    /// <param name="command">子プロセスの起動コマンド</param>
     /// <returns>起動した子プロセス</returns>
     public static StressProcess Start(
         string workFolder,
@@ -40,7 +41,8 @@ internal sealed class StressProcess : IAsyncDisposable
         int files,
         bool retry,
         string logFile,
-        string startFile)
+        string startFile,
+        string command = StressWriter.Command)
     {
         ProcessStartInfo start = new ProcessStartInfo
         {
@@ -52,7 +54,7 @@ internal sealed class StressProcess : IAsyncDisposable
         };
         start.ArgumentList.Add("exec");
         start.ArgumentList.Add(typeof(StressWriter).Assembly.Location);
-        start.ArgumentList.Add(StressWriter.Command);
+        start.ArgumentList.Add(command);
         start.ArgumentList.Add(workFolder);
         start.ArgumentList.Add(child.ToString(CultureInfo.InvariantCulture));
         start.ArgumentList.Add(transactions.ToString(CultureInfo.InvariantCulture));

@@ -20,6 +20,7 @@ public static class Program
         return args[0] switch
         {
             Stress.StressWriter.Command => Stress.StressWriter.RunAsync(args),
+            Stress.DirectoryStressWriter.Command => Stress.DirectoryStressWriter.RunAsync(args),
             _ => Task.FromResult(2),
         };
     }
