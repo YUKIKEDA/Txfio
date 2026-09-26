@@ -108,7 +108,7 @@ internal sealed partial class Transaction : ITransaction
                 cleanupSucceeded = false;
             }
 
-            if (!StagingApplier.DeleteStagingBackups(_workFolder, _transactionId, ignoreIoFailures: true))
+            if (!StagingApplier.DeleteStagingBackups(_paths.Rows, ignoreIoFailures: true))
             {
                 cleanupSucceeded = false;
             }

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Txfio;
 
 /// <summary>
-/// ジャーナルの末尾に書き足す 1 行（表の末尾に足した操作と作成ディレクトリ）
+/// ジャーナルの末尾に追記する 1 行（表の末尾に足した操作と作成ディレクトリ）
 /// </summary>
 internal sealed class JournalAppend
 {

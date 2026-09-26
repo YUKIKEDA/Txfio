@@ -8,9 +8,9 @@ public sealed class JournalAppendTests
     /// 末尾に足すだけの操作は、ジャーナルへ 1 行ずつ追記する
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダ</para>
+    /// <para>前提: ワークフォルダだけがある</para>
     /// <para>手順: a.txt、b.txt、c.txt を順に Add し、ジャーナルの行数を数える</para>
-    /// <para>期待: 1 行目の文書と、追記が 3 行の計 4 行</para>
+    /// <para>期待: 1 行目の文書と追記 3 行の計 4 行であり、操作の path は a.txt、b.txt、c.txt である</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_末尾に足すだけならジャーナルへ追記すること()
@@ -22,7 +22,11 @@ public sealed class JournalAppendTests
         await tx.WriteAllTextAsync("b.txt", "b");
         await tx.WriteAllTextAsync("c.txt", "c");
 
-        Assert.Equal(4, (await File.ReadAllLinesAsync(JournalOf(work.Path))).Length);
+        string journal = await File.ReadAllTextAsync(JournalOf(work.Path));
+        Assert.Equal(4, journal.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        Assert.Contains("\"path\":\"a.txt\"", journal, StringComparison.Ordinal);
+        Assert.Contains("\"path\":\"b.txt\"", journal, StringComparison.Ordinal);
+        Assert.Contains("\"path\":\"c.txt\"", journal, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -31,7 +35,7 @@ public sealed class JournalAppendTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt を Add した</para>
     /// <para>手順: a.txt を Delete して Add を打ち消す</para>
-    /// <para>期待: ジャーナルは 1 行で、操作は b.txt の Add だけ</para>
+    /// <para>期待: ジャーナルは 1 行であり、操作は b.txt の Add だけ</para>
     /// </remarks>
     [Fact]
     public async Task DeleteAsync_途中が変わるとジャーナルを書き直すこと()
