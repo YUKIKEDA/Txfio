@@ -773,7 +773,7 @@ internal sealed partial class Transaction
                 && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase)
                 && File.Exists(stagingPath))
             {
-                backupPath = stagingPath + ".prev";
+                backupPath = WorkPath.StagingBackupPath(stagingPath);
                 StagingFile.MoveReplacing(stagingPath, backupPath);
             }
 

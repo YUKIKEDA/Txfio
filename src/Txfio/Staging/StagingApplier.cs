@@ -164,17 +164,29 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// このトランザクションの `.txnew` を、ワークフォルダ配下から消す
+    /// このトランザクションの `.txnew` と再ステージの退避を、ワークフォルダ配下から探して消す（操作が分からない読めないジャーナルだけに使う）
     /// </summary>
+    /// <remarks>
+    /// 読めないフォルダとリパースポイントは飛ばし、辿らない
+    /// </remarks>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <param name="transactionId">トランザクション ID</param>
     internal static void DeleteStagingFiles(string workFolder, Guid transactionId)
     {
-        string pattern = "*." + transactionId.ToString("D") + ".txnew";
-        foreach (string path in Directory.EnumerateFiles(workFolder, pattern, SearchOption.AllDirectories))
+        string stagingSuffix = "." + transactionId.ToString("D") + ".txnew";
+        string backupSuffix = WorkPath.StagingBackupPath(stagingSuffix);
+        EnumerationOptions options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            MatchCasing = MatchCasing.CaseInsensitive,
+        };
+        foreach (string path in Directory.EnumerateFiles(workFolder, "*" + stagingSuffix + "*", options))
         {
             if (WorkPath.IsInMetadataFolder(workFolder, path)
-                || !WorkPath.IsThisTransactionStagingFile(path, transactionId))
+                || !(path.EndsWith(stagingSuffix, StringComparison.OrdinalIgnoreCase)
+                    || path.EndsWith(backupSuffix, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
@@ -184,39 +196,29 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// 再ステージの退避 <c>.txnew.prev</c> を、ワークフォルダ配下から消す
+    /// 操作の `.txnew` に `.prev` を付けた再ステージの退避を消す（ワークフォルダは走査しない）
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="transactionId">トランザクション ID</param>
+    /// <param name="operations">操作一覧</param>
     /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに最後まで続ける</param>
     /// <returns>すべて消せたら <see langword="true"/>（例外を投げるときは戻らない）</returns>
-    internal static bool DeleteStagingBackups(string workFolder, Guid transactionId, bool ignoreIoFailures = false)
+    internal static bool DeleteStagingBackups(IReadOnlyList<JournalOperation> operations, bool ignoreIoFailures = false)
     {
-        try
+        bool succeeded = true;
+        foreach (JournalOperation operation in operations)
         {
-            bool succeeded = true;
-            string suffix = "." + transactionId.ToString("D") + ".txnew.prev";
-            string pattern = "*" + suffix;
-            foreach (string path in Directory.EnumerateFiles(workFolder, pattern, SearchOption.AllDirectories))
+            if (string.IsNullOrEmpty(operation.StagingPath))
             {
-                if (WorkPath.IsInMetadataFolder(workFolder, path)
-                    || !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (!DeleteOne(ignoreIoFailures, () => File.Delete(path)))
-                {
-                    succeeded = false;
-                }
+                continue;
             }
 
-            return succeeded;
+            string backupPath = WorkPath.StagingBackupPath(operation.StagingPath);
+            if (!DeleteOne(ignoreIoFailures, () => StagingFile.TryDelete(backupPath)))
+            {
+                succeeded = false;
+            }
         }
-        catch (Exception exception) when (ignoreIoFailures && exception is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
+
+        return succeeded;
     }
 
     /// <summary>
