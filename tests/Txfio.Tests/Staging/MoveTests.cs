@@ -575,6 +575,59 @@ public sealed class MoveTests
         Assert.Equal("b.txt", System.IO.Path.GetFileName(pending.NewPath), StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// Move 先への Update は、移動先の .txnew を書く前にジャーナルへ載せる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt があり、Move(a.txt→b.txt) を予約した</para>
+    /// <para>手順: b.txt を UpdateAsync し、書き込み中の進捗でジャーナルを読む</para>
+    /// <para>期待: 進捗が届いたどの時点でも、ジャーナルに b.txt の .txnew が書いてあり、最後は Add と Delete に畳まれる</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_Move先への書き込みはtxnewより先にジャーナルへ載せること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.MoveAsync("a.txt", "b.txt");
+        JournalProbeProgress probe = new JournalProbeProgress(work.Path, "b.txt.");
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+
+        await tx.UpdateAsync("b.txt", content, probe);
+
+        Assert.True(probe.Reported);
+        Assert.True(probe.AlwaysJournaled);
+        Assert.Equal(
+            new[] { PendingChangeKind.Add, PendingChangeKind.Delete },
+            tx.GetPendingChanges().Select(static change => change.Kind).OrderBy(static kind => kind).ToArray());
+    }
+
+    /// <summary>
+    /// ステージ済みの Add を Move すると、.txnew は移動先の名前に付け替わり、ジャーナルもそれを指す
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を Add した</para>
+    /// <para>手順: Move(a.txt→c.txt) する</para>
+    /// <para>期待: .txnew は c.txt の名前の 1 つだけで、ジャーナルは c.txt の .txnew を指し、a.txt の .txnew を指さない</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_ステージ済みのAddはtxnewとジャーナルを移動先へ付け替えること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        await tx.AddAsync("a.txt", content);
+
+        await tx.MoveAsync("a.txt", "c.txt");
+
+        string staging = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.StartsWith("c.txt.", System.IO.Path.GetFileName(staging), StringComparison.Ordinal);
+        string journal = Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal").Single();
+        string text = await File.ReadAllTextAsync(journal);
+        Assert.Contains(System.IO.Path.GetFileName(staging), text, StringComparison.Ordinal);
+        Assert.DoesNotContain("a.txt.", text, StringComparison.Ordinal);
+    }
+
     private static FileStream LockJournal(string workFolder)
     {
         string journal = Assert.Single(
