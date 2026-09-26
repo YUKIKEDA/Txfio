@@ -232,6 +232,53 @@ internal sealed class DirectoryTree
         }
     }
 
+    /// <summary>
+    /// 別の木のファイルまたはディレクトリを、配下ごとコピー先へ置く
+    /// </summary>
+    /// <param name="sourceTree">コピー元の木</param>
+    /// <param name="source">コピー元の相対パス</param>
+    /// <param name="destination">コピー先の相対パス</param>
+    public void CopySubtree(DirectoryTree sourceTree, string source, string destination)
+    {
+        if (sourceTree.IsFile(source))
+        {
+            PutFile(destination, sourceTree.File(source));
+            return;
+        }
+
+        AddDirectory(destination);
+        foreach (string path in sourceTree.PathsUnder(source))
+        {
+            string rebased = destination + path.Substring(source.Length);
+            if (sourceTree.IsDirectory(path))
+            {
+                AddDirectory(rebased);
+            }
+            else
+            {
+                PutFile(rebased, sourceTree.File(path));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 別の木のディレクトリだけを、配下ごとコピー先へ置く
+    /// </summary>
+    /// <param name="sourceTree">コピー元の木</param>
+    /// <param name="source">コピー元の相対パス</param>
+    /// <param name="destination">コピー先の相対パス</param>
+    public void CopyDirectories(DirectoryTree sourceTree, string source, string destination)
+    {
+        AddDirectory(destination);
+        foreach (string path in sourceTree.PathsUnder(source))
+        {
+            if (sourceTree.IsDirectory(path))
+            {
+                AddDirectory(destination + path.Substring(source.Length));
+            }
+        }
+    }
+
     private List<string> PathsUnder(string directory)
     {
         return _nodes.Keys.Where(path => IsUnder(path, directory)).ToList();
