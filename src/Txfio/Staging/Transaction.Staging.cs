@@ -139,14 +139,14 @@ internal sealed partial class Transaction
                 PendingChangeKind.Delete,
                 targetPath,
                 isDirectory: true);
-            _paths.Rows.Add(directoryDelete);
+            _paths.Add(directoryDelete);
             try
             {
                 await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
             }
             catch
             {
-                _paths.Rows.Remove(directoryDelete);
+                _paths.Remove(directoryDelete);
                 throw;
             }
 
@@ -155,14 +155,14 @@ internal sealed partial class Transaction
 
         StagingRules.EnsureTargetMatchesKind(PendingChangeKind.Delete, targetPath);
         JournalOperation operation = new JournalOperation(PendingChangeKind.Delete, targetPath);
-        _paths.Rows.Add(operation);
+        _paths.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Remove(operation);
+            _paths.Remove(operation);
             throw;
         }
     }
@@ -404,7 +404,7 @@ internal sealed partial class Transaction
         if (destDeleteIndex >= 0)
         {
             foldedDelete = _paths.Rows[destDeleteIndex];
-            _paths.Rows.RemoveAt(destDeleteIndex);
+            _paths.RemoveAt(destDeleteIndex);
             sourceIndex = sourceIndex > destDeleteIndex ? sourceIndex - 1 : sourceIndex;
             moveToSource = moveToSource > destDeleteIndex ? moveToSource - 1 : moveToSource;
         }
@@ -418,7 +418,7 @@ internal sealed partial class Transaction
         {
             if (foldedDelete is not null)
             {
-                _paths.Rows.Insert(Math.Min(destDeleteIndex, _paths.Rows.Count), foldedDelete);
+                _paths.Insert(Math.Min(destDeleteIndex, _paths.Rows.Count), foldedDelete);
                 await TryPersistUndoAsync().ConfigureAwait(false);
             }
 
@@ -462,14 +462,14 @@ internal sealed partial class Transaction
             destPath,
             overwrite: replaces);
         ThrowIfMoveChainCloses(operation, replaceIndex: -1);
-        _paths.Rows.Add(operation);
+        _paths.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Remove(operation);
+            _paths.Remove(operation);
             throw;
         }
     }
@@ -482,11 +482,11 @@ internal sealed partial class Transaction
         JournalOperation existing = _paths.Rows[existingIndex];
         if (replacement is null)
         {
-            _paths.Rows.RemoveAt(existingIndex);
+            _paths.RemoveAt(existingIndex);
         }
         else
         {
-            _paths.Rows[existingIndex] = replacement;
+            _paths.Set(existingIndex, replacement);
         }
 
         try
@@ -497,11 +497,11 @@ internal sealed partial class Transaction
         {
             if (replacement is null)
             {
-                _paths.Rows.Insert(existingIndex, existing);
+                _paths.Insert(existingIndex, existing);
             }
             else
             {
-                _paths.Rows[existingIndex] = existing;
+                _paths.Set(existingIndex, existing);
             }
 
             throw;
@@ -550,20 +550,20 @@ internal sealed partial class Transaction
         if (destDeleteTreeIndex >= 0)
         {
             foldedDelete = _paths.Rows[destDeleteTreeIndex];
-            _paths.Rows.RemoveAt(destDeleteTreeIndex);
+            _paths.RemoveAt(destDeleteTreeIndex);
         }
 
-        _paths.Rows.Add(operation);
+        _paths.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Remove(operation);
+            _paths.Remove(operation);
             if (foldedDelete is not null)
             {
-                _paths.Rows.Insert(Math.Min(destDeleteTreeIndex, _paths.Rows.Count), foldedDelete);
+                _paths.Insert(Math.Min(destDeleteTreeIndex, _paths.Rows.Count), foldedDelete);
             }
 
             throw;
@@ -635,14 +635,14 @@ internal sealed partial class Transaction
             newPath: destPath,
             isDirectory: true);
         ThrowIfMoveChainCloses(operation, replaceIndex: -1);
-        _paths.Rows.Add(operation);
+        _paths.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Remove(operation);
+            _paths.Remove(operation);
             throw;
         }
     }
@@ -708,14 +708,14 @@ internal sealed partial class Transaction
             return;
         }
 
-        _paths.Rows.Add(operation);
+        _paths.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Remove(operation);
+            _paths.Remove(operation);
             throw;
         }
     }
@@ -768,7 +768,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken)
     {
         JournalOperation existing = _paths.Rows[sourceIndex];
-        JournalOperation[] previous = _paths.Rows.ToArray();
+        JournalOperation[] previous = _paths.ToArray();
         string sourcePath = existing.Path;
 
         // .txnew は移動先の名前に付け替える（元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする）
@@ -783,27 +783,26 @@ internal sealed partial class Transaction
             if (existing.StagingPath is not null)
             {
                 // 付け替えの前後どちらで落ちても、両方の .txnew がジャーナルに載っているようにする
-                _paths.Rows.Add(retargeted);
+                _paths.Add(retargeted);
                 await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
                 journalUpdated = true;
                 File.Move(existing.StagingPath, stagingPath!);
                 moved = true;
-                _paths.Rows.Remove(retargeted);
+                _paths.Remove(retargeted);
             }
 
-            _paths.Rows.RemoveAt(sourceIndex);
-            _paths.Rows.Add(new JournalOperation(retargetedKind, destPath, stagingPath));
+            _paths.RemoveAt(sourceIndex);
+            _paths.Add(new JournalOperation(retargetedKind, destPath, stagingPath));
             if (deleteSource)
             {
-                _paths.Rows.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
+                _paths.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
             }
 
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Clear();
-            _paths.Rows.AddRange(previous);
+            _paths.Load(previous);
             if (moved)
             {
                 try
@@ -850,20 +849,18 @@ internal sealed partial class Transaction
             new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
 
         // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
-        JournalOperation[] previous = _paths.Rows.ToArray();
+        JournalOperation[] previous = _paths.ToArray();
         bool journalUpdated = false;
         try
         {
-            _paths.Rows.Clear();
-            _paths.Rows.AddRange(folded);
+            _paths.Load(folded);
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
             journalUpdated = true;
             await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Clear();
-            _paths.Rows.AddRange(previous);
+            _paths.Load(previous);
             StagingFile.TryDelete(stagingPath);
             if (journalUpdated)
             {
@@ -886,17 +883,15 @@ internal sealed partial class Transaction
     {
         List<JournalOperation> folded = new List<JournalOperation>(_paths.Rows);
         fold(folded);
-        JournalOperation[] previous = _paths.Rows.ToArray();
-        _paths.Rows.Clear();
-        _paths.Rows.AddRange(folded);
+        JournalOperation[] previous = _paths.ToArray();
+        _paths.Load(folded);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Clear();
-            _paths.Rows.AddRange(previous);
+            _paths.Load(previous);
             throw;
         }
     }
@@ -963,11 +958,11 @@ internal sealed partial class Transaction
             staged = new JournalOperation(recordedKind, targetPath, stagingPath);
             if (existingIndex >= 0)
             {
-                _paths.Rows[existingIndex] = staged;
+                _paths.Set(existingIndex, staged);
             }
             else
             {
-                _paths.Rows.Add(staged);
+                _paths.Add(staged);
             }
 
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
@@ -988,11 +983,11 @@ internal sealed partial class Transaction
             {
                 if (existingIndex < 0)
                 {
-                    _paths.Rows.Remove(staged);
+                    _paths.Remove(staged);
                 }
                 else
                 {
-                    _paths.Rows[existingIndex] = previous!;
+                    _paths.Set(existingIndex, previous!);
                 }
             }
 

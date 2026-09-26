@@ -36,14 +36,14 @@ internal sealed partial class Transaction
             PendingChangeKind.CreateDirectory,
             targetPath,
             isDirectory: true);
-        _paths.Rows.Add(operation);
+        _paths.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Remove(operation);
+            _paths.Remove(operation);
             throw;
         }
 
@@ -53,7 +53,7 @@ internal sealed partial class Transaction
 
             // 作ったあとで作成済みを書く（未作成のまま落ちたときは、他が作った同じ名前のディレクトリを Recover が中身ごと消さない）
             JournalOperation created = operation.WithDirectoryCreated();
-            _paths.Rows[_paths.Rows.IndexOf(operation)] = created;
+            _paths.Set(_paths.IndexOf(operation), created);
             operation = created;
             await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
@@ -82,18 +82,18 @@ internal sealed partial class Transaction
             // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
         }
 
-        _paths.Rows.Remove(operation);
+        _paths.Remove(operation);
         try
         {
             await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
         catch (IOException)
         {
-            _paths.Rows.Add(operation);
+            _paths.Add(operation);
         }
         catch (UnauthorizedAccessException)
         {
-            _paths.Rows.Add(operation);
+            _paths.Add(operation);
         }
     }
 }
