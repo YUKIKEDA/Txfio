@@ -315,10 +315,10 @@ internal sealed partial class Transaction
 
         EnsureCopyDestinationFree(archive);
         bool directoryInput = roots.Any(static root => root.IsDirectory);
-        _locks.AcquireShared(_workFolder);
-        _locks.Acquire(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray());
-        using PathLockSet.WorkFolderExclusive exclusive = directoryInput
-            ? _locks.EnterExclusive(_workFolder)
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray()).ConfigureAwait(false);
+        await using PathLockSet.WorkFolderExclusive exclusive = directoryInput
+            ? await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false)
             : default;
         foreach (ArchiveRoot root in roots)
         {
@@ -337,8 +337,13 @@ internal sealed partial class Transaction
 
         string stagingPath = WorkPath.StagingFilePath(archive, _transactionId);
         int operationCount = _paths.Rows.Count;
+        bool journalUpdated = false;
         try
         {
+            // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
+            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journalUpdated = true;
             await using (FileStream output = new FileStream(
                 stagingPath,
                 FileMode.Create,
@@ -356,14 +361,16 @@ internal sealed partial class Transaction
                         cancellationToken)
                     .ConfigureAwait(false);
             }
-
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             RollbackAddedOperations(operationCount);
             StagingFile.TryDelete(stagingPath);
+            if (journalUpdated)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
             throw;
         }
     }

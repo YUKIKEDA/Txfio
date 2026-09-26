@@ -18,24 +18,35 @@ internal static class JournalStore
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         WriteIndented = false,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(namingPolicy: null, allowIntegerValues: false) },
     };
 
     /// <summary>
-    /// 未コミットの新規ジャーナルを作成する
+    /// 未コミットの新規ジャーナルを作成する（一時ファイルに書いてから rename し、ジャーナルのパスに途中の状態を残さない）
     /// </summary>
     /// <param name="journalPath">書き込み先</param>
     /// <param name="transactionId">トランザクション ID</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>書き込みの完了</returns>
-    internal static Task WriteNewAsync(string journalPath, Guid transactionId, CancellationToken cancellationToken)
+    /// <exception cref="IOException">ジャーナルのパスに既にファイルがある、または書き込みに失敗した</exception>
+    internal static async Task WriteNewAsync(string journalPath, Guid transactionId, CancellationToken cancellationToken)
     {
         JournalDocument document = new JournalDocument(
             CurrentVersion,
             transactionId,
             committing: false,
             Array.Empty<JournalOperation>());
-        return WriteAsync(journalPath, document, FileMode.CreateNew, cancellationToken);
+        string tempPath = MetadataNames.JournalTempPath(journalPath);
+        try
+        {
+            await WriteAsync(tempPath, document, FileMode.Create, cancellationToken).ConfigureAwait(false);
+            File.Move(tempPath, journalPath, overwrite: false);
+        }
+        catch
+        {
+            TryDeleteTemp(tempPath);
+            throw;
+        }
     }
 
     /// <summary>
@@ -64,23 +75,51 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// ジャーナルを読む（JSON として読めないときは <see langword="null"/>）
+    /// ジャーナルを読み、版と種別と必須の欄を確かめる
     /// </summary>
     /// <param name="journalPath">読み取り元</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>読めた文書（JSON として読めないときと、値が JSON の null のときは <see langword="null"/>）</returns>
+    /// <returns>読めた文書、または読めない理由（JSON として読めない、値が JSON の null である、種別が名前に無い、path が空、または Move の newPath が空、版が違う）</returns>
     /// <exception cref="IOException">読み取りに失敗した</exception>
-    internal static async Task<JournalDocument?> TryReadAsync(string journalPath, CancellationToken cancellationToken)
+    internal static async Task<JournalReadResult> ReadAsync(string journalPath, CancellationToken cancellationToken)
     {
+        byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
+
+        // 版が 1 でない JSON は、操作を解釈する前に返す（未知の種別で逆シリアル化が落ちても .txnew を消さない）
+        if (IsUnsupportedVersion(payload))
+        {
+            return JournalReadResult.OtherVersion();
+        }
+
+        JournalDocument? document;
         try
         {
-            byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
+            document = JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
         }
         catch (JsonException)
         {
-            return null;
+            return JournalReadResult.Corrupt();
         }
+
+        if (document is null)
+        {
+            return JournalReadResult.Corrupt();
+        }
+
+        if (document.Version != CurrentVersion)
+        {
+            return JournalReadResult.OtherVersion();
+        }
+
+        foreach (JournalOperation operation in document.Operations)
+        {
+            if (operation is null || !IsComplete(operation))
+            {
+                return JournalReadResult.Corrupt();
+            }
+        }
+
+        return JournalReadResult.Readable(document);
     }
 
     /// <summary>
@@ -133,6 +172,51 @@ internal static class JournalStore
         finally
         {
             await stream.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    // 種別が名前に無い、または path が空、または Move の newPath が空の操作は、適用も巻き戻しもできない
+    private static bool IsComplete(JournalOperation operation)
+    {
+        if (!Enum.IsDefined(operation.Kind) || string.IsNullOrEmpty(operation.Path))
+        {
+            return false;
+        }
+
+        return operation.Kind != PendingChangeKind.Move || !string.IsNullOrEmpty(operation.NewPath);
+    }
+
+    // 版の欄が数値の 1 でなければ、操作を解釈せず版が違うと返す
+    private static bool IsUnsupportedVersion(byte[] payload)
+    {
+        try
+        {
+            using JsonDocument parsed = JsonDocument.Parse(payload);
+            if (parsed.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            bool sawVersion = false;
+            bool supported = false;
+            foreach (JsonProperty property in parsed.RootElement.EnumerateObject())
+            {
+                if (!property.Name.Equals("version", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                sawVersion = true;
+                supported = property.Value.ValueKind == JsonValueKind.Number
+                    && property.Value.TryGetInt32(out int version)
+                    && version == CurrentVersion;
+            }
+
+            return sawVersion && !supported;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
