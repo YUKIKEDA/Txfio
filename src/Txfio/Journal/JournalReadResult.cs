@@ -17,12 +17,12 @@ internal sealed class JournalReadResult
     internal JournalDocument? Document { get; }
 
     /// <summary>
-    /// 版がこのライブラリの版と違うなら <see langword="true"/>（新しい版が残したものかもしれないので何にも触れない）
+    /// 版がこのライブラリの版と違うなら <see langword="true"/>（新しい版のライブラリが残したものかもしれないので、何にも触れない）
     /// </summary>
     internal bool UnsupportedVersion { get; }
 
     /// <summary>
-    /// 読めた文書の結果を作る
+    /// 読めた結果を作る
     /// </summary>
     /// <param name="document">読めた文書</param>
     /// <returns>読めた結果</returns>
