@@ -60,7 +60,7 @@ internal sealed partial class Transaction
         }
 
         Stream stream = OpenRead(appearance.ContentPath, targetPath);
-        _externalChanges?.NoteRead(_paths.Rows, targetPath, appearance.ContentPath, _transactionId);
+        _externalChanges?.NoteRead(targetPath, appearance);
         return stream;
     }
 }

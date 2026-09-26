@@ -728,7 +728,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (kind == PendingChangeKind.Update)
         {
-            _externalChanges?.NoteUpdate(_paths.Rows, targetPath, _transactionId);
+            _externalChanges?.NoteUpdate(_paths.Rows, targetPath);
         }
 
         if (moveToIndex >= 0)
