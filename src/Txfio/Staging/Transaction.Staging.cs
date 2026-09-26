@@ -42,6 +42,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, targetPath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, targetPath);
+        StagingRules.ThrowIfOverwriteMovePath(_paths.Rows, targetPath);
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
         if (Directory.Exists(targetPath))
         {
@@ -173,6 +174,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, targetPath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, targetPath);
+        StagingRules.ThrowIfOverwriteMovePath(_paths.Rows, targetPath);
 
         int existingIndex = FindOperationIndex(targetPath);
         if (existingIndex >= 0
@@ -222,7 +224,13 @@ internal sealed partial class Transaction
     }
 
     /// <inheritdoc />
-    public async Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default)
+    public Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default)
+    {
+        return MoveAsync(oldPath, newPath, overwrite: false, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
         BeginLockAttempt(cancellationToken);
@@ -245,10 +253,24 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, destPath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, sourcePath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, destPath);
+        StagingRules.ThrowIfOverwriteMovePath(_paths.Rows, sourcePath);
+        StagingRules.ThrowIfOverwriteMovePath(_paths.Rows, destPath);
 
         int destIndex = FindOperationIndex(destPath);
         bool destIsMoveSource = destIndex >= 0 && _paths.Rows[destIndex].Kind == PendingChangeKind.Move;
-        if (destIndex >= 0 && !destIsMoveSource)
+
+        // 置き換えの Move は、移動先のファイルの Delete を畳む
+        int destDeleteIndex = -1;
+        if (overwrite
+            && destIndex >= 0
+            && _paths.Rows[destIndex].Kind == PendingChangeKind.Delete
+            && !_paths.Rows[destIndex].IsDirectory)
+        {
+            destDeleteIndex = destIndex;
+            destIndex = -1;
+        }
+
+        if (destIndex >= 0 && (!destIsMoveSource || overwrite))
         {
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
         }
@@ -273,6 +295,11 @@ internal sealed partial class Transaction
         int moveToSource = FindMoveToIndex(sourcePath);
         if (IsDirectoryMove(sourcePath, sourceIndex, moveToSource))
         {
+            if (overwrite)
+            {
+                throw new UnsupportedOperationException("ディレクトリを置き換える Move は未対応です: " + sourcePath);
+            }
+
             await MoveDirectoryAsync(
                     sourcePath,
                     destPath,
@@ -321,14 +348,62 @@ internal sealed partial class Transaction
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
         await _locks.AcquireAsync(_workFolder, sourcePath, destPath).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
+        bool replaces = false;
         if (!destIsMoveSource)
         {
-            StagingRules.EnsureMoveDestinationIsFree(destPath);
+            if (overwrite && File.Exists(destPath))
+            {
+                replaces = true;
+            }
+            else
+            {
+                StagingRules.EnsureMoveDestinationIsFree(destPath);
+            }
         }
 
+        if (sourceIndex < 0 && moveToSource < 0)
+        {
+            StagingRules.EnsureMoveSourceExists(sourcePath);
+        }
+
+        // 畳んだ Delete は、この Move と同じジャーナルの書き込みで外す
+        JournalOperation? foldedDelete = null;
+        if (destDeleteIndex >= 0)
+        {
+            foldedDelete = _paths.Rows[destDeleteIndex];
+            _paths.Rows.RemoveAt(destDeleteIndex);
+            sourceIndex = sourceIndex > destDeleteIndex ? sourceIndex - 1 : sourceIndex;
+            moveToSource = moveToSource > destDeleteIndex ? moveToSource - 1 : moveToSource;
+        }
+
+        try
+        {
+            await RecordFileMoveAsync(sourcePath, destPath, sourceIndex, moveToSource, replaces, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            if (foldedDelete is not null)
+            {
+                _paths.Rows.Insert(Math.Min(destDeleteIndex, _paths.Rows.Count), foldedDelete);
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
+
+    private async Task RecordFileMoveAsync(
+        string sourcePath,
+        string destPath,
+        int sourceIndex,
+        int moveToSource,
+        bool replaces,
+        CancellationToken cancellationToken)
+    {
         if (sourceIndex >= 0)
         {
-            await MovePendingSourceAsync(sourceIndex, destPath, cancellationToken).ConfigureAwait(false);
+            await MovePendingSourceAsync(sourceIndex, destPath, replaces, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -339,18 +414,19 @@ internal sealed partial class Transaction
                 PendingChangeKind.Move,
                 existing.Path,
                 stagingPath: null,
-                destPath);
+                destPath,
+                overwrite: replaces);
             ThrowIfMoveChainCloses(folded, moveToSource);
             await PersistReplacingOperationAsync(moveToSource, folded, cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        StagingRules.EnsureMoveSourceExists(sourcePath);
         JournalOperation operation = new JournalOperation(
             PendingChangeKind.Move,
             sourcePath,
             stagingPath: null,
-            destPath);
+            destPath,
+            overwrite: replaces);
         ThrowIfMoveChainCloses(operation, replaceIndex: -1);
         _paths.Rows.Add(operation);
         try
@@ -553,6 +629,7 @@ internal sealed partial class Transaction
     private async Task MovePendingSourceAsync(
         int sourceIndex,
         string destPath,
+        bool replaces,
         CancellationToken cancellationToken)
     {
         JournalOperation existing = _paths.Rows[sourceIndex];
@@ -567,7 +644,8 @@ internal sealed partial class Transaction
                 PendingChangeKind.Move,
                 existing.Path,
                 stagingPath: null,
-                destPath);
+                destPath,
+                overwrite: replaces);
             ThrowIfMoveChainCloses(folded, sourceIndex);
             await PersistReplacingOperationAsync(sourceIndex, folded, cancellationToken).ConfigureAwait(false);
             return;
@@ -578,10 +656,12 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
         }
 
+        // 置き換える先がファイルなら、書き直した中身はその Update になる
         await RetargetStagedContentAsync(
                 sourceIndex,
                 destPath,
                 deleteSource: existing.Kind == PendingChangeKind.Update,
+                replaces ? PendingChangeKind.Update : PendingChangeKind.Add,
                 cancellationToken)
             .ConfigureAwait(false);
     }
@@ -590,6 +670,7 @@ internal sealed partial class Transaction
         int sourceIndex,
         string destPath,
         bool deleteSource,
+        PendingChangeKind retargetedKind,
         CancellationToken cancellationToken)
     {
         JournalOperation existing = _paths.Rows[sourceIndex];
@@ -617,7 +698,7 @@ internal sealed partial class Transaction
             }
 
             _paths.Rows.RemoveAt(sourceIndex);
-            _paths.Rows.Add(retargeted);
+            _paths.Rows.Add(new JournalOperation(retargetedKind, destPath, stagingPath));
             if (deleteSource)
             {
                 _paths.Rows.Add(new JournalOperation(PendingChangeKind.Delete, sourcePath));
@@ -741,6 +822,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, targetPath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, targetPath);
+        StagingRules.ThrowIfOverwriteMovePath(_paths.Rows, targetPath);
 
         _paths.PlanStageFile(
             targetPath,

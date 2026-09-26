@@ -20,6 +20,7 @@ internal sealed class JournalOperation
     /// <param name="destAfter">Move の移動先の適用直後状態（それ以外は null）</param>
     /// <param name="isDirectory">ディレクトリの Delete、DeleteTree、Move、または CreateDirectory なら <see langword="true"/></param>
     /// <param name="directoryCreated">CreateDirectory がディレクトリを作り終えたなら <see langword="true"/></param>
+    /// <param name="overwrite">置き換えの Move なら <see langword="true"/></param>
     [JsonConstructor]
     public JournalOperation(
         PendingChangeKind kind,
@@ -31,7 +32,8 @@ internal sealed class JournalOperation
         PathState? destBefore = null,
         PathState? destAfter = null,
         bool isDirectory = false,
-        bool directoryCreated = false)
+        bool directoryCreated = false,
+        bool overwrite = false)
     {
         Kind = kind;
         Path = path;
@@ -43,6 +45,7 @@ internal sealed class JournalOperation
         DestAfter = destAfter;
         IsDirectory = isDirectory;
         DirectoryCreated = directoryCreated;
+        Overwrite = overwrite;
     }
 
     /// <summary>
@@ -102,6 +105,12 @@ internal sealed class JournalOperation
     public bool DirectoryCreated { get; }
 
     /// <summary>
+    /// 置き換えの Move なら <see langword="true"/>
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Overwrite { get; }
+
+    /// <summary>
     /// Before / After を付けたコピーを返す
     /// </summary>
     /// <param name="before">対象パスの適用直前状態</param>
@@ -125,7 +134,8 @@ internal sealed class JournalOperation
             destBefore,
             destAfter,
             IsDirectory,
-            DirectoryCreated);
+            DirectoryCreated,
+            Overwrite);
     }
 
     /// <summary>
@@ -144,6 +154,7 @@ internal sealed class JournalOperation
             DestBefore,
             DestAfter,
             IsDirectory,
-            directoryCreated: true);
+            directoryCreated: true,
+            overwrite: Overwrite);
     }
 }
