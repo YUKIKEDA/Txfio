@@ -11,7 +11,9 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 
 - Solution file: **`Txfio.slnx` only** (do not create or keep `.sln`)
 - Implementation under `src/Txfio/`
-- Tests under `tests/Txfio.Tests/` mirroring src folders (`Foo.cs` → `FooTests.cs`)
+- Unit tests under `tests/Txfio.Tests/` mirroring src folders (`Foo.cs` → `FooTests.cs`)
+- Shared test helpers (`TempDirectory`, `WindowsFact`) under `tests/Txfio.TestSupport/`
+- Stress tests under `tests/Txfio.Stress/`. The merge gate does not run them. Run `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` explicitly
 - Lasting decisions: `docs/design.md`, `docs/roadmap.md`, `docs/conventions.md`
 - Do not put lasting decisions only in `.dev/`
 
@@ -43,8 +45,8 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 
 ## Verification gate
 
-- Windows: `./build.ps1` before merge (restore → format verify → build → test) on **`Txfio.slnx`**
-- Linux: do **not** run `./build.ps1`. Run restore / format verify / build / `dotnet test`. Before a PR, all tests must pass except those skipped as `Windows 専用` (`WindowsFact`). This does not replace the Windows merge gate
+- Windows: `./build.ps1` before merge (restore → format verify → build on **`Txfio.slnx`**, then `dotnet test` on **`tests/Txfio.Tests`** only)
+- Linux: do **not** run `./build.ps1`. Run restore / format verify / build on `Txfio.slnx`, then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. Before a PR, all tests in that project must pass except those skipped as `Windows 専用` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. This does not replace the Windows merge gate
 - Tests that depend on Windows-only behavior (junctions, drive letters, open files that cannot be renamed or deleted) use `[WindowsFact("reason")]`
 - GitHub Actions workflow may exist but **must not be assumed runnable** while Actions are restricted
 - Crash injection / SMB tests are required only when the Issue acceptance says so

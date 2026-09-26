@@ -3,6 +3,8 @@
     <Project Path="src/Txfio/Txfio.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Txfio.TestSupport/Txfio.TestSupport.csproj" />
     <Project Path="tests/Txfio.Tests/Txfio.Tests.csproj" />
+    <Project Path="tests/Txfio.Stress/Txfio.Stress.csproj" />
   </Folder>
 </Solution>

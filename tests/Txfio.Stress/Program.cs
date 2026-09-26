@@ -1,12 +1,12 @@
 namespace Txfio.Tests;
 
 /// <summary>
-/// 別プロセスのロック確認の入口
+/// 耐久テストの子プロセスの入口
 /// </summary>
 public static class Program
 {
     /// <summary>
-    /// 引数があるときだけ、子プロセスとしてロックを持ち続ける
+    /// 引数があるときだけ、子プロセスとして耐久テストのトランザクションを繰り返す
     /// </summary>
     /// <param name="args"><c>dotnet test</c> からは呼ばれない起動引数</param>
     /// <returns>終了コード</returns>
@@ -19,8 +19,7 @@ public static class Program
 
         return args[0] switch
         {
-            ProcessLockChild.HoldUntilStop => ProcessLockChild.RunHoldUntilStopAsync(args),
-            ProcessLockChild.HoldUntilKilled => ProcessLockChild.RunHoldUntilKilledAsync(args),
+            Stress.StressWriter.Command => Stress.StressWriter.RunAsync(args),
             _ => Task.FromResult(2),
         };
     }

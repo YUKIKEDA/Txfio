@@ -5,8 +5,7 @@
     <UseAppHost>false</UseAppHost>
     <GenerateProgramFile>false</GenerateProgramFile>
     <RootNamespace>Txfio.Tests</RootNamespace>
-    <AssemblyName>Txfio.Tests</AssemblyName>
-    <IsPackable>false</IsPackable>
+    <AssemblyName>Txfio.Stress</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

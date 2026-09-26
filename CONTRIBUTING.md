@@ -65,7 +65,9 @@ Grill はメンテナ側の道具です。外部の人は次に従ってくだ�
 ```text
 Txfio.slnx
 src/Txfio/
+tests/Txfio.TestSupport/
 tests/Txfio.Tests/
+tests/Txfio.Stress/
 docs/design.md
 docs/roadmap.md
 docs/conventions.md
@@ -89,9 +91,9 @@ GitHub Actions の workflow はリポジトリに置くが、**利用制限に�
 ./build.ps1
 ```
 
-想定内容: `dotnet restore` → `dotnet format --verify-no-changes` → `dotnet build` → `dotnet test`。対象は **`Txfio.slnx`**。
+想定内容: `dotnet restore` → `dotnet format --verify-no-changes` → `dotnet build` → `dotnet test`。restore / format / build の対象は **`Txfio.slnx`**。`dotnet test` の対象は **`tests/Txfio.Tests/Txfio.Tests.csproj`**。耐久テスト（`tests/Txfio.Stress`）は関門に含めず、`dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。
 
-このスクリプトは **Windows 専用** です。Linux では `./build.ps1` を実行せず、restore / format / build / `dotnet test` を順に回す。PR を出す前に、`Windows 専用` として Skip されるもの（`WindowsFact`）以外のテストがすべて通っていること。これは PR 前の条件で、マージの関門ではない。マージ前のテスト記録は Windows 側が必要です。テストの実行には .NET 10 SDK に加えて .NET 8 ランタイムが要る。
+このスクリプトは **Windows 専用** です。Linux では `./build.ps1` を実行せず、`Txfio.slnx` に対して restore / format / build を順に回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行する。PR を出す前に、`Windows 専用` として Skip されるもの（`WindowsFact`）以外の単体テストがすべて通っていること。これは PR 前の条件で、マージの関門ではない。マージ前のテスト記録は Windows 側が必要です。テストの実行には .NET 10 SDK に加えて .NET 8 ランタイムが要る。
 
 クラッシュインジェクションと SMB 検証は、Issue の受け入れ条件に書いたときだけローカル必須とする。
 
