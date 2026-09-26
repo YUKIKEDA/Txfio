@@ -247,14 +247,9 @@ internal abstract class OperationKind
                 StagingFile.MoveToTarget(operation.StagingPath, operation.Path, replace: operation.Kind == PendingChangeKind.Update);
                 return true;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
+                reason = IoErrors.Classify(exception);
                 return false;
             }
         }
@@ -281,27 +276,9 @@ internal abstract class OperationKind
             StagingFile.TryDelete(stagingPath);
             return true;
         }
-        catch (IOException exception)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool DeleteOne(bool ignoreIoFailures, Action delete)
-    {
-        try
-        {
-            delete();
-            return true;
-        }
-        catch (Exception exception) when (ignoreIoFailures && exception is IOException or UnauthorizedAccessException)
-        {
+            reason = IoErrors.Classify(exception);
             return false;
         }
     }
@@ -317,13 +294,6 @@ internal abstract class OperationKind
         {
             return false;
         }
-    }
-
-    private static OperationFailureReason ClassifyIo(IOException exception)
-    {
-        return PathLockSet.IsSharingViolation(exception)
-            ? OperationFailureReason.SharingViolation
-            : OperationFailureReason.IoFailure;
     }
 
     private sealed class AddKind : OperationKind
@@ -528,14 +498,9 @@ internal abstract class OperationKind
                 Directory.Delete(path);
                 return true;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
+                reason = IoErrors.Classify(exception);
                 return false;
             }
         }
@@ -559,14 +524,9 @@ internal abstract class OperationKind
                 File.Delete(path);
                 return true;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
+                reason = IoErrors.Classify(exception);
                 return false;
             }
         }
@@ -723,14 +683,9 @@ internal abstract class OperationKind
 
                 return true;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
+                reason = IoErrors.Classify(exception);
                 return false;
             }
         }
@@ -788,14 +743,9 @@ internal abstract class OperationKind
                 SameVolumeMove.MoveDirectory(sourcePath, destPath);
                 return true;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
+                reason = IoErrors.Classify(exception);
                 return false;
             }
         }
@@ -838,14 +788,9 @@ internal abstract class OperationKind
                 SameVolumeMove.MoveFile(sourcePath, destPath, overwrite);
                 return true;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
+                reason = IoErrors.Classify(exception);
                 return false;
             }
         }
@@ -920,14 +865,9 @@ internal abstract class OperationKind
                 Directory.Delete(path, recursive: true);
                 return true;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
-                reason = ClassifyIo(exception);
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                reason = OperationFailureReason.IoFailure;
+                reason = IoErrors.Classify(exception);
                 return false;
             }
         }
@@ -975,7 +915,7 @@ internal abstract class OperationKind
 
             if (operation.DirectoryCreated)
             {
-                return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true));
+                return IoErrors.TryDelete(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true));
             }
 
             // 作る前後で落ちたので、このトランザクションが作ったとは言えない（空のときだけ消し、中身があれば残す）
@@ -984,7 +924,7 @@ internal abstract class OperationKind
                 return true;
             }
 
-            return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path));
+            return IoErrors.TryDelete(ignoreIoFailures, () => Directory.Delete(operation.Path));
         }
 
         private static bool TryProjectCreateDirectory(

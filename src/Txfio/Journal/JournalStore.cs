@@ -372,11 +372,7 @@ internal static class JournalStore
                 File.Delete(tempPath);
             }
         }
-        catch (IOException)
-        {
-            // 消せなくても、呼び出し側が元の例外を返す
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // 消せなくても、呼び出し側が元の例外を返す
         }

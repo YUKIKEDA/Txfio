@@ -166,15 +166,4 @@ internal sealed partial class Transaction
             || name.EndsWith(id + "txnew.prev", StringComparison.OrdinalIgnoreCase)
             || name.EndsWith(id + "txold", StringComparison.OrdinalIgnoreCase);
     }
-
-    private string? FindStagingPath(string targetPath)
-    {
-        int index = FindOperationIndex(targetPath);
-        if (index < 0)
-        {
-            return null;
-        }
-
-        return _paths.Rows[index].StagingPath;
-    }
 }

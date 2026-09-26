@@ -347,11 +347,7 @@ internal sealed partial class Transaction : ITransaction
         {
             await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (IOException)
-        {
-            // ジャーナルが残っていれば、次の Recover が消す
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // ジャーナルが残っていれば、次の Recover が消す
         }
