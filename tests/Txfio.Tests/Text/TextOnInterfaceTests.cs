@@ -210,6 +210,31 @@ public sealed class TextOnInterfaceTests
             return Pending<bool>(path, cancellationToken);
         }
 
+        public Task<IReadOnlyList<DirectoryEntry>> GetEntriesAsync(string directoryPath, CancellationToken cancellationToken = default)
+        {
+            return Pending<IReadOnlyList<DirectoryEntry>>(directoryPath, cancellationToken);
+        }
+
+        public Task AppendAllTextAsync(string path, string? contents, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, cancellationToken);
+        }
+
+        public Task AppendAllTextAsync(string path, string? contents, Encoding encoding, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, encoding, cancellationToken);
+        }
+
+        public Task AppendAllLinesAsync(string path, IEnumerable<string> contents, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, cancellationToken);
+        }
+
+        public Task AppendAllLinesAsync(string path, IEnumerable<string> contents, Encoding encoding, CancellationToken cancellationToken = default)
+        {
+            return Pending(path, contents, encoding, cancellationToken);
+        }
+
         public Task<string> ReadAllTextAsync(
             string path,
             Encoding encoding,

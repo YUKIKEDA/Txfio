@@ -334,6 +334,21 @@ public interface ITransaction : IAsyncDisposable
     Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// コミット後の姿で、ディレクトリの直下にあるファイルとディレクトリを返す（再帰しない）
+    /// </summary>
+    /// <remarks>
+    /// このトランザクションのステージングファイル（`.txnew`）、再ステージの退避（`.txnew.prev`）、入れ替えの退避（`.txold`）は含めない（別のトランザクションのものは、ディスクにあるので見える）
+    /// </remarks>
+    /// <param name="directoryPath">ディレクトリ（ワークフォルダ基準の相対、ワークフォルダ内の絶対パス、またはワークフォルダ自身）</param>
+    /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
+    /// <returns>直下の 1 件ずつ（パスの大文字小文字を無視した辞書順）</returns>
+    /// <exception cref="ExternalConflictException">コミット後の姿でディレクトリが無い</exception>
+    /// <exception cref="UnsupportedOperationException">コミット後の姿でファイルである</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task<IReadOnlyList<DirectoryEntry>> GetEntriesAsync(string directoryPath, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 読み取ったバイトを文字列にする（エンコーディングは BOM を見て決める）
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
@@ -457,6 +472,80 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task WriteAllLinesAsync(
+        string path,
+        IEnumerable<string> contents,
+        Encoding encoding,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 文字列を BOM なし UTF-8 で末尾に足す（コミット後の姿でファイルが無ければ Add、あれば中身に足して Update）
+    /// </summary>
+    /// <remarks>
+    /// 既存の中身もいったんメモリに読むので、大きいファイルは <see cref="Stream"/> の API で組み立てる
+    /// </remarks>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="contents">足す文字列（null は空文字列として書く）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task AppendAllTextAsync(
+        string path,
+        string? contents,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 文字列を、指定したエンコーディングで末尾に足す（足す部分には BOM を付けず、新しく書くときだけ付ける）
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="contents">足す文字列（null は空文字列として書く）</param>
+    /// <param name="encoding">足す部分のエンコーディング</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> が null</exception>
+    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task AppendAllTextAsync(
+        string path,
+        string? contents,
+        Encoding encoding,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 行を BOM なし UTF-8 で末尾に足す（コミット後の姿でファイルが無ければ Add、あれば中身に足して Update、各行のあとに改行を書く）
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="contents">足す行（各行の改行は含めない）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="contents"/> が null</exception>
+    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task AppendAllLinesAsync(
+        string path,
+        IEnumerable<string> contents,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 行を、指定したエンコーディングで末尾に足す（足す部分には BOM を付けず、新しく書くときだけ付ける）
+    /// </summary>
+    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="contents">足す行（各行の改行は含めない）</param>
+    /// <param name="encoding">足す部分のエンコーディング</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ステージングの完了</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="contents"/> または <paramref name="encoding"/> が null</exception>
+    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task AppendAllLinesAsync(
         string path,
         IEnumerable<string> contents,
         Encoding encoding,
