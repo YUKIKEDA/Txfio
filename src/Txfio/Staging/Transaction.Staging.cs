@@ -53,6 +53,10 @@ internal sealed partial class Transaction
         }
 
         StagingRules.EnsureParentDirectoryExists(targetPath);
+        if (!Directory.Exists(targetPath))
+        {
+            _externalChanges?.NoteRemoval(_paths.Rows, targetPath, _transactionId);
+        }
 
         int existingIndex = FindOperationIndex(targetPath);
         if (IsFileMoveOut(existingIndex))
@@ -321,6 +325,7 @@ internal sealed partial class Transaction
         _locks.AcquireShared(_workFolder);
         _locks.Acquire(_workFolder, sourcePath, destPath);
         StagingRules.EnsureParentDirectoryExists(destPath);
+        _externalChanges?.NoteRemoval(_paths.Rows, sourcePath, _transactionId);
         if (!destIsMoveSource)
         {
             StagingRules.EnsureMoveDestinationIsFree(destPath);
