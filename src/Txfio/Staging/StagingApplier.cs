@@ -18,8 +18,17 @@ internal static class StagingApplier
         out OperationReport[] skipped)
     {
         List<OperationReport> failures = new List<OperationReport>();
-        foreach (JournalOperation operation in InApplyOrder(operations))
+        JournalOperation[] ordered = InApplyOrder(operations);
+        for (int i = 0; i < ordered.Length; i++)
         {
+            JournalOperation operation = ordered[i];
+
+            // あとのディレクトリ Move が済んでいれば、その移動元の配下の操作も済んでいる（元の場所には残っていない）
+            if (IsUnderAppliedLaterDirectoryMove(ordered, i))
+            {
+                continue;
+            }
+
             if (!TryApply(operation, faults, out OperationFailureReason reason))
             {
                 failures.Add(OperationReport.Create(operation, OperationDisposition.Skipped, reason));
@@ -51,7 +60,7 @@ internal static class StagingApplier
             }
         }
 
-        ordered.AddRange(OrderMoveChains(nondestructive));
+        ordered.AddRange(PlaceBeforeDirectoryMoves(OrderMoveChains(nondestructive)));
 
         foreach (JournalOperation operation in operations)
         {
@@ -406,6 +415,53 @@ internal static class StagingApplier
         }
 
         return true;
+    }
+
+    private static bool IsUnderAppliedLaterDirectoryMove(JournalOperation[] ordered, int index)
+    {
+        string path = ordered[index].Path;
+        for (int j = index + 1; j < ordered.Length; j++)
+        {
+            JournalOperation later = ordered[j];
+            if (later.Kind == PendingChangeKind.Move
+                && later.IsDirectory
+                && !string.IsNullOrEmpty(later.NewPath)
+                && PathTable.IsUnder(later.Path, path)
+                && !Directory.Exists(later.Path)
+                && Directory.Exists(later.NewPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // ディレクトリ Move の移動元の配下の操作（作成ディレクトリへの Add）は、その Move より先に適用する
+    private static List<JournalOperation> PlaceBeforeDirectoryMoves(List<JournalOperation> items)
+    {
+        List<JournalOperation> output = new List<JournalOperation>(items);
+        for (int m = 0; m < output.Count; m++)
+        {
+            JournalOperation move = output[m];
+            if (move.Kind != PendingChangeKind.Move || !move.IsDirectory)
+            {
+                continue;
+            }
+
+            for (int k = m + 1; k < output.Count; k++)
+            {
+                if (output[k].Kind != PendingChangeKind.Move && PathTable.IsUnder(move.Path, output[k].Path))
+                {
+                    JournalOperation child = output[k];
+                    output.RemoveAt(k);
+                    output.Insert(m, child);
+                    m++;
+                }
+            }
+        }
+
+        return output;
     }
 
     private static int PathDepth(string path)

@@ -85,6 +85,18 @@ internal static class WorkPath
     }
 
     /// <summary>
+    /// ディレクトリの入れ替えで、既存の移動先を退避するパスを返す
+    /// </summary>
+    /// <param name="destPath">入れ替える移動先</param>
+    /// <param name="transactionId">トランザクション ID</param>
+    /// <returns>同じ親の `{名前}.{txid}.txold`</returns>
+    internal static string ReplacedDirectoryPath(string destPath, Guid transactionId)
+    {
+        string trimmed = System.IO.Path.TrimEndingDirectorySeparator(destPath);
+        return trimmed + "." + transactionId.ToString("D") + ".txold";
+    }
+
+    /// <summary>
     /// このトランザクションの `.txnew` かどうかを判定する
     /// </summary>
     /// <param name="path">調べるパス</param>

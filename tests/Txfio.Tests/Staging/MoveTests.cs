@@ -653,24 +653,23 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move でも、移動先がディレクトリなら失敗し、ディレクトリの Move は未対応
+    /// 置き換えの Move でも、ファイルとディレクトリは入れ替えない
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt、ディレクトリ d と e がある</para>
-    /// <para>手順: Move(a.txt→d, overwrite: true) と Move(d→e, overwrite: true) をする</para>
-    /// <para>期待: 前者は ExternalConflictException、後者は UnsupportedOperationException で、操作は無い</para>
+    /// <para>前提: a.txt、ディレクトリ d がある</para>
+    /// <para>手順: Move(a.txt→d, overwrite: true) と Move(d→a.txt, overwrite: true) をする</para>
+    /// <para>期待: どちらも ExternalConflictException で、操作は無い</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_overwriteでもディレクトリは置き換えないこと()
+    public async Task MoveAsync_overwriteでもファイルとディレクトリは入れ替えないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "e"));
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("a.txt", "d", overwrite: true));
-        await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.MoveAsync("d", "e", overwrite: true));
+        await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("d", "a.txt", overwrite: true));
 
         Assert.Empty(tx.GetPendingChanges());
     }

@@ -195,15 +195,16 @@ internal abstract class OperationKind
                 return false;
             }
 
-            if (destBefore.Exists)
+            // 入れ替えは、移動先がディレクトリか無いときだけ進める
+            if (destBefore.Exists && !(operation.Overwrite && destBefore.IsDirectory))
             {
-                reason = OperationFailureReason.AlreadyExists;
+                reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
                 return false;
             }
 
             projected[operation.Path] = PathState.Absent;
             projected[operation.NewPath] = before;
-            stamped = operation.WithOutcome(before, PathState.Absent, PathState.Absent, before);
+            stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
             return true;
         }
 
@@ -496,6 +497,63 @@ internal abstract class OperationKind
         }
     }
 
+    // 入れ替え: (1) 移動先を .txold へ、(2) 移動元を移動先へ、(3) .txold を消す。落ちたあとは残っている段階から続ける
+    private static bool TryReplaceDirectory(JournalOperation operation, out OperationFailureReason reason)
+    {
+        reason = OperationFailureReason.BeforeAfterMismatch;
+        string sourcePath = operation.Path;
+        string destPath = operation.NewPath!;
+        string? oldPath = operation.StagingPath;
+        if (string.IsNullOrEmpty(oldPath))
+        {
+            reason = OperationFailureReason.IoFailure;
+            return false;
+        }
+
+        if (File.Exists(sourcePath) || File.Exists(destPath))
+        {
+            reason = OperationFailureReason.ReplacedByFile;
+            return false;
+        }
+
+        bool source = Directory.Exists(sourcePath);
+        bool dest = Directory.Exists(destPath);
+        bool old = Directory.Exists(oldPath);
+        try
+        {
+            if (source && dest && !old)
+            {
+                SameVolumeMove.MoveDirectory(destPath, oldPath);
+                SameVolumeMove.MoveDirectory(sourcePath, destPath);
+            }
+            else if (source && !dest && old)
+            {
+                SameVolumeMove.MoveDirectory(sourcePath, destPath);
+            }
+            else if (source || !dest)
+            {
+                return false;
+            }
+
+            if (Directory.Exists(oldPath))
+            {
+                Directory.Delete(oldPath, recursive: true);
+            }
+
+            return true;
+        }
+        catch (IOException exception)
+        {
+            reason = ClassifyIo(exception);
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            reason = OperationFailureReason.IoFailure;
+            return false;
+        }
+    }
+
     private static bool TryMove(string sourcePath, string destPath, bool overwrite, out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
@@ -753,6 +811,12 @@ internal abstract class OperationKind
 
         internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
         {
+            // 入れ替えは途中の段階を .txold の有無で見分けるので、Before / After の照合を通さない
+            if (operation.IsDirectory && operation.Overwrite)
+            {
+                return TryReplaceDirectory(operation, out reason);
+            }
+
             return TryApplyWhenBeforeMatches(
                 operation,
                 out reason,
