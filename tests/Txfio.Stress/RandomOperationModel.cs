@@ -5,21 +5,21 @@ namespace Txfio.Tests.Stress;
 /// </summary>
 internal sealed class RandomOperationModel
 {
-    private readonly Dictionary<string, string> _files;
+    private readonly Dictionary<string, byte[]> _files;
 
     /// <summary>
     /// 開始時のファイルからモデルを作る
     /// </summary>
     /// <param name="initialFiles">相対パスから内容への辞書</param>
-    public RandomOperationModel(IReadOnlyDictionary<string, string> initialFiles)
+    public RandomOperationModel(IReadOnlyDictionary<string, byte[]> initialFiles)
     {
-        _files = new Dictionary<string, string>(initialFiles, StringComparer.Ordinal);
+        _files = new Dictionary<string, byte[]>(initialFiles, StringComparer.Ordinal);
     }
 
     /// <summary>
     /// コミットしたときにあるはずのファイル（相対パスから内容）。ReadAsync もこの内容を返す
     /// </summary>
-    public IReadOnlyDictionary<string, string> Files => _files;
+    public IReadOnlyDictionary<string, byte[]> Files => _files;
 
     /// <summary>
     /// 通った操作をモデルに反映する

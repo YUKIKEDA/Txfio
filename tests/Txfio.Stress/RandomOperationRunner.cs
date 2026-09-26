@@ -26,9 +26,9 @@ internal static class RandomOperationRunner
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, RandomOperationScenario.SubDirectory));
-        foreach (KeyValuePair<string, string> file in scenario.InitialFiles)
+        foreach (KeyValuePair<string, byte[]> file in scenario.InitialFiles)
         {
-            await File.WriteAllTextAsync(FullPath(work.Path, file.Key), file.Value);
+            await File.WriteAllBytesAsync(FullPath(work.Path, file.Key), file.Value);
         }
 
         RandomOperationModel model = new RandomOperationModel(scenario.InitialFiles);
@@ -136,7 +136,7 @@ internal static class RandomOperationRunner
                 }
             }
 
-            IReadOnlyDictionary<string, string> expected = scenario.InitialFiles;
+            IReadOnlyDictionary<string, byte[]> expected = scenario.InitialFiles;
             if (scenario.Commit)
             {
                 try
@@ -177,14 +177,14 @@ internal static class RandomOperationRunner
         switch (operation.Kind)
         {
             case RandomOperationKind.Add:
-                await using (MemoryStream content = Utf8(operation.Content!))
+                await using (MemoryStream content = new MemoryStream(operation.Content!))
                 {
                     await tx.AddAsync(operation.Path, content);
                 }
 
                 break;
             case RandomOperationKind.Update:
-                await using (MemoryStream content = Utf8(operation.Content!))
+                await using (MemoryStream content = new MemoryStream(operation.Content!))
                 {
                     await tx.UpdateAsync(operation.Path, content);
                 }
@@ -215,28 +215,27 @@ internal static class RandomOperationRunner
 
     private static async Task<string?> CompareReadAsync(ITransaction tx, RandomOperationModel model, string path)
     {
-        string expected = model.Files[path];
-        string actual = await ReadAsync(tx, path);
-        return actual == expected ? null : $"{path} は期待 \"{expected}\"、実際 \"{actual}\"";
+        byte[] expected = model.Files[path];
+        byte[] actual = await ReadAsync(tx, path);
+        return SameContent(expected, actual) ? null : Mismatch(path, expected, actual);
     }
 
-    private static async Task<string?> CompareDiskAsync(string workFolder, IReadOnlyDictionary<string, string> expected)
+    private static async Task<string?> CompareDiskAsync(string workFolder, IReadOnlyDictionary<string, byte[]> expected)
     {
-        SortedDictionary<string, string> actual = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        SortedDictionary<string, byte[]> actual = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (string file in Directory.EnumerateFiles(workFolder, "*", SearchOption.AllDirectories))
         {
             string relative = System.IO.Path.GetRelativePath(workFolder, file).Replace('\\', '/');
             if (!relative.StartsWith(".txfio/", StringComparison.Ordinal))
             {
-                actual[relative] = await File.ReadAllTextAsync(file);
+                actual[relative] = await File.ReadAllBytesAsync(file);
             }
         }
 
-        string expectedText = string.Join(", ", expected.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(Format));
-        string actualText = string.Join(", ", actual.Select(Format));
-        if (expectedText != actualText)
+        string? mismatch = FirstMismatch(expected, actual);
+        if (mismatch is not null)
         {
-            return $"終わったあとのディスクが違う: 期待 [{expectedText}]、実際 [{actualText}]";
+            return "終わったあとのディスクが違う: " + mismatch;
         }
 
         string[] directories = Directory.EnumerateDirectories(workFolder)
@@ -263,16 +262,53 @@ internal static class RandomOperationRunner
         return string.Join(", ", tx.GetPendingChanges().Select(change => $"{change.Kind}:{change.Path}>{change.NewPath}"));
     }
 
-    private static async Task<string> ReadAsync(ITransaction tx, string path)
+    private static async Task<byte[]> ReadAsync(ITransaction tx, string path)
     {
         await using Stream stream = await tx.ReadAsync(path);
-        using StreamReader reader = new StreamReader(stream, Encoding.UTF8);
-        return await reader.ReadToEndAsync();
+        using MemoryStream copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        return copy.ToArray();
     }
 
-    private static MemoryStream Utf8(string text) => new MemoryStream(Encoding.UTF8.GetBytes(text));
+    private static string? FirstMismatch(
+        IReadOnlyDictionary<string, byte[]> expected,
+        IReadOnlyDictionary<string, byte[]> actual)
+    {
+        foreach (KeyValuePair<string, byte[]> file in expected.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (!actual.TryGetValue(file.Key, out byte[]? found))
+            {
+                return file.Key + " が無い（期待 " + StressContent.Describe(file.Value) + "）";
+            }
 
-    private static string Format(KeyValuePair<string, string> file) => $"{file.Key}=\"{file.Value}\"";
+            if (!SameContent(file.Value, found))
+            {
+                return Mismatch(file.Key, file.Value, found);
+            }
+        }
+
+        foreach (string path in actual.Keys.Order(StringComparer.Ordinal))
+        {
+            if (!expected.ContainsKey(path))
+            {
+                return path + " が余分（" + StressContent.Describe(actual[path]) + "）";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool SameContent(byte[] expected, byte[] actual) => expected.AsSpan().SequenceEqual(actual);
+
+    private static string Mismatch(string path, byte[] expected, byte[] actual)
+    {
+        if (expected.Length == actual.Length)
+        {
+            return path + " は長さ " + StressContent.Describe(expected) + " で内容が違う";
+        }
+
+        return path + " は期待 " + StressContent.Describe(expected) + "、実際 " + StressContent.Describe(actual);
+    }
 
     private static string FullPath(string workFolder, string relative)
     {
