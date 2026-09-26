@@ -258,13 +258,16 @@ internal sealed partial class Transaction
 
         int destIndex = FindOperationIndex(destPath);
         bool destIsMoveSource = destIndex >= 0 && _paths.Rows[destIndex].Kind == PendingChangeKind.Move;
+        int sourceIndex = FindOperationIndex(sourcePath);
+        int moveToSource = FindMoveToIndex(sourcePath);
+        bool directoryMove = IsDirectoryMove(sourcePath, sourceIndex, moveToSource);
 
-        // 置き換えの Move は、移動先のファイルの Delete を畳む
+        // 置き換えの Move は、移動先のファイルの Delete を畳む。ディレクトリの入れ替えは DeleteTree も畳む
         int destDeleteIndex = -1;
         if (overwrite
             && destIndex >= 0
-            && _paths.Rows[destIndex].Kind == PendingChangeKind.Delete
-            && !_paths.Rows[destIndex].IsDirectory)
+            && ((_paths.Rows[destIndex].Kind == PendingChangeKind.Delete && !_paths.Rows[destIndex].IsDirectory)
+                || (directoryMove && _paths.Rows[destIndex].Kind == PendingChangeKind.DeleteTree)))
         {
             destDeleteIndex = destIndex;
             destIndex = -1;
@@ -291,13 +294,13 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
         }
 
-        int sourceIndex = FindOperationIndex(sourcePath);
-        int moveToSource = FindMoveToIndex(sourcePath);
-        if (IsDirectoryMove(sourcePath, sourceIndex, moveToSource))
+        if (directoryMove)
         {
             if (overwrite)
             {
-                throw new UnsupportedOperationException("ディレクトリを置き換える Move は未対応です: " + sourcePath);
+                await ReplaceDirectoryAsync(sourcePath, destPath, sourceIndex, moveToSource, destDeleteIndex, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
             }
 
             await MoveDirectoryAsync(
@@ -474,6 +477,69 @@ internal sealed partial class Transaction
         }
 
         StagingFile.TryDelete(existing.StagingPath);
+    }
+
+    // ディレクトリの入れ替え（移動先の既存ディレクトリを、移動元で中身ごと入れ替える）
+    private async Task ReplaceDirectoryAsync(
+        string sourcePath,
+        string destPath,
+        int sourceIndex,
+        int moveToSource,
+        int destDeleteTreeIndex,
+        CancellationToken cancellationToken)
+    {
+        if (sourceIndex >= 0 || moveToSource >= 0)
+        {
+            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        }
+
+        StagingRules.ThrowIfDirectoryReplaceConflicts(_paths.Rows, _createdDirectories, sourcePath, destPath);
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { sourcePath, destPath }, sourcePath, destPath).ConfigureAwait(false);
+        StagingRules.EnsureParentDirectoryExists(destPath);
+        if (!Directory.Exists(sourcePath))
+        {
+            throw new ExternalConflictException("移動元のディレクトリが存在しません: " + sourcePath, sourcePath);
+        }
+
+        bool replaces = Directory.Exists(destPath);
+        if (!replaces)
+        {
+            StagingRules.EnsureMoveDestinationIsFree(destPath);
+        }
+
+        JournalOperation operation = new JournalOperation(
+            PendingChangeKind.Move,
+            sourcePath,
+            stagingPath: replaces ? WorkPath.ReplacedDirectoryPath(destPath, _transactionId) : null,
+            newPath: destPath,
+            isDirectory: true,
+            overwrite: replaces);
+        ThrowIfMoveChainCloses(operation, replaceIndex: -1);
+
+        // 畳んだ DeleteTree は、この入れ替えと同じジャーナルの書き込みで外す
+        JournalOperation? foldedDelete = null;
+        if (destDeleteTreeIndex >= 0)
+        {
+            foldedDelete = _paths.Rows[destDeleteTreeIndex];
+            _paths.Rows.RemoveAt(destDeleteTreeIndex);
+        }
+
+        _paths.Rows.Add(operation);
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _paths.Rows.Remove(operation);
+            if (foldedDelete is not null)
+            {
+                _paths.Rows.Insert(Math.Min(destDeleteTreeIndex, _paths.Rows.Count), foldedDelete);
+            }
+
+            throw;
+        }
     }
 
     private async Task MoveDirectoryAsync(

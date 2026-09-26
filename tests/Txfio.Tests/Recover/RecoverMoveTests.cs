@@ -138,4 +138,107 @@ public sealed class RecoverMoveTests
         Assert.Empty(Assert.Single(report.Journals).Operations);
         Assert.Equal("new", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
     }
+
+    /// <summary>
+    /// ディレクトリの入れ替えを Committing の直後に止めても、Recover が入れ替えを終える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: site/old.txt と build/new.txt があり、Move(build→site, overwrite: true) を予約した</para>
+    /// <para>手順: Committing の直後に止めて Dispose し、RecoverAsync する</para>
+    /// <para>期待: RolledForward であり、site には new.txt だけがあり、.txold は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_ディレクトリの入れ替えを完了すること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string site = System.IO.Path.Combine(work.Path, "site");
+        Directory.CreateDirectory(site);
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "build"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(site, "old.txt"), "old");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "build", "new.txt"), "new");
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        {
+            await tx.MoveAsync("build", "site", overwrite: true);
+            await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
+        }
+
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(new[] { "new.txt" }, Directory.GetFileSystemEntries(site).Select(System.IO.Path.GetFileName).ToArray());
+        Assert.Empty(Directory.GetDirectories(work.Path, "*.txold"));
+    }
+
+    /// <summary>
+    /// 移動先を .txold へ退けたところで落ちても、Recover は続きから入れ替える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: site/old.txt と build/new.txt があり、Move(build→site, overwrite: true) を Committing の直後に止めた</para>
+    /// <para>手順: site を site.{txid}.txold へ手で移してから RecoverAsync する</para>
+    /// <para>期待: RolledForward であり、site には new.txt だけがあり、build も .txold も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_退避のあとで落ちた入れ替えを続けること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string site = System.IO.Path.Combine(work.Path, "site");
+        Directory.CreateDirectory(site);
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "build"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(site, "old.txt"), "old");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "build", "new.txt"), "new");
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        {
+            await tx.MoveAsync("build", "site", overwrite: true);
+            await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
+        }
+
+        string journal = Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal").Single();
+        string id = System.IO.Path.GetFileNameWithoutExtension(journal).Substring("tx-".Length);
+        Directory.Move(site, site + "." + id + ".txold");
+
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(new[] { "new.txt" }, Directory.GetFileSystemEntries(site).Select(System.IO.Path.GetFileName).ToArray());
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "build")));
+        Assert.Empty(Directory.GetDirectories(work.Path, "*.txold"));
+    }
+
+    /// <summary>
+    /// 入れ替えを手で済ませたあとの Recover は、移動元配下の Add も済んだとみなし RolledForward になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: site/old.txt と、外の incoming/a.txt があり、incoming を site.new へ Import し、Move(site.new→site, overwrite: true) を予約した</para>
+    /// <para>手順: 最初の適用（Add）の直後に止め、入れ替えを手で済ませてから RecoverAsync する</para>
+    /// <para>期待: RolledForward であり、飛ばした操作は無く、site には a.txt だけがある</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_入れ替え済みなら移動元の配下のAddも済んだとみなすこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using TempDirectory outside = TempDirectory.Create();
+        string site = System.IO.Path.Combine(work.Path, "site");
+        string staged = System.IO.Path.Combine(work.Path, "site.new");
+        Directory.CreateDirectory(site);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(site, "old.txt"), "old");
+        string incoming = System.IO.Path.Combine(outside.Path, "incoming");
+        Directory.CreateDirectory(incoming);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(incoming, "a.txt"), "alpha");
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterApply);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        {
+            await tx.ImportAsync(incoming, "site.new");
+            await tx.MoveAsync("site.new", "site", overwrite: true);
+            await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
+        }
+
+        Directory.Delete(site, recursive: true);
+        Directory.Move(staged, site);
+
+        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, report.Result);
+        Assert.Empty(Assert.Single(report.Journals).Operations);
+        Assert.Equal(new[] { "a.txt" }, Directory.GetFileSystemEntries(site).Select(System.IO.Path.GetFileName).ToArray());
+    }
 }
