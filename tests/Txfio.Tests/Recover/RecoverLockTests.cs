@@ -86,12 +86,12 @@ public sealed class RecoverLockTests
     }
 
     /// <summary>
-    /// Recover は、過去の操作が残したパスと意図のロックファイルを消し、生存ロックとジャーナルは残す
+    /// Recover は、過去の操作が残したパスロックと意図ロックのファイルを消す
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub/a.txt を Add してコミットし、ロックファイルが残っている。別のトランザクションが生きている</para>
-    /// <para>手順: 生きているトランザクションを破棄してから RecoverAsync する</para>
-    /// <para>期待: .txfio/locks に .lock は無い</para>
+    /// <para>前提: sub/a.txt を Add してコミットし、パスロックと意図ロックのファイルが残っている</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: sub/a.txt のパスロックと意図ロックのファイルは無く、残る .lock は Recover が開いていたワークフォルダ全体のロックだけである</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_残ったロックファイルを消すこと()
@@ -104,12 +104,20 @@ public sealed class RecoverLockTests
             Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         }
 
-        string locks = MetadataNames.LockFolderPath(work.Path);
-        Assert.NotEmpty(Directory.GetFiles(locks, "*.lock"));
+        string file = System.IO.Path.Combine(work.Path, "sub", "a.txt");
+        string pathLock = PathLockSet.FilePath(work.Path, file);
+        string intentLock = PathLockSet.IntentFilePath(work.Path, System.IO.Path.Combine(work.Path, "sub"));
+        string sentinel = PathLockSet.FilePath(work.Path, work.Path);
+        Assert.True(File.Exists(pathLock));
+        Assert.True(File.Exists(intentLock));
 
         await global::Txfio.Txfio.RecoverAsync(work.Path);
 
-        Assert.Empty(Directory.GetFiles(locks, "*.lock"));
+        Assert.False(File.Exists(pathLock));
+        Assert.False(File.Exists(intentLock));
+        Assert.All(
+            Directory.GetFiles(MetadataNames.LockFolderPath(work.Path), "*.lock"),
+            path => Assert.Equal(sentinel, path, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>
