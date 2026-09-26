@@ -81,7 +81,7 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 置き換えの Move の移動元か移動先なら、続けて操作できない
+    /// 置き換えまたは入れ替えの Move の移動元か移動先、または入れ替えの移動先の配下なら、続けて操作できない
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="path">操作するパス</param>
@@ -92,9 +92,10 @@ internal static class StagingRules
             if (operation.Kind == PendingChangeKind.Move
                 && operation.Overwrite
                 && (string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)))
+                    || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)
+                    || (operation.NewPath is not null && IsInsideDirectory(operation.NewPath, path))))
             {
-                throw new InvalidOperationException("置き換えの Move の移動元と移動先へは、続けて操作できません: " + path);
+                throw new InvalidOperationException("置き換えまたは入れ替えの Move の移動元、移動先、または入れ替えの移動先の配下へは、続けて操作できません: " + path);
             }
         }
     }

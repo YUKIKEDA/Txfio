@@ -259,6 +259,32 @@ public sealed class StagingApplierTests
         }
     }
 
+    /// <summary>
+    /// 後始末は、Move の退避先（.txold）を消さない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 入れ替えの Move の退避先にファイルがある（入れ替えの途中で止まり、元の移動先がそこにある）</para>
+    /// <para>手順: その操作一覧で DeleteStagingFiles を呼ぶ</para>
+    /// <para>期待: 退避先のファイルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteStagingFiles_Moveの退避先は消さないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "d");
+        string backup = dest + "." + Guid.NewGuid().ToString("D") + ".txold";
+        await File.WriteAllTextAsync(backup, "original");
+        JournalOperation[] operations =
+        {
+            new JournalOperation(PendingChangeKind.Move, source, backup, dest, overwrite: true),
+        };
+
+        StagingApplier.DeleteStagingFiles(operations);
+
+        Assert.Equal("original", await File.ReadAllTextAsync(backup));
+    }
+
     private static bool InvokeMove(
         string methodName,
         string source,

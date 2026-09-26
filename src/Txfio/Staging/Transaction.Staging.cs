@@ -261,13 +261,14 @@ internal sealed partial class Transaction
         int sourceIndex = FindOperationIndex(sourcePath);
         int moveToSource = FindMoveToIndex(sourcePath);
         bool directoryMove = IsDirectoryMove(sourcePath, sourceIndex, moveToSource);
+        bool replacesDirectory = overwrite && !destIsMoveSource && Directory.Exists(destPath);
 
-        // 置き換えの Move は、移動先のファイルの Delete を畳む。ディレクトリの入れ替えは DeleteTree も畳む
+        // 置き換えの Move は、移動先のファイルの Delete を畳む。入れ替えは DeleteTree も畳む
         int destDeleteIndex = -1;
         if (overwrite
             && destIndex >= 0
             && ((_paths.Rows[destIndex].Kind == PendingChangeKind.Delete && !_paths.Rows[destIndex].IsDirectory)
-                || (directoryMove && _paths.Rows[destIndex].Kind == PendingChangeKind.DeleteTree)))
+                || ((directoryMove || replacesDirectory) && _paths.Rows[destIndex].Kind == PendingChangeKind.DeleteTree)))
         {
             destDeleteIndex = destIndex;
             destIndex = -1;
@@ -348,15 +349,39 @@ internal sealed partial class Transaction
             }
         }
 
+        // ファイルでディレクトリを入れ替えるときは、移動先の配下を排他の意図ロックで終わりまで予約する
+        if (replacesDirectory)
+        {
+            StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, destPath);
+            if (sourceIndex >= 0 || moveToSource >= 0)
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+        }
+
         await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, sourcePath, destPath).ConfigureAwait(false);
+        if (replacesDirectory)
+        {
+            await _locks.AcquireReservingAsync(_workFolder, new[] { sourcePath, destPath }, sourcePath, destPath).ConfigureAwait(false);
+        }
+        else
+        {
+            await _locks.AcquireAsync(_workFolder, sourcePath, destPath).ConfigureAwait(false);
+        }
+
         StagingRules.EnsureParentDirectoryExists(destPath);
         bool replaces = false;
+        string? backupPath = null;
         if (!destIsMoveSource)
         {
             if (overwrite && File.Exists(destPath))
             {
                 replaces = true;
+            }
+            else if (replacesDirectory)
+            {
+                replaces = true;
+                backupPath = WorkPath.ReplacedDirectoryPath(destPath, _transactionId);
             }
             else
             {
@@ -381,7 +406,7 @@ internal sealed partial class Transaction
 
         try
         {
-            await RecordFileMoveAsync(sourcePath, destPath, sourceIndex, moveToSource, replaces, cancellationToken)
+            await RecordFileMoveAsync(sourcePath, destPath, sourceIndex, moveToSource, replaces, backupPath, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch
@@ -402,6 +427,7 @@ internal sealed partial class Transaction
         int sourceIndex,
         int moveToSource,
         bool replaces,
+        string? backupPath,
         CancellationToken cancellationToken)
     {
         if (sourceIndex >= 0)
@@ -427,7 +453,7 @@ internal sealed partial class Transaction
         JournalOperation operation = new JournalOperation(
             PendingChangeKind.Move,
             sourcePath,
-            stagingPath: null,
+            stagingPath: backupPath,
             destPath,
             overwrite: replaces);
         ThrowIfMoveChainCloses(operation, replaceIndex: -1);
@@ -502,11 +528,8 @@ internal sealed partial class Transaction
             throw new ExternalConflictException("移動元のディレクトリが存在しません: " + sourcePath, sourcePath);
         }
 
-        bool replaces = Directory.Exists(destPath);
-        if (!replaces)
-        {
-            StagingRules.EnsureMoveDestinationIsFree(destPath);
-        }
+        // 移動先がファイルでもディレクトリでも入れ替える。無ければ普通のディレクトリ Move と同じ
+        bool replaces = Directory.Exists(destPath) || File.Exists(destPath);
 
         JournalOperation operation = new JournalOperation(
             PendingChangeKind.Move,

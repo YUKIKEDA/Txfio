@@ -205,8 +205,8 @@ internal abstract class OperationKind
                 return false;
             }
 
-            // 入れ替えは、移動先がディレクトリか無いときだけ進める
-            if (destBefore.Exists && !(operation.Overwrite && destBefore.IsDirectory))
+            // 入れ替えは、移動先が無いか、.txold へ退避するときだけ進める（移動先の種類は問わない）
+            if (destBefore.Exists && !(operation.Overwrite && operation.StagingPath is not null))
             {
                 reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
                 return false;
@@ -224,8 +224,8 @@ internal abstract class OperationKind
             return false;
         }
 
-        // 置き換えの Move は、移動先がファイルか無いときだけ進める
-        if (destBefore.Exists && !(operation.Overwrite && destBefore.IsFile))
+        // ファイルの overwrite Move は、移動先がファイルか無いときだけ進める（入れ替えで .txold へ退避するときは種類を問わない）
+        if (destBefore.Exists && !(operation.Overwrite && (destBefore.IsFile || operation.StagingPath is not null)))
         {
             reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
             return false;
@@ -552,7 +552,8 @@ internal abstract class OperationKind
     }
 
     // 入れ替え: (1) 移動先を .txold へ、(2) 移動元を移動先へ、(3) .txold を消す（落ちたあとは残っている段階から続ける）
-    private static bool TryReplaceDirectory(JournalOperation operation, out OperationFailureReason reason)
+    // 移動元と移動先は、ファイルでもディレクトリでもよい
+    private static bool TryReplaceWithBackup(JournalOperation operation, out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
         string sourcePath = operation.Path;
@@ -564,25 +565,26 @@ internal abstract class OperationKind
             return false;
         }
 
-        if (File.Exists(sourcePath) || File.Exists(destPath))
+        bool sourceIsDirectory = operation.IsDirectory;
+        if (sourceIsDirectory ? File.Exists(sourcePath) : Directory.Exists(sourcePath))
         {
             reason = OperationFailureReason.ReplacedByFile;
             return false;
         }
 
-        bool source = Directory.Exists(sourcePath);
-        bool dest = Directory.Exists(destPath);
-        bool old = Directory.Exists(oldPath);
+        bool source = sourceIsDirectory ? Directory.Exists(sourcePath) : File.Exists(sourcePath);
+        bool dest = ExistsAny(destPath);
+        bool old = ExistsAny(oldPath);
         try
         {
             if (source && dest && !old)
             {
-                SameVolumeMove.MoveDirectory(destPath, oldPath);
-                SameVolumeMove.MoveDirectory(sourcePath, destPath);
+                MoveAny(destPath, oldPath);
+                MoveAny(sourcePath, destPath);
             }
             else if (source && !dest && old)
             {
-                SameVolumeMove.MoveDirectory(sourcePath, destPath);
+                MoveAny(sourcePath, destPath);
             }
             else if (source || !dest)
             {
@@ -592,6 +594,10 @@ internal abstract class OperationKind
             if (Directory.Exists(oldPath))
             {
                 Directory.Delete(oldPath, recursive: true);
+            }
+            else if (File.Exists(oldPath))
+            {
+                File.Delete(oldPath);
             }
 
             return true;
@@ -606,6 +612,22 @@ internal abstract class OperationKind
             reason = OperationFailureReason.IoFailure;
             return false;
         }
+    }
+
+    private static bool ExistsAny(string path)
+    {
+        return File.Exists(path) || Directory.Exists(path);
+    }
+
+    private static void MoveAny(string sourcePath, string destPath)
+    {
+        if (Directory.Exists(sourcePath))
+        {
+            SameVolumeMove.MoveDirectory(sourcePath, destPath);
+            return;
+        }
+
+        SameVolumeMove.MoveFile(sourcePath, destPath);
     }
 
     private static bool TryMove(string sourcePath, string destPath, bool overwrite, out OperationFailureReason reason)
@@ -862,6 +884,12 @@ internal abstract class OperationKind
 
         internal override Phase ApplyPhase => Phase.Nondestructive;
 
+        // Move の stagingPath は入れ替えの退避先（.txold）で、退避した元の移動先（利用者のファイルかディレクトリ）である
+        // 後始末で消すと、入れ替えの途中で止まったときに元の移動先が失われるので、消さない
+        internal override void DeleteOwnStaging(JournalOperation operation)
+        {
+        }
+
         internal override bool TryProject(
             JournalOperation operation,
             IReadOnlyList<JournalOperation> operations,
@@ -878,10 +906,10 @@ internal abstract class OperationKind
             Func<string, bool> changedLater,
             out OperationFailureReason reason)
         {
-            // 入れ替えは途中の段階を .txold の有無で見分けるので、Before / After の照合を通さない
-            if (operation.IsDirectory && operation.Overwrite)
+            // .txold への退避を挟む入れ替えは、途中の段階を .txold の有無で見分けるので、Before / After の照合を通さない
+            if (operation.Overwrite && operation.StagingPath is not null)
             {
-                return TryReplaceDirectory(operation, out reason);
+                return TryReplaceWithBackup(operation, out reason);
             }
 
             return TryApplyWhenBeforeMatches(

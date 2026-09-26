@@ -89,26 +89,26 @@ public interface ITransaction : IAsyncDisposable
 
     /// <summary>
     /// 同一ボリューム内のファイルまたはディレクトリの移動を予約する
-    /// <paramref name="overwrite"/> が <see langword="true"/> なら、移動先の既存ファイルを置き換える
-    /// 移動元がディレクトリのときは、移動先の既存ディレクトリを中身ごと入れ替える
+    /// <paramref name="overwrite"/> が <see langword="true"/> なら、移動先の既存のファイルかディレクトリを移動元で置き換えるか入れ替える
+    /// ファイルどうしは 1 回の rename で置き換え、どちらかがディレクトリなら移動先を `.txold` へ退避してから入れ替える
     /// </summary>
     /// <remarks>
-    /// ファイルの置き換えはコミットで 1 回の rename（`MOVEFILE_REPLACE_EXISTING`）であり、バイトはコピーしない
-    /// ディレクトリの入れ替えは、移動先を `{名前}.{txid}.txold` へ退け、移動元を移動先へ rename してから `.txold` を消す
-    /// 移動先にこのトランザクションのファイルの Delete があれば、その Delete をファイルの置き換えに畳む
-    /// 移動先の DeleteTree は、ディレクトリの入れ替えに畳む
-    /// ファイルの置き換えとディレクトリの入れ替えでは、移動元と移動先へはこのあと続けて操作できない
-    /// ディレクトリの入れ替えでは、その配下へも続けて操作できない
+    /// ファイルどうしの置き換えはコミットで 1 回の rename（`MOVEFILE_REPLACE_EXISTING`）であり、バイトはコピーしない
+    /// 移動元か移動先がディレクトリの入れ替えは、移動先を `{名前}.{txid}.txold` へ退避し、移動元を移動先へ rename してから `.txold` を消す
+    /// 移動先にこのトランザクションのファイルの Delete があれば、その Delete をファイルどうしの置き換えに畳む
+    /// 移動先の DeleteTree は、入れ替えに畳む
+    /// 置き換えと入れ替えでは、移動元と移動先へはこのあと続けて操作できない
+    /// 入れ替えでは、移動先の配下へも続けて操作できない
     /// </remarks>
     /// <param name="oldPath">移動元パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="overwrite"><see langword="true"/> なら移動先の既存ファイルを置き換え、移動元がディレクトリなら既存ディレクトリを中身ごと入れ替える（<see langword="false"/> は <see cref="MoveAsync(string, string, CancellationToken)"/> と同じ）</param>
+    /// <param name="overwrite"><see langword="true"/> なら移動先の既存のファイルかディレクトリを移動元で置き換えるか入れ替える（<see langword="false"/> は <see cref="MoveAsync(string, string, CancellationToken)"/> と同じ）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>予約の完了</returns>
-    /// <exception cref="ExternalConflictException">移動元が無い、ファイルとディレクトリを入れ替えようとしている、置き換えないのに移動先が塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="ExternalConflictException">移動元が無い、<paramref name="overwrite"/> が <see langword="false"/> なのに移動先が塞がっている、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動である</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動、別操作でステージング済み、置き換えの Move の移動元か移動先への操作、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、リパースポイント、またはメタデータ配下である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動、別操作でステージング済み、置き換えまたは入れ替えの Move の移動元か移動先への操作、入れ替えの移動先の配下への操作、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、リパースポイント、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default);
 
