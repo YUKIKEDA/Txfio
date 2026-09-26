@@ -76,6 +76,51 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
+    /// 既存ディレクトリへの Add はその場で失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 対象パスに空ディレクトリがある</para>
+    /// <para>手順: AddAsync する</para>
+    /// <para>期待: ExternalConflictException になり、Path は対象で、.txnew も操作も無く、ディレクトリは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task AddAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "d");
+        Directory.CreateDirectory(target);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("d", content));
+        Assert.Equal(target, ex.Path);
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(tx.GetPendingChanges());
+        Assert.True(Directory.Exists(target));
+    }
+
+    /// <summary>
+    /// 既存ディレクトリへの Update はその場で失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 対象パスに空ディレクトリがある</para>
+    /// <para>手順: UpdateAsync する</para>
+    /// <para>期待: ExternalConflictException になり、Path は対象で、.txnew も操作も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "d");
+        Directory.CreateDirectory(target);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.UpdateAsync("d", content));
+        Assert.Equal(target, ex.Path);
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
+    /// <summary>
     /// 無いファイルへの Update はその場で失敗する
     /// </summary>
     /// <remarks>
