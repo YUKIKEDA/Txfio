@@ -201,7 +201,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **コミット時の外部干渉への対処**（ダーティリード許容の帰結として）
 
-1. `Committing`マーカーを書き込む前に、ジャーナル内の全操作について前提条件を検証し、同時に Before / After を書く。Add の対象は無く、Update の対象はファイル、Delete の対象はファイルか直下の前提を満たすディレクトリ、DeleteTree の対象はディレクトリ、Move の元はファイルかディレクトリで先は無い。`detectExternalChanges` が false のとき、ステージ後に内容だけ変わった Update はここでは失敗にせず、Before はその時点のディスクにする。true のときは「ステージ後の外部変更」に従い、記録と違う Update は `Failed` で `ExternalChange` にする。`CreateDirectory` もディレクトリが存在しなければ失敗し、ファイルにすり替わっていても失敗する。中身は見ない。前提が崩れていれば、`CreateDirectory` がすでに作ったディレクトリを除き、まだ実体には触れていないので、コミット全体を安全に中止し `Failed` を返す（「結果の詳細」）。失敗時の破棄は、未コミットの Dispose と同じく、そのディレクトリを中身ごと消す
+1. `Committing`マーカーを書き込む前に、ジャーナル内の全操作について前提条件を検証し、同時に Before / After を書く。Add の対象は無く、Update の対象はファイル、Delete の対象はファイルか直下の前提を満たすディレクトリ、DeleteTree の対象はディレクトリ、Move の元はファイルかディレクトリで先は無い。Update の対象とファイルの Delete の対象は、読み取り専用属性が付いていない（付いていれば `ReadOnly` で拒む。Windows では置き換えも削除も適用で `UnauthorizedAccessException` になり、`PartialConflict` で確定してしまうため）。Move は読み取り専用でも rename できるので見ない。DeleteTree とディレクトリは、中を走査しないので見ない。`detectExternalChanges` が false のとき、ステージ後に内容だけ変わった Update はここでは失敗にせず、Before はその時点のディスクにする。true のときは「ステージ後の外部変更」に従い、記録と違う Update は `Failed` で `ExternalChange` にする。`CreateDirectory` もディレクトリが存在しなければ失敗し、ファイルにすり替わっていても失敗する。中身は見ない。前提が崩れていれば、`CreateDirectory` がすでに作ったディレクトリを除き、まだ実体には触れていないので、コミット全体を安全に中止し `Failed` を返す（「結果の詳細」）。失敗時の破棄は、未コミットの Dispose と同じく、そのディレクトリを中身ごと消す
 2. 検証後・`Committing`マーカー書き込み後に適用を開始してから外部干渉が起きた場合（極めて稀）は、ロールフォワード原則により後戻りはできない。該当操作をスキップして続行し、`CommitAsync` の `CommitReport.Result` で明確に区別する（`Succeeded`：全操作が想定通り適用された／`PartialConflict`：一部操作で外部干渉による不整合が検出されたが確定はした。ジャーナルと、適用しなかった操作の `.txnew` を消してから返す／`Failed`：コミット前検証で失敗し実体には一切触れていない）。`PartialConflict`を明示的な列挙値にすることで、呼び出し側が戻り値を握りつぶしにくいAPI形状にする。拒んだ操作と飛ばした操作のパスと理由は「結果の詳細」に載せる。`Failed` のあと、同じトランザクションでもう一度コミットできる。`PartialConflict` のあと、同じインスタンスではやり直せない。共有違反の自動再試行はしない
 
 **ステージ後の外部変更**: `BeginAsync(path, bool detectExternalChanges, CancellationToken)` と `BeginAsync(path, TimeSpan lockWait, bool detectExternalChanges, CancellationToken)` を足す。既存の `BeginAsync` は `detectExternalChanges` が false である。false のときは、ステージ後に内容だけ変わった Update を失敗にしない。
@@ -236,8 +236,9 @@ true のときはファイルの `Update` だけを見る。`Add`、`Delete`、`
 - `SharingViolation` = 5。共有違反
 - `IoFailure` = 6。それ以外の IO 失敗（`UnauthorizedAccessException` を含む）
 - `ExternalChange` = 7。`detectExternalChanges` が true のとき、記録した実ファイルのサイズか最終更新日時が違う
+- `ReadOnly` = 8。Update の対象、またはファイルの Delete の対象に、読み取り専用属性が付いている
 
-検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`、`ExternalChange`。`.txnew` をファイルとして読めないときは、検証でも `IoFailure` にする。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。適用中に移動先が既にあるときは `AlreadyExists`、移動元が無く移動先も無いときは `Missing`、ファイルとディレクトリが入れ替わったときは `ReplacedByFile` にする。`.txnew` が無く Before だけ一致するときは `IoFailure` にする。`UnauthorizedAccessException` は `IoFailure` にする。
+検証で使うのは `Missing`、`AlreadyExists`、`ReplacedByFile`、`DirectoryPreconditions`、`ExternalChange`、`ReadOnly`。`.txnew` をファイルとして読めないときは、検証でも `IoFailure` にする。適用で使うのは `BeforeAfterMismatch`、`SharingViolation`、`IoFailure`。適用中に移動先が既にあるときは `AlreadyExists`、移動元が無く移動先も無いときは `Missing`、ファイルとディレクトリが入れ替わったときは `ReplacedByFile` にする。`.txnew` が無く Before だけ一致するときは `IoFailure` にする。`UnauthorizedAccessException` は `IoFailure` にする。
 
 `Failed` は実体に触れない（`CreateDirectory` がすでに作ったディレクトリを除く。失敗時の破棄は未コミットの Dispose と同じ）。ジャーナルは残り、コミット済みにはしない。同じトランザクションで、状態を直したあと `CommitAsync` を再度呼べる。`PartialConflict` はジャーナルと、適用しなかった操作の `.txnew` を消して確定する。同じインスタンスではやり直せない。共有違反で飛ばしたパスは、新しいトランザクションでやり直せる。`BeforeAfterMismatch` は、同じ書き込みを繰り返しても意図どおりには戻らない。ライブラリは共有違反を自動では再試行しない。
 
