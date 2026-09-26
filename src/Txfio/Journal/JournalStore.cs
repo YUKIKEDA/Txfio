@@ -31,11 +31,13 @@ internal static class JournalStore
     /// <exception cref="IOException">ジャーナルのパスに既にファイルがある、または書き込みに失敗した</exception>
     internal static async Task WriteNewAsync(string journalPath, Guid transactionId, CancellationToken cancellationToken)
     {
-        JournalDocument document = new JournalDocument(
-            CurrentVersion,
-            transactionId,
-            committing: false,
-            Array.Empty<JournalOperation>());
+        JournalDocument document = JournalPaths.ToStored(
+            new JournalDocument(
+                CurrentVersion,
+                transactionId,
+                committing: false,
+                Array.Empty<JournalOperation>()),
+            MetadataNames.WorkFolderFromJournal(journalPath));
         string tempPath = MetadataNames.JournalTempPath(journalPath);
         try
         {
@@ -61,7 +63,8 @@ internal static class JournalStore
         string tempPath = MetadataNames.JournalTempPath(journalPath);
         try
         {
-            await WriteAsync(tempPath, document, FileMode.Create, cancellationToken).ConfigureAwait(false);
+            JournalDocument stored = JournalPaths.ToStored(document, MetadataNames.WorkFolderFromJournal(journalPath));
+            await WriteAsync(tempPath, stored, FileMode.Create, cancellationToken).ConfigureAwait(false);
 
             // File.Move の共有違反は UnauthorizedAccessException になるため、先に開いて閉じる（開けないときの共有違反は IOException のまま返す）
             EnsureReplaceable(journalPath);
@@ -79,7 +82,7 @@ internal static class JournalStore
     /// </summary>
     /// <param name="journalPath">読み取り元</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>読めた文書、または読めない理由（JSON として読めない、値が JSON の null である、種別が名前に無い、path が空、または Move の newPath が空、版が違う）</returns>
+    /// <returns>読めた文書、または読めない理由（JSON として読めない、値が JSON の null である、種別が名前に無い、path が空、または Move の newPath が空、版が違う、結合したパスがワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下である）</returns>
     /// <exception cref="IOException">読み取りに失敗した</exception>
     internal static async Task<JournalReadResult> ReadAsync(string journalPath, CancellationToken cancellationToken)
     {
@@ -117,6 +120,20 @@ internal static class JournalStore
             {
                 return JournalReadResult.Corrupt();
             }
+        }
+
+        try
+        {
+            document = JournalPaths.ToAbsolute(document, MetadataNames.WorkFolderFromJournal(journalPath));
+        }
+        catch (JsonException)
+        {
+            return JournalReadResult.Corrupt();
+        }
+
+        if (document is null)
+        {
+            return JournalReadResult.Corrupt();
         }
 
         return JournalReadResult.Readable(document);
