@@ -58,61 +58,21 @@ internal static class StagingFile
     }
 
     /// <summary>
-    /// ステージングファイルを別パスへコピーしてフラッシュする
+    /// 排他で開けることを確かめてから、同じディレクトリの移し先へファイルを移し、移し先があれば置き換える
     /// </summary>
-    /// <param name="sourcePath">コピー元</param>
-    /// <param name="destinationPath">コピー先</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>コピーの完了</returns>
-    internal static async Task CopyAsync(
-        string sourcePath,
-        string destinationPath,
-        CancellationToken cancellationToken)
+    /// <param name="sourcePath">移すファイル</param>
+    /// <param name="destinationPath">移し先</param>
+    internal static void MoveReplacing(string sourcePath, string destinationPath)
     {
-        FileStream? source = null;
-        FileStream? destination = null;
-        try
-        {
-            source = new FileStream(
-                sourcePath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 4096,
-                FileOptions.Asynchronous);
-            destination = new FileStream(
-                destinationPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough);
-            await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
-            await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            if (destination is not null)
-            {
-                await destination.DisposeAsync().ConfigureAwait(false);
-                destination = null;
-            }
-
-            TryDelete(destinationPath);
-            throw;
-        }
-        finally
-        {
-            if (destination is not null)
-            {
-                await destination.DisposeAsync().ConfigureAwait(false);
-            }
-
-            if (source is not null)
-            {
-                await source.DisposeAsync().ConfigureAwait(false);
-            }
-        }
+        // 読み取り中は FileShare.Delete で移せるため、排他で開けなければ移さない
+        FileStream exclusive = new FileStream(
+            sourcePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.None,
+            bufferSize: 1);
+        exclusive.Dispose();
+        File.Move(sourcePath, destinationPath, overwrite: true);
     }
 
     /// <summary>

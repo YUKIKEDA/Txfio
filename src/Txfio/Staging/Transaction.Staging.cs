@@ -774,7 +774,7 @@ internal sealed partial class Transaction
                 && File.Exists(stagingPath))
             {
                 backupPath = stagingPath + ".prev";
-                await StagingFile.CopyAsync(stagingPath, backupPath, cancellationToken).ConfigureAwait(false);
+                StagingFile.MoveReplacing(stagingPath, backupPath);
             }
 
             await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
@@ -797,9 +797,7 @@ internal sealed partial class Transaction
             {
                 try
                 {
-                    await StagingFile.CopyAsync(backupPath, stagingPath, CancellationToken.None)
-                        .ConfigureAwait(false);
-                    StagingFile.TryDelete(backupPath);
+                    StagingFile.MoveReplacing(backupPath, stagingPath);
                 }
                 catch (IOException)
                 {
