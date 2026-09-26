@@ -227,6 +227,63 @@ internal sealed partial class Transaction : ITransaction
         return JournalStore.SaveAsync(_journalPath, document, cancellationToken);
     }
 
+    /// <summary>
+    /// 表を変えてジャーナルを先に書き、そのあと実体を作る（途中で失敗したら、作りかけの実体を消し、表を戻し、書いたジャーナルも戻してから例外を返す）
+    /// </summary>
+    /// <remarks>
+    /// ステージのすべての変更はここを通す（ジャーナルが先、実体が後の順を 1 か所で守る）
+    /// </remarks>
+    /// <param name="record">表を変える</param>
+    /// <param name="materialize">ジャーナルを書いたあとで実体を作る（無ければ null）</param>
+    /// <param name="discard">失敗したとき作りかけの実体を消す（無ければ null。<see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> は元の例外を優先して握る）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ジャーナルと実体の完了</returns>
+    private async Task RecordThenMaterializeAsync(
+        Action record,
+        Func<Task>? materialize,
+        Action? discard,
+        CancellationToken cancellationToken)
+    {
+        JournalOperation[] previous = _paths.ToArray();
+        bool journaled = false;
+        record();
+        try
+        {
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journaled = true;
+            if (materialize is not null)
+            {
+                await materialize().ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            if (discard is not null)
+            {
+                TryCleanup(discard);
+            }
+
+            _paths.Load(previous);
+            if (journaled)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 表を変えてジャーナルを書く（書けなければ表を戻して例外を返す）
+    /// </summary>
+    /// <param name="record">表を変える</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>ジャーナルの書き込みの完了</returns>
+    private Task RecordAsync(Action record, CancellationToken cancellationToken)
+    {
+        return RecordThenMaterializeAsync(record, materialize: null, discard: null, cancellationToken);
+    }
+
     private async Task TryPersistUndoAsync()
     {
         try

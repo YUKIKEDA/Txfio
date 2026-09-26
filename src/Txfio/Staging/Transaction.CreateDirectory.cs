@@ -37,16 +37,7 @@ internal sealed partial class Transaction
             PendingChangeKind.CreateDirectory,
             targetPath,
             isDirectory: true);
-        _paths.Add(operation);
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _paths.Remove(operation);
-            throw;
-        }
+        await RecordAsync(() => _paths.Add(operation), cancellationToken).ConfigureAwait(false);
 
         try
         {
