@@ -9,6 +9,7 @@ internal sealed partial class Transaction
     public async Task<CommitReport> CommitAsync(CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
 

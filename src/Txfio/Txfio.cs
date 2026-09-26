@@ -110,6 +110,7 @@ public static class Txfio
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        await CallerContext.LeaveAsync();
         string workFolder = NormalizeWorkFolder(path);
 
         return await RecoverService.RecoverAsync(workFolder, lockWait, cancellationToken).ConfigureAwait(false);
@@ -160,6 +161,7 @@ public static class Txfio
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        await CallerContext.LeaveAsync();
         string workFolder = NormalizeWorkFolder(path);
 
         cancellationToken.ThrowIfCancellationRequested();

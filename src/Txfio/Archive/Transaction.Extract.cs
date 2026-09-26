@@ -23,6 +23,7 @@ internal sealed partial class Transaction
         }
 
         using CallScope scope = EnterCall(cancellationToken);
+        await CallerContext.LeaveAsync();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string archive = WorkPath.ResolveInWorkFolder(_workFolder, archivePath);
@@ -49,6 +50,7 @@ internal sealed partial class Transaction
         }
 
         using CallScope scope = EnterCall(cancellationToken);
+        await CallerContext.LeaveAsync();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalArchivePath);

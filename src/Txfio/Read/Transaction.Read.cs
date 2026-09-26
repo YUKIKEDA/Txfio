@@ -6,27 +6,30 @@ namespace Txfio;
 internal sealed partial class Transaction
 {
     /// <inheritdoc />
-    public Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default)
+    public async Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
-        return Task.FromResult(ReadCore(path, cancellationToken));
+        await CallerContext.LeaveAsync();
+        return ReadCore(path, cancellationToken);
     }
 
     /// <inheritdoc />
-    public Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
-        return Task.FromResult(CommitView.Resolve(_paths.Rows, targetPath).Exists);
+        return CommitView.Resolve(_paths.Rows, targetPath).Exists;
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<DirectoryEntry>> GetEntriesAsync(string directoryPath, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<DirectoryEntry>> GetEntriesAsync(string directoryPath, CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
@@ -82,7 +85,7 @@ internal sealed partial class Transaction
         }
 
         entries.Sort(static (left, right) => string.Compare(left.Path, right.Path, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult<IReadOnlyList<DirectoryEntry>>(entries);
+        return entries;
     }
 
     private static void AddChildCandidate(HashSet<string> candidates, string target, string real, string path)

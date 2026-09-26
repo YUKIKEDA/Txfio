@@ -23,6 +23,7 @@ internal sealed partial class Transaction
     {
         ArgumentNullException.ThrowIfNull(encoding);
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         await using Stream stream = ReadCore(path, cancellationToken);
         using StreamReader reader = new StreamReader(
             stream,
@@ -47,6 +48,7 @@ internal sealed partial class Transaction
     {
         ArgumentNullException.ThrowIfNull(encoding);
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         await using Stream stream = ReadCore(path, cancellationToken);
         using StreamReader reader = new StreamReader(
             stream,
@@ -85,6 +87,7 @@ internal sealed partial class Transaction
     {
         ArgumentNullException.ThrowIfNull(encoding);
         using CallScope scope = EnterCall(cancellationToken);
+        await CallerContext.LeaveAsync();
         await WriteEncodedAsync(
             path,
             encoding,
@@ -114,6 +117,7 @@ internal sealed partial class Transaction
         ArgumentNullException.ThrowIfNull(contents);
         ArgumentNullException.ThrowIfNull(encoding);
         using CallScope scope = EnterCall(cancellationToken);
+        await CallerContext.LeaveAsync();
         await WriteEncodedAsync(
             path,
             encoding,
@@ -145,6 +149,7 @@ internal sealed partial class Transaction
     {
         ArgumentNullException.ThrowIfNull(encoding);
         using CallScope scope = EnterCall(cancellationToken);
+        await CallerContext.LeaveAsync();
         await AppendEncodedAsync(
             path,
             encoding,
@@ -174,6 +179,7 @@ internal sealed partial class Transaction
         ArgumentNullException.ThrowIfNull(contents);
         ArgumentNullException.ThrowIfNull(encoding);
         using CallScope scope = EnterCall(cancellationToken);
+        await CallerContext.LeaveAsync();
         await AppendEncodedAsync(
             path,
             encoding,

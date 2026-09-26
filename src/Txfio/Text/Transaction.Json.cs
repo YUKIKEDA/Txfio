@@ -14,6 +14,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         await using Stream stream = ReadCore(path, cancellationToken);
         return await JsonSerializer.DeserializeAsync<T>(stream, options, cancellationToken).ConfigureAwait(false);
     }
@@ -26,6 +27,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         using CallScope scope = EnterCall(cancellationToken);
+        await CallerContext.LeaveAsync();
         await using MemoryStream buffer = new MemoryStream();
         await JsonSerializer.SerializeAsync(buffer, value, options, cancellationToken).ConfigureAwait(false);
         buffer.Position = 0;

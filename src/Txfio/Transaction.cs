@@ -73,6 +73,7 @@ internal sealed partial class Transaction : ITransaction
     public async ValueTask DisposeAsync()
     {
         using CallScope scope = EnterCall();
+        await CallerContext.LeaveAsync();
         if (_disposed)
         {
             return;
