@@ -259,6 +259,32 @@ public sealed class StagingApplierTests
         }
     }
 
+    /// <summary>
+    /// 後始末は、Move の退避先（.txold）を消さない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 入れ替えの Move の退避先にファイルがある（入れ替えの途中で止まり、元の移動先がそこにある）</para>
+    /// <para>手順: その操作一覧で DeleteStagingFiles を呼ぶ</para>
+    /// <para>期待: 退避先のファイルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteStagingFiles_Moveの退避先は消さないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "d");
+        string backup = dest + "." + Guid.NewGuid().ToString("D") + ".txold";
+        await File.WriteAllTextAsync(backup, "original");
+        JournalOperation[] operations =
+        {
+            new JournalOperation(PendingChangeKind.Move, source, backup, dest, overwrite: true),
+        };
+
+        StagingApplier.DeleteStagingFiles(operations);
+
+        Assert.Equal("original", await File.ReadAllTextAsync(backup));
+    }
+
     private static bool InvokeMove(
         string methodName,
         string source,
@@ -268,9 +294,11 @@ public sealed class StagingApplierTests
         System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
             methodName,
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-        object?[] args = { source, dest, null };
+        object?[] args = method.GetParameters().Length == 4
+            ? new object?[] { source, dest, false, null }
+            : new object?[] { source, dest, null };
         bool applied = (bool)method.Invoke(null, args)!;
-        reason = (OperationFailureReason)args[2]!;
+        reason = (OperationFailureReason)args[args.Length - 1]!;
         return applied;
     }
 
@@ -290,9 +318,10 @@ public sealed class StagingApplierTests
         System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
             "TryApplyStagedFile",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-        object?[] args = { operation, null };
+        Func<string, bool> changedLater = static _ => false;
+        object?[] args = { operation, changedLater, null };
         bool applied = (bool)method.Invoke(null, args)!;
-        reason = (OperationFailureReason)args[1]!;
+        reason = (OperationFailureReason)args[2]!;
         return applied;
     }
 }
