@@ -319,6 +319,29 @@ public sealed class CreateArchiveTests
         Assert.False(File.Exists(cancelled));
     }
 
+    /// <summary>
+    /// ZIP の .txnew は、書く前にジャーナルへ載せる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: tree/a.txt がある</para>
+    /// <para>手順: tree を CreateArchiveAsync し、書き込み中の進捗でジャーナルを読む</para>
+    /// <para>期待: 進捗が届いたどの時点でも、ジャーナルに out.zip の .txnew が書いてある</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateArchiveAsync_txnewより先にジャーナルへ載せること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "tree", "a.txt"), "hello");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        JournalProbeProgress probe = new JournalProbeProgress(work.Path, "out.zip.");
+
+        await tx.CreateArchiveAsync("tree", "out.zip", progress: probe);
+
+        Assert.True(probe.Reported);
+        Assert.True(probe.AlwaysJournaled);
+    }
+
     private static async Task<Dictionary<string, string>> ReadEntriesAsync(string archivePath)
     {
         Dictionary<string, string> entries = new Dictionary<string, string>(StringComparer.Ordinal);
