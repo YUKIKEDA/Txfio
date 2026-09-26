@@ -96,16 +96,12 @@ public sealed class RecoverReportTests
         await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
         string liveJournal = Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.True(MetadataNames.TryGetTransactionId(liveJournal, out Guid liveId));
-        CrashInjector.Arm(CrashInjector.AfterCommitting);
-        try
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
         {
-            await using ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path);
             await crashed.WriteAllTextAsync("a.txt", "crashed");
             await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
-        }
-        finally
-        {
-            CrashInjector.Reset();
         }
 
         RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);

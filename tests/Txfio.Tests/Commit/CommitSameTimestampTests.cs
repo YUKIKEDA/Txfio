@@ -2,18 +2,8 @@ using Txfio.Tests.Support;
 
 namespace Txfio.Tests.Commit;
 
-public sealed class CommitSameTimestampTests : IDisposable
+public sealed class CommitSameTimestampTests
 {
-    public CommitSameTimestampTests()
-    {
-        CrashInjector.Reset();
-    }
-
-    public void Dispose()
-    {
-        CrashInjector.Reset();
-    }
-
     /// <summary>
     /// 同じ長さで更新時刻も同じ Update は、本物を新しい内容にする
     /// </summary>
@@ -55,8 +45,9 @@ public sealed class CommitSameTimestampTests : IDisposable
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        CrashInjector.Arm(CrashInjector.AfterCommitting);
-        await using (ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path))
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
             await transaction.UpdateAsync("a.txt", content);

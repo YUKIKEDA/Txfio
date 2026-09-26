@@ -100,7 +100,10 @@ internal static class RecoverService
 
                 if (document is { Committing: true })
                 {
-                    bool appliedAll = StagingApplier.TryApplyAll(document.Operations, out OperationReport[] skipped);
+                    bool appliedAll = StagingApplier.TryApplyAll(
+                        document.Operations,
+                        NoFaultInjector.Instance,
+                        out OperationReport[] skipped);
                     IReadOnlyList<OperationReport> operations = Array.Empty<OperationReport>();
                     RecoverResult journalResult = RecoverResult.RolledForward;
                     if (!appliedAll)

@@ -65,40 +65,13 @@ public static class Txfio
     /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
     /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
     /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
-    public static async Task<ITransaction> BeginAsync(
+    public static Task<ITransaction> BeginAsync(
         string path,
         TimeSpan lockWait,
         bool detectExternalChanges,
         CancellationToken cancellationToken = default)
     {
-        if (lockWait < TimeSpan.Zero && lockWait != Timeout.InfiniteTimeSpan)
-        {
-            throw new ArgumentOutOfRangeException(nameof(lockWait));
-        }
-
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        string workFolder = NormalizeWorkFolder(path);
-
-        cancellationToken.ThrowIfCancellationRequested();
-        EnsureMetadataFolder(workFolder);
-        StaleJournals.ThrowIfAny(workFolder);
-
-        Guid transactionId = Guid.NewGuid();
-        string journalPath = MetadataNames.JournalPath(workFolder, transactionId);
-
-        // Recover が生きているトランザクションのジャーナルを見つけたとき、必ず共有違反になるよう先に開く
-        FileStream liveness = LivenessLock.Create(MetadataNames.LivenessLockPath(journalPath));
-        try
-        {
-            await JournalStore.WriteNewAsync(journalPath, transactionId, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await liveness.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
-
-        return new Transaction(workFolder, transactionId, journalPath, liveness, lockWait, detectExternalChanges);
+        return BeginAsync(path, lockWait, detectExternalChanges, NoFaultInjector.Instance, cancellationToken);
     }
 
     /// <summary>
@@ -140,6 +113,75 @@ public static class Txfio
         string workFolder = NormalizeWorkFolder(path);
 
         return await RecoverService.RecoverAsync(workFolder, lockWait, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// ワークフォルダに対するトランザクションを開始する（ロックの待ちはゼロ）。失敗と途中停止は <paramref name="faults"/> が担う
+    /// </summary>
+    /// <param name="path">既存のワークフォルダ</param>
+    /// <param name="faults">このトランザクションの失敗と途中停止</param>
+    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
+    /// <returns>開始したトランザクション</returns>
+    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
+    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    internal static Task<ITransaction> BeginAsync(
+        string path,
+        IFaultInjector faults,
+        CancellationToken cancellationToken = default)
+    {
+        return BeginAsync(path, TimeSpan.Zero, detectExternalChanges: false, faults, cancellationToken);
+    }
+
+    /// <summary>
+    /// ワークフォルダに対するトランザクションを開始する。失敗と途中停止は <paramref name="faults"/> が担う
+    /// </summary>
+    /// <param name="path">既存のワークフォルダ</param>
+    /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限（ゼロは待たない）</param>
+    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
+    /// <param name="faults">このトランザクションの失敗と途中停止</param>
+    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
+    /// <returns>開始したトランザクション</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
+    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
+    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
+    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    internal static async Task<ITransaction> BeginAsync(
+        string path,
+        TimeSpan lockWait,
+        bool detectExternalChanges,
+        IFaultInjector faults,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(faults);
+        if (lockWait < TimeSpan.Zero && lockWait != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(lockWait));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string workFolder = NormalizeWorkFolder(path);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureMetadataFolder(workFolder);
+        StaleJournals.ThrowIfAny(workFolder);
+
+        Guid transactionId = Guid.NewGuid();
+        string journalPath = MetadataNames.JournalPath(workFolder, transactionId);
+
+        // Recover が生きているトランザクションのジャーナルを見つけたとき、必ず共有違反になるよう先に開く
+        FileStream liveness = LivenessLock.Create(MetadataNames.LivenessLockPath(journalPath));
+        try
+        {
+            await JournalStore.WriteNewAsync(journalPath, transactionId, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await liveness.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        return new Transaction(workFolder, transactionId, journalPath, liveness, lockWait, detectExternalChanges, faults);
     }
 
     private static string NormalizeWorkFolder(string path)

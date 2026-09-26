@@ -5,49 +5,28 @@ namespace Txfio;
 /// </summary>
 internal static class StagingApplier
 {
-    private static readonly AsyncLocal<ApplyFailure?> _nextApplyFailure = new AsyncLocal<ApplyFailure?>();
-
-    /// <summary>
-    /// 次の適用で、指定した例外を投げる（テスト用）
-    /// </summary>
-    /// <param name="exception">投げる例外</param>
-    internal static void FailNextApply(Exception exception)
-    {
-        _nextApplyFailure.Value = new ApplyFailure(exception);
-    }
-
-    /// <summary>
-    /// テストが仕込んだ適用の失敗を消す
-    /// </summary>
-    internal static void ClearApplyFailure()
-    {
-        ApplyFailure? failure = _nextApplyFailure.Value;
-        if (failure is not null)
-        {
-            failure.Exception = null;
-        }
-
-        _nextApplyFailure.Value = null;
-    }
-
     /// <summary>
     /// Add / Move / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
     /// </summary>
     /// <param name="operations">適用する操作一覧</param>
+    /// <param name="faults">この適用の失敗と途中停止</param>
     /// <param name="skipped">適用で飛ばした操作（すべてできたときは空）</param>
     /// <returns>すべて適用できた、または既に適用済みなら <see langword="true"/></returns>
-    internal static bool TryApplyAll(IReadOnlyList<JournalOperation> operations, out OperationReport[] skipped)
+    internal static bool TryApplyAll(
+        IReadOnlyList<JournalOperation> operations,
+        IFaultInjector faults,
+        out OperationReport[] skipped)
     {
         List<OperationReport> failures = new List<OperationReport>();
         foreach (JournalOperation operation in InApplyOrder(operations))
         {
-            if (!TryApply(operation, out OperationFailureReason reason))
+            if (!TryApply(operation, faults, out OperationFailureReason reason))
             {
                 failures.Add(OperationReport.Create(operation, OperationDisposition.Skipped, reason));
                 continue;
             }
 
-            CrashInjector.CheckPoint(CrashInjector.AfterApply);
+            faults.CheckPoint(IFaultInjector.AfterApply);
         }
 
         skipped = failures.ToArray();
@@ -121,12 +100,13 @@ internal static class StagingApplier
     /// 1 操作を適用する（既に適用済みなら成功、失敗なら <see langword="false"/>）
     /// </summary>
     /// <param name="operation">適用する操作</param>
+    /// <param name="faults">この適用の失敗と途中停止</param>
     /// <param name="reason">飛ばした理由（成功時は使わない）</param>
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
-    internal static bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+    internal static bool TryApply(JournalOperation operation, IFaultInjector faults, out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
-        ThrowIfApplyArmed();
+        faults.ThrowIfApplyArmed();
         if (operation.Before is null || operation.After is null)
         {
             reason = OperationFailureReason.IoFailure;
@@ -310,19 +290,6 @@ internal static class StagingApplier
         }
     }
 
-    private static void ThrowIfApplyArmed()
-    {
-        ApplyFailure? failure = _nextApplyFailure.Value;
-        if (failure?.Exception is null)
-        {
-            return;
-        }
-
-        Exception exception = failure.Exception;
-        failure.Exception = null;
-        throw exception;
-    }
-
     private static List<JournalOperation> OrderMoveChains(List<JournalOperation> items)
     {
         List<int> moveSlots = new List<int>();
@@ -460,15 +427,5 @@ internal static class StagingApplier
         return PathLockSet.IsSharingViolation(exception)
             ? OperationFailureReason.SharingViolation
             : OperationFailureReason.IoFailure;
-    }
-
-    private sealed class ApplyFailure
-    {
-        internal ApplyFailure(Exception exception)
-        {
-            Exception = exception;
-        }
-
-        internal Exception? Exception { get; set; }
     }
 }

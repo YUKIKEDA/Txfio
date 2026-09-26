@@ -2,18 +2,8 @@ using Txfio.Tests.Support;
 
 namespace Txfio.Tests.Commit;
 
-public sealed class CommitApplyExceptionTests : IDisposable
+public sealed class CommitApplyExceptionTests
 {
-    public CommitApplyExceptionTests()
-    {
-        StagingApplier.ClearApplyFailure();
-    }
-
-    public void Dispose()
-    {
-        StagingApplier.ClearApplyFailure();
-    }
-
     /// <summary>
     /// Committing を書いたあとの例外では、Dispose がロールバックせず Recover が Add を確定する
     /// </summary>
@@ -29,12 +19,13 @@ public sealed class CommitApplyExceptionTests : IDisposable
         string tree = System.IO.Path.Combine(work.Path, "d");
         string target = System.IO.Path.Combine(tree, "a.txt");
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        FaultInjector faults = new FaultInjector();
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
         {
             await tx.CreateDirectoryAsync("d");
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
             await tx.AddAsync(@"d/a.txt", content);
-            StagingApplier.FailNextApply(new FileNotFoundException("missing"));
+            faults.FailNextApply(new FileNotFoundException("missing"));
 
             await Assert.ThrowsAsync<FileNotFoundException>(() => tx.CommitAsync());
         }

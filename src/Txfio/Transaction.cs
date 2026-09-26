@@ -10,7 +10,8 @@ internal sealed partial class Transaction : ITransaction
     private readonly string _journalPath;
     private readonly PathTable _paths = new PathTable();
     private readonly List<string> _createdDirectories = new List<string>();
-    private readonly PathLockSet _locks = new PathLockSet();
+    private readonly IFaultInjector _faults;
+    private readonly PathLockSet _locks;
     private readonly TimeSpan _lockWait;
     private readonly ExternalChangeSet? _externalChanges;
     private FileStream? _liveness;
@@ -28,19 +29,23 @@ internal sealed partial class Transaction : ITransaction
     /// <param name="liveness">トランザクションが終わるまで持つ生存ロック</param>
     /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限</param>
     /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
+    /// <param name="faults">このトランザクションの失敗と途中停止</param>
     internal Transaction(
         string workFolder,
         Guid transactionId,
         string journalPath,
         FileStream liveness,
         TimeSpan lockWait,
-        bool detectExternalChanges)
+        bool detectExternalChanges,
+        IFaultInjector faults)
     {
         _workFolder = workFolder;
         _transactionId = transactionId;
         _journalPath = journalPath;
         _liveness = liveness;
         _lockWait = lockWait;
+        _faults = faults;
+        _locks = new PathLockSet(faults);
         _externalChanges = detectExternalChanges ? new ExternalChangeSet() : null;
     }
 
@@ -76,7 +81,7 @@ internal sealed partial class Transaction : ITransaction
         }
 
         // Committing を書いたあとはロールバックしない（ジャーナルを残し、次の Recover が進める）
-        if (CrashInjector.ShouldSkipRollback || _committingWritten)
+        if (_faults.ShouldSkipRollback || _committingWritten)
         {
             _locks.Release();
             ReleaseLiveness();

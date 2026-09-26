@@ -316,18 +316,19 @@ public sealed class DirectoryMoveTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        PathLockSet holder = new PathLockSet();
+        FaultInjector faults = new FaultInjector();
+        PathLockSet holder = new PathLockSet(faults);
         holder.AcquireShared(work.Path);
         holder.Acquire(work.Path, target);
-        PathLockSet.FailNextOpen(FileShare.None, SharingViolation());
-        PathLockSet.FailNextOpen(FileShare.ReadWrite, SharingViolation());
+        faults.FailNextOpen(FileShare.None, SharingViolation());
+        faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
         try
         {
             Assert.Throws<LockContentionException>(() => holder.AcquireExclusive(work.Path));
         }
         finally
         {
-            PathLockSet.ClearOpenFailures();
+            faults.ClearOpenFailures();
         }
 
         string marker = MetadataNames.ShareLostLockPath(work.Path);
@@ -385,10 +386,11 @@ public sealed class DirectoryMoveTests
     public async Task AcquireExclusive_共有へ戻せない失敗は次の取得で開くこと()
     {
         await using TempDirectory work = TempDirectory.Create();
-        PathLockSet mover = new PathLockSet();
+        FaultInjector faults = new FaultInjector();
+        PathLockSet mover = new PathLockSet(faults);
         mover.AcquireShared(work.Path);
-        PathLockSet.FailNextOpen(FileShare.None, SharingViolation());
-        PathLockSet.FailNextOpen(FileShare.ReadWrite, new IOException("disk"));
+        faults.FailNextOpen(FileShare.None, SharingViolation());
+        faults.FailNextOpen(FileShare.ReadWrite, new IOException("disk"));
         try
         {
             IOException failure = Assert.Throws<IOException>(() => mover.AcquireExclusive(work.Path));
@@ -396,7 +398,7 @@ public sealed class DirectoryMoveTests
         }
         finally
         {
-            PathLockSet.ClearOpenFailures();
+            faults.ClearOpenFailures();
         }
 
         mover.AcquireShared(work.Path);
@@ -418,17 +420,18 @@ public sealed class DirectoryMoveTests
     public async Task AcquireExclusive_哨兵を失ったあとは共有を戻してから排他を試すこと()
     {
         await using TempDirectory work = TempDirectory.Create();
-        PathLockSet mover = new PathLockSet();
+        FaultInjector faults = new FaultInjector();
+        PathLockSet mover = new PathLockSet(faults);
         mover.AcquireShared(work.Path);
-        PathLockSet.FailNextOpen(FileShare.None, SharingViolation());
-        PathLockSet.FailNextOpen(FileShare.ReadWrite, SharingViolation());
+        faults.FailNextOpen(FileShare.None, SharingViolation());
+        faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
         try
         {
             Assert.Throws<LockContentionException>(() => mover.AcquireExclusive(work.Path));
         }
         finally
         {
-            PathLockSet.ClearOpenFailures();
+            faults.ClearOpenFailures();
         }
 
         PathLockSet holder = new PathLockSet();
