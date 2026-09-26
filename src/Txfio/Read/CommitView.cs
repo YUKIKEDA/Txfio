@@ -42,7 +42,7 @@ internal static class CommitView
             {
                 if (PathMath.SamePath(operation.Path, current) && !string.IsNullOrEmpty(operation.StagingPath))
                 {
-                    return CommitAppearance.File(operation.StagingPath);
+                    return CommitAppearance.Staged(operation);
                 }
 
                 continue;

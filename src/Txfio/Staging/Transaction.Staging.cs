@@ -56,7 +56,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (!Directory.Exists(targetPath))
         {
-            _externalChanges?.NoteRemoval(_paths.Rows, targetPath, _transactionId);
+            _externalChanges?.NoteRemoval(_paths.Rows, targetPath);
         }
 
         int existingIndex = FindOperationIndex(targetPath);
@@ -356,7 +356,7 @@ internal sealed partial class Transaction
         }
 
         StagingRules.EnsureParentDirectoryExists(destPath);
-        _externalChanges?.NoteRemoval(_paths.Rows, sourcePath, _transactionId);
+        _externalChanges?.NoteRemoval(_paths.Rows, sourcePath);
         bool replaces = false;
         string? backupPath = null;
         if (!destIsMoveSource)
@@ -858,7 +858,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (kind == PendingChangeKind.Update)
         {
-            _externalChanges?.NoteUpdate(_paths.Rows, targetPath, _transactionId);
+            _externalChanges?.NoteUpdate(_paths.Rows, targetPath);
         }
 
         if (moveToIndex >= 0)
