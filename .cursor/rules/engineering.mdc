@@ -29,6 +29,8 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 - Format with `dotnet format` / `.editorconfig` (LF)
 - Private fields: `_camelCase` (including static). Constants: PascalCase. Do not prefix members with `this.` unless required for disambiguation
 - StyleCop SA1101 / SA1306 / SA1309 / SA1310 / SA1311 are disabled so .NET field naming wins
+- Keep explicit types (`var` off), `new List<T>()` / `new T[] { }`, and the flat `Txfio` namespace. Do not apply IDE suggestions for `var`, collection expressions, target-typed `new`, primary constructors, or folder-matched namespaces (`IDE0007`, `IDE0130`, `IDE0300` and the other IDs set to `none` in `.editorconfig`)
+- Do not reshape code for CA performance suggestions (`CA1822`, `CA1859`, `CA1861`) or for moving `CancellationToken` after callbacks (`CA1068`)
 - Strict XML docs on public API **and** `public` members of internal types, plus internal types/members (`documentInternalElements`). Do not block tests/private on doc requirements
 - Interface names must be prefixed with `I`. SA1302 stays enabled
 - Comments (XML docs / inline) in **Japanese**; no `。` or `.` mid-sentence or at the end (SA1629 disabled). Follow [`.cursor/skills/japanese-writing/SKILL.md`](../skills/japanese-writing/SKILL.md), and append a new general rule there when a review finds one

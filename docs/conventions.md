@@ -97,6 +97,14 @@ tests/Txfio.Tests/
 
 - 正本はリポジトリルートの `.editorconfig`
 - file-scoped namespace、ImplicitUsings
+- 変数の型は明示する。`var` は使わない
+- コレクションと配列は `new List<T>()` と `new T[] { }` で書く。コレクション式 `[]`、型を省略した `new()`、オブジェクト初期化子への寄せ、プライマリコンストラクタは使わない
+- `Substring` を範囲演算子や末尾からのインデックスに置き換えない。ラムダをメソッドグループに簡略化しない
+- 名前空間はフォルダに合わせない（上の「リポジトリ配置」）。`Txfio.Archive` のようなフォルダ名の名前空間にはしない
+- コールバックが末尾にある private メソッドでは、`CancellationToken` をコールバックの前に置く
+- 公開メソッドの引数名を、ヘルパーから `ArgumentException` のパラメータ名として渡してよい
+- `finally` でのロック復帰は、競合と取り消しだけを受け、それ以外の例外は呼び出し元へ届く
+- 具象型への変更、インスタンスメソッドの static 化、引数の定数配列を static フィールドに出す、といった性能の提案ではコードを変えない
 - 行末は **LF**（`.gitattributes` で固定）
 - 提出前に `dotnet format` を通す。CI / `build.ps1` は `--verify-no-changes` で確認する
 - コンパイラ警告はエラーにする（`TreatWarningsAsErrors`）
