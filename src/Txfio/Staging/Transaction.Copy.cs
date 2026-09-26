@@ -12,8 +12,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
@@ -103,8 +102,8 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, sourcePath, destinationPath).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, new[] { sourcePath, destinationPath }, _lockAttempt).ConfigureAwait(false);
         if (!File.Exists(sourcePath))
         {
             throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
@@ -139,12 +138,13 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
         using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
                 _workFolder,
                 new[] { sourcePath, destinationPath },
                 new[] { destinationPath },
-                new[] { sourcePath })
+                new[] { sourcePath },
+                _lockAttempt)
             .ConfigureAwait(false);
         if (!Directory.Exists(sourcePath))
         {

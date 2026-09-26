@@ -12,8 +12,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         await StageAsync(PendingChangeKind.Add, path, content, progress, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -25,8 +24,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         await StageAsync(PendingChangeKind.Update, path, content, progress, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -34,22 +32,21 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task DeleteAsync(string path, CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
         StagingRules.ThrowIfInsideDirectoryMove(_paths.Rows, targetPath);
         StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, targetPath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, targetPath);
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
         if (Directory.Exists(targetPath))
         {
-            await _locks.AcquireReservingAsync(_workFolder, new[] { targetPath }, targetPath).ConfigureAwait(false);
+            await _locks.AcquireReservingAsync(_workFolder, new[] { targetPath }, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
         }
         else
         {
-            await _locks.AcquireAsync(_workFolder, targetPath).ConfigureAwait(false);
+            await _locks.AcquireAsync(_workFolder, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
         }
 
         StagingRules.EnsureParentDirectoryExists(targetPath);
@@ -165,8 +162,7 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task DeleteTreeAsync(string path, CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         string targetPath = WorkPath.ResolveInWorkFolder(_workFolder, path);
         StagingRules.EnsureNotMetadataFolder(_workFolder, targetPath);
@@ -224,8 +220,7 @@ internal sealed partial class Transaction
     /// <inheritdoc />
     public async Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, oldPath);
         string destPath = WorkPath.ResolveInWorkFolder(_workFolder, newPath);
@@ -318,8 +313,8 @@ internal sealed partial class Transaction
             }
         }
 
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, sourcePath, destPath).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, new[] { sourcePath, destPath }, _lockAttempt).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!destIsMoveSource)
         {
@@ -434,8 +429,8 @@ internal sealed partial class Transaction
         }
 
         StagingRules.ThrowIfDirectoryMoveConflicts(_paths.Rows, root, destPath);
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { root, destPath }, root, destPath).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { root, destPath }, new[] { root, destPath }, _lockAttempt).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!destIsMoveSource)
         {
@@ -521,8 +516,8 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken,
         int replaceIndex = -1)
     {
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { directoryPath }, directoryPath).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { directoryPath }, new[] { directoryPath }, _lockAttempt).ConfigureAwait(false);
         if (!Directory.Exists(directoryPath))
         {
             throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + directoryPath, directoryPath);
@@ -721,8 +716,8 @@ internal sealed partial class Transaction
             out bool addOntoFileMove,
             out PendingChangeKind recordedKind);
 
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, targetPath).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (kind == PendingChangeKind.Update)
         {

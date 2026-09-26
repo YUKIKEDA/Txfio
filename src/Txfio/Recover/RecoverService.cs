@@ -30,9 +30,9 @@ internal static class RecoverService
         PathLockSet sentinel = new PathLockSet();
         try
         {
-            sentinel.BeginAttempt(lockWait, cancellationToken);
-            await sentinel.AcquireExclusiveAsync(workFolder).ConfigureAwait(false);
-            await sentinel.RejectForeignLocksAsync(workFolder).ConfigureAwait(false);
+            LockAttempt attempt = LockAttempt.Start(lockWait, cancellationToken);
+            await sentinel.AcquireExclusiveAsync(workFolder, attempt).ConfigureAwait(false);
+            await sentinel.RejectForeignLocksAsync(workFolder, attempt).ConfigureAwait(false);
             string[] journals = Directory.GetFiles(
                 metadataFolder,
                 MetadataNames.JournalSearchPattern,

@@ -289,14 +289,14 @@ public sealed class DirectoryMoveTests
             FileAccess.ReadWrite,
             FileShare.ReadWrite);
         PathLockSet mover = new PathLockSet();
-        await mover.AcquireExclusiveAsync(work.Path);
+        await mover.AcquireExclusiveAsync(work.Path, default);
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.RejectForeignLocksAsync(work.Path));
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.RejectForeignLocksAsync(work.Path, default));
 
         Assert.Equal(work.Path, contention.Path);
         PathLockSet other = new PathLockSet();
-        await other.AcquireSharedAsync(work.Path);
-        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path));
+        await other.AcquireSharedAsync(work.Path, default);
+        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path, default));
         mover.Release();
         other.Release();
     }
@@ -316,13 +316,13 @@ public sealed class DirectoryMoveTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         FaultInjector faults = new FaultInjector();
         PathLockSet holder = new PathLockSet(faults);
-        await holder.AcquireSharedAsync(work.Path);
-        await holder.AcquireAsync(work.Path, target);
+        await holder.AcquireSharedAsync(work.Path, default);
+        await holder.AcquireAsync(work.Path, new[] { target }, default);
         faults.FailNextOpen(FileShare.None, SharingViolation());
         faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
         try
         {
-            await Assert.ThrowsAsync<LockContentionException>(() => holder.AcquireExclusiveAsync(work.Path));
+            await Assert.ThrowsAsync<LockContentionException>(() => holder.AcquireExclusiveAsync(work.Path, default));
         }
         finally
         {
@@ -332,9 +332,9 @@ public sealed class DirectoryMoveTests
         string marker = MetadataNames.ShareLostLockPath(work.Path);
         Assert.True(File.Exists(marker));
         PathLockSet mover = new PathLockSet();
-        await mover.AcquireExclusiveAsync(work.Path);
+        await mover.AcquireExclusiveAsync(work.Path, default);
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => mover.RejectForeignLocksAsync(work.Path));
+            () => mover.RejectForeignLocksAsync(work.Path, default));
         Assert.Equal(work.Path, contention.Path);
         holder.Release();
         using (FileStream free = new FileStream(marker, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
@@ -359,15 +359,15 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         PathLockSet holder = new PathLockSet();
         PathLockSet mover = new PathLockSet();
-        await holder.AcquireSharedAsync(work.Path);
-        await mover.AcquireSharedAsync(work.Path);
+        await holder.AcquireSharedAsync(work.Path, default);
+        await mover.AcquireSharedAsync(work.Path, default);
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path));
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path, default));
 
         Assert.Equal(work.Path, contention.Path);
         holder.Release();
         PathLockSet third = new PathLockSet();
-        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path));
+        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path, default));
         mover.Release();
         third.Release();
     }
@@ -386,12 +386,12 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
         PathLockSet mover = new PathLockSet(faults);
-        await mover.AcquireSharedAsync(work.Path);
+        await mover.AcquireSharedAsync(work.Path, default);
         faults.FailNextOpen(FileShare.None, SharingViolation());
         faults.FailNextOpen(FileShare.ReadWrite, new IOException("disk"));
         try
         {
-            IOException failure = await Assert.ThrowsAsync<IOException>(() => mover.AcquireExclusiveAsync(work.Path));
+            IOException failure = await Assert.ThrowsAsync<IOException>(() => mover.AcquireExclusiveAsync(work.Path, default));
             Assert.Equal("disk", failure.Message);
         }
         finally
@@ -399,9 +399,9 @@ public sealed class DirectoryMoveTests
             faults.ClearOpenFailures();
         }
 
-        await mover.AcquireSharedAsync(work.Path);
+        await mover.AcquireSharedAsync(work.Path, default);
         PathLockSet other = new PathLockSet();
-        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path));
+        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path, default));
         mover.Release();
         other.Release();
     }
@@ -420,12 +420,12 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
         PathLockSet mover = new PathLockSet(faults);
-        await mover.AcquireSharedAsync(work.Path);
+        await mover.AcquireSharedAsync(work.Path, default);
         faults.FailNextOpen(FileShare.None, SharingViolation());
         faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
         try
         {
-            await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path));
+            await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path, default));
         }
         finally
         {
@@ -433,11 +433,11 @@ public sealed class DirectoryMoveTests
         }
 
         PathLockSet holder = new PathLockSet();
-        await holder.AcquireSharedAsync(work.Path);
-        await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path));
+        await holder.AcquireSharedAsync(work.Path, default);
+        await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path, default));
         holder.Release();
         PathLockSet third = new PathLockSet();
-        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path));
+        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path, default));
         mover.Release();
         third.Release();
     }

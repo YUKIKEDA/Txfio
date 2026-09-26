@@ -19,6 +19,7 @@ internal sealed partial class Transaction : ITransaction
     private bool _committingWritten;
     private bool _disposed;
     private int _callDepth;
+    private LockAttempt _lockAttempt;
 
     /// <summary>
     /// 指定したワークフォルダとジャーナルでトランザクションを開始する
@@ -146,12 +147,8 @@ internal sealed partial class Transaction : ITransaction
         }
     }
 
-    private void BeginLockAttempt(CancellationToken cancellationToken)
-    {
-        _locks.BeginAttempt(_lockWait, cancellationToken);
-    }
-
-    private CallScope EnterCall()
+    // ロック待ちの期限は、公開呼び出しに入った時点から数え、呼び出しを出ると待たない既定値に戻す
+    private CallScope EnterCall(CancellationToken cancellationToken = default)
     {
         if (Interlocked.Increment(ref _callDepth) != 1)
         {
@@ -161,11 +158,13 @@ internal sealed partial class Transaction : ITransaction
             throw new InvalidOperationException("同じトランザクションへの呼び出しが重なっています");
         }
 
+        _lockAttempt = LockAttempt.Start(_lockWait, cancellationToken);
         return new CallScope(this);
     }
 
     private void ExitCall()
     {
+        _lockAttempt = default;
         Interlocked.Decrement(ref _callDepth);
     }
 

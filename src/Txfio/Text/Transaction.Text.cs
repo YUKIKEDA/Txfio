@@ -84,8 +84,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(encoding);
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         await WriteEncodedAsync(
             path,
             encoding,
@@ -114,8 +113,7 @@ internal sealed partial class Transaction
     {
         ArgumentNullException.ThrowIfNull(contents);
         ArgumentNullException.ThrowIfNull(encoding);
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         await WriteEncodedAsync(
             path,
             encoding,
