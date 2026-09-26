@@ -136,7 +136,7 @@ public sealed class AddUpdateTests
     /// <remarks>
     /// <para>前提: 同じパスを既に Add している</para>
     /// <para>手順: 別内容で再度 AddAsync する</para>
-    /// <para>期待: pending は 1 件で、.txnew の内容は後者</para>
+    /// <para>期待: pending は 1 件で、.txnew の内容は後者、.prev は残らない</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_同一パスの再ステージは上書きして1件のままであること()
@@ -152,6 +152,7 @@ public sealed class AddUpdateTests
         string[] sidecars = Directory.GetFiles(work.Path, "*.txnew");
         Assert.Single(sidecars);
         Assert.Equal("second", await File.ReadAllTextAsync(sidecars[0]));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.prev"));
     }
 
     /// <summary>
@@ -233,10 +234,107 @@ public sealed class AddUpdateTests
         Assert.Empty(Directory.GetFiles(workPath, "*.prev"));
     }
 
+    /// <summary>
+    /// 再ステージの書き込みに失敗すると .txnew は元の内容に戻る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を Add している</para>
+    /// <para>手順: 進捗が例外を投げる Update で同じパスを再ステージする</para>
+    /// <para>期待: InvalidOperationException になり、.txnew の内容は Add のままで、.prev は残らない</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_再ステージの書き込みに失敗するとtxnewは元の内容に戻ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
+        await tx.AddAsync("a.txt", first);
+        await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => tx.UpdateAsync("a.txt", second, new ThrowingProgress()));
+
+        string sidecar = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Equal("first", await File.ReadAllTextAsync(sidecar));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.prev"));
+        Assert.Equal(PendingChangeKind.Add, Assert.Single(tx.GetPendingChanges()).Kind);
+    }
+
+    /// <summary>
+    /// 再ステージを取り消すと .txnew は元の内容に戻る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を Add しており、最初の通知で取り消しトークンが取り消される</para>
+    /// <para>手順: そのトークンで同じパスを Update する</para>
+    /// <para>期待: OperationCanceledException になり、.txnew の内容は Add のままで、.prev は残らない</para>
+    /// </remarks>
+    [Fact]
+    public async Task UpdateAsync_再ステージを取り消すとtxnewは元の内容に戻ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
+        await tx.AddAsync("a.txt", first);
+        await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
+        using CancellationTokenSource source = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => tx.UpdateAsync("a.txt", second, new CancelOnReport(source), source.Token));
+
+        string sidecar = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Equal("first", await File.ReadAllTextAsync(sidecar));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.prev"));
+    }
+
+    /// <summary>
+    /// 大きい再ステージの退避は、コピーせず同じファイルのまま戻る
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 1MiB の a.txt を Add しており、.txnew の作成時刻をずらしてある</para>
+    /// <para>手順: 進捗が例外を投げる Update で同じパスを再ステージする</para>
+    /// <para>期待: InvalidOperationException になり、.txnew の内容と作成時刻は Add のままで、.prev は残らない</para>
+    /// </remarks>
+    [WindowsFact("ファイルの作成時刻は移すと残る")]
+    public async Task UpdateAsync_大きい再ステージの退避は同じファイルのまま戻ること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        byte[] original = new byte[1024 * 1024];
+        original.AsSpan().Fill(0xAB);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream first = new MemoryStream(original);
+        await tx.AddAsync("a.txt", first);
+        string sidecar = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+        File.SetCreationTimeUtc(sidecar, new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc));
+        DateTime created = File.GetCreationTimeUtc(sidecar);
+        await using MemoryStream second = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => tx.UpdateAsync("a.txt", second, new ThrowingProgress()));
+
+        byte[] actual = await File.ReadAllBytesAsync(sidecar);
+        Assert.True(original.AsSpan().SequenceEqual(actual));
+        Assert.Equal(created, File.GetCreationTimeUtc(sidecar));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.prev"));
+    }
+
     private static FileStream LockJournal(string workFolder)
     {
         string journal = Assert.Single(
             Directory.GetFiles(System.IO.Path.Combine(workFolder, ".txfio"), "tx-*.journal"));
         return new FileStream(journal, FileMode.Open, FileAccess.Read, FileShare.None);
+    }
+
+    private sealed class ThrowingProgress : IProgress<TransferProgress>
+    {
+        public void Report(TransferProgress value) => throw new InvalidOperationException("report");
+    }
+
+    private sealed class CancelOnReport : IProgress<TransferProgress>
+    {
+        private readonly CancellationTokenSource _source;
+
+        public CancelOnReport(CancellationTokenSource source) => _source = source;
+
+        public void Report(TransferProgress value) => _source.Cancel();
     }
 }
