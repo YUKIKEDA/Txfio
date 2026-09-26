@@ -653,25 +653,81 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move でも、ファイルとディレクトリは入れ替えない
+    /// 置き換えの Move で、ディレクトリをファイルに入れ替える
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt、ディレクトリ d がある</para>
-    /// <para>手順: Move(a.txt→d, overwrite: true) と Move(d→a.txt, overwrite: true) をする</para>
-    /// <para>期待: どちらも ExternalConflictException で、操作は無い</para>
+    /// <para>前提: a.txt と、子 old.txt を持つディレクトリ d がある</para>
+    /// <para>手順: Move(a.txt→d, overwrite: true) し、コミット後の姿を見てからコミットする</para>
+    /// <para>期待: 姿では d は a.txt の中身で d/old.txt は無い。コミット後の d はファイルで、a.txt も .txold も無い</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_overwriteでもファイルとディレクトリは入れ替えないこと()
+    public async Task MoveAsync_overwriteでディレクトリをファイルに入れ替えること()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
+        string target = System.IO.Path.Combine(work.Path, "d");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "file");
+        Directory.CreateDirectory(target);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(target, "old.txt"), "old");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
 
-        await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("a.txt", "d", overwrite: true));
-        await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("d", "a.txt", overwrite: true));
+        await tx.MoveAsync("a.txt", "d", overwrite: true);
 
-        Assert.Empty(tx.GetPendingChanges());
+        Assert.Equal("file", await tx.ReadAllTextAsync("d"));
+        Assert.False(await tx.ExistsAsync("d/old.txt"));
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+        Assert.Equal("file", await File.ReadAllTextAsync(target));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+        Assert.Empty(Directory.GetFileSystemEntries(work.Path, "*.txold"));
+    }
+
+    /// <summary>
+    /// 置き換えの Move で、ファイルをディレクトリに入れ替える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル x と、子 new.txt を持つディレクトリ d がある</para>
+    /// <para>手順: Move(d→x, overwrite: true) してコミットする</para>
+    /// <para>期待: x はディレクトリで new.txt を持ち、d も .txold も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_overwriteでファイルをディレクトリに入れ替えること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "x");
+        await File.WriteAllTextAsync(target, "file");
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "d", "new.txt"), "new");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await tx.MoveAsync("d", "x", overwrite: true);
+
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+        Assert.Equal("new", await File.ReadAllTextAsync(System.IO.Path.Combine(target, "new.txt")));
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "d")));
+        Assert.Empty(Directory.GetFileSystemEntries(work.Path, "*.txold"));
+    }
+
+    /// <summary>
+    /// Delete のあとの同じパスの CreateDirectory と、空ディレクトリの Delete のあとの Add は受け付けない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ファイル x と空ディレクトリ e がある</para>
+    /// <para>手順: Delete(x) のあと CreateDirectory(x)、Delete(e) のあと e へ Add する</para>
+    /// <para>期待: どちらも InvalidOperationException で、操作は Delete 2 件のまま</para>
+    /// </remarks>
+    [Fact]
+    public async Task DeleteAsync_同じパスの種類はDeleteのあとで変えられないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "x"), "file");
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "e"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.DeleteAsync("x");
+        await tx.DeleteAsync("e");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CreateDirectoryAsync("x"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.WriteAllTextAsync("e", "file"));
+
+        Assert.Equal(2, tx.GetPendingChanges().Count);
     }
 
     /// <summary>

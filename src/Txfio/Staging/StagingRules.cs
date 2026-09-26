@@ -83,7 +83,8 @@ internal static class StagingRules
             if (operation.Kind == PendingChangeKind.Move
                 && operation.Overwrite
                 && (string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)))
+                    || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)
+                    || (operation.NewPath is not null && IsInsideDirectory(operation.NewPath, path))))
             {
                 throw new InvalidOperationException("置き換えの Move の移動元と移動先へは、続けて操作できません: " + path);
             }

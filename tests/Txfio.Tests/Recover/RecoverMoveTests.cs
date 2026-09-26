@@ -241,4 +241,37 @@ public sealed class RecoverMoveTests
         Assert.Empty(Assert.Single(report.Journals).Operations);
         Assert.Equal(new[] { "a.txt" }, Directory.GetFileSystemEntries(site).Select(System.IO.Path.GetFileName).ToArray());
     }
+
+    /// <summary>
+    /// ディレクトリをファイルで入れ替える途中の .txold のあとで落ちても、Recover が続きから入れ替える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt と、子を持つディレクトリ d がある。Move(a.txt→d, overwrite: true) を Committing の直後に止めた</para>
+    /// <para>手順: d を d.{txid}.txold へ手で移してから RecoverAsync する</para>
+    /// <para>期待: RolledForward で d は a.txt の中身のファイルになり、.txold は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_ディレクトリをファイルで入れ替える途中から続けること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "d");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "file");
+        Directory.CreateDirectory(target);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(target, "old.txt"), "old");
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        {
+            await tx.MoveAsync("a.txt", "d", overwrite: true);
+            await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
+        }
+
+        string journal = Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal").Single();
+        string id = System.IO.Path.GetFileNameWithoutExtension(journal).Substring("tx-".Length);
+        Directory.Move(target, target + "." + id + ".txold");
+
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal("file", await File.ReadAllTextAsync(target));
+        Assert.Empty(Directory.GetFileSystemEntries(work.Path, "*.txold"));
+    }
 }

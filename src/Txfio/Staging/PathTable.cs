@@ -151,6 +151,13 @@ internal sealed class PathTable
             if (SamePath(operation.NewPath, current))
             {
                 current = operation.Path;
+                continue;
+            }
+
+            // ファイルで入れ替えた移動先の配下は、コミット後には無い
+            if (operation.Overwrite && IsUnder(operation.NewPath, current))
+            {
+                return CommitAppearance.Absent();
             }
         }
 
