@@ -17,8 +17,7 @@ internal sealed class PathLockSet
 
     private const int RetryIntervalMilliseconds = 100;
 
-    private static readonly AsyncLocal<Queue<(FileShare Share, Exception Exception)>?> _openFailures =
-        new AsyncLocal<Queue<(FileShare Share, Exception Exception)>?>();
+    private readonly IFaultInjector _faults;
 
     private readonly Dictionary<string, FileStream> _handles = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
 
@@ -41,6 +40,23 @@ internal sealed class PathLockSet
     private long _deadlineTick;
 
     private CancellationToken _waitCancellation;
+
+    /// <summary>
+    /// 失敗も途中停止もしないロックの集合を作る
+    /// </summary>
+    internal PathLockSet()
+        : this(NoFaultInjector.Instance)
+    {
+    }
+
+    /// <summary>
+    /// 渡した失敗と途中停止を使うロックの集合を作る
+    /// </summary>
+    /// <param name="faults">この集合の失敗と途中停止</param>
+    internal PathLockSet(IFaultInjector faults)
+    {
+        _faults = faults;
+    }
 
     /// <summary>
     /// ロックファイルの絶対パスを返す
@@ -79,27 +95,6 @@ internal sealed class PathLockSet
 
         // Linux の判定は開発環境でテストを回すためのもので、実行時に保証するのは Windows だけである
         return OperatingSystem.IsLinux() && exception.HResult == LinuxWouldBlock;
-    }
-
-    /// <summary>
-    /// 次に同じ共有モードで開くとき、指定した例外を投げる（テスト用）
-    /// </summary>
-    /// <param name="share">失敗させる共有モード</param>
-    /// <param name="exception">投げる例外</param>
-    internal static void FailNextOpen(FileShare share, Exception exception)
-    {
-        Queue<(FileShare Share, Exception Exception)> queue = _openFailures.Value
-            ?? new Queue<(FileShare Share, Exception Exception)>();
-        queue.Enqueue((share, exception));
-        _openFailures.Value = queue;
-    }
-
-    /// <summary>
-    /// テストが仕込んだオープン失敗を消す
-    /// </summary>
-    internal static void ClearOpenFailures()
-    {
-        _openFailures.Value = null;
     }
 
     /// <summary>
@@ -412,14 +407,14 @@ internal sealed class PathLockSet
         return new LockContentionException("他のトランザクションがこのパスを使用中です: " + workFolder, workFolder);
     }
 
-    private static FileStream Open(string workFolder, string fullPath, FileShare share)
+    private FileStream Open(string workFolder, string fullPath, FileShare share)
     {
         return OpenLockFile(FilePath(workFolder, fullPath), share);
     }
 
-    private static FileStream OpenLockFile(string lockPath, FileShare share)
+    private FileStream OpenLockFile(string lockPath, FileShare share)
     {
-        ThrowIfOpenArmed(share);
+        _faults.ThrowIfOpenArmed(share);
         string? directory = System.IO.Path.GetDirectoryName(lockPath);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -431,17 +426,6 @@ internal sealed class PathLockSet
             FileMode.OpenOrCreate,
             FileAccess.ReadWrite,
             share);
-    }
-
-    private static void ThrowIfOpenArmed(FileShare share)
-    {
-        Queue<(FileShare Share, Exception Exception)>? failures = _openFailures.Value;
-        if (failures is null || failures.Count == 0 || failures.Peek().Share != share)
-        {
-            return;
-        }
-
-        throw failures.Dequeue().Exception;
     }
 
     private void AcquireOne(string workFolder, string fullPath)

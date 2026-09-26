@@ -3,18 +3,8 @@ using Txfio.Tests.Support;
 
 namespace Txfio.Tests.Recover;
 
-public sealed class RecoverCreatedDirectoryTests : IDisposable
+public sealed class RecoverCreatedDirectoryTests
 {
-    public RecoverCreatedDirectoryTests()
-    {
-        CrashInjector.Reset();
-    }
-
-    public void Dispose()
-    {
-        CrashInjector.Reset();
-    }
-
     /// <summary>
     /// 落ちたディレクトリコピーの先と .txnew を Recover が消す
     /// </summary>
@@ -32,8 +22,9 @@ public sealed class RecoverCreatedDirectoryTests : IDisposable
         Directory.CreateDirectory(nested);
         await File.WriteAllTextAsync(System.IO.Path.Combine(nested, "a.txt"), "hello");
 
-        CrashInjector.SuppressRollback();
-        await using (ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path))
+        FaultInjector faults = new FaultInjector();
+        faults.SuppressRollback();
+        await using (ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
         {
             await transaction.CopyAsync("src", "dst");
             PendingChange pending = Assert.Single(transaction.GetPendingChanges());
@@ -64,8 +55,9 @@ public sealed class RecoverCreatedDirectoryTests : IDisposable
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "src"));
 
-        CrashInjector.SuppressRollback();
-        await using (ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path))
+        FaultInjector faults = new FaultInjector();
+        faults.SuppressRollback();
+        await using (ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
         {
             await transaction.CopyAsync("src", "dst");
             Assert.Empty(transaction.GetPendingChanges());

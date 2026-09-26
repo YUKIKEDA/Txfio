@@ -2,18 +2,8 @@ using Txfio.Tests.Support;
 
 namespace Txfio.Tests.Recover;
 
-public sealed class RecoverLivenessTests : IDisposable
+public sealed class RecoverLivenessTests
 {
-    public RecoverLivenessTests()
-    {
-        CrashInjector.Reset();
-    }
-
-    public void Dispose()
-    {
-        CrashInjector.Reset();
-    }
-
     /// <summary>
     /// 変更中のトランザクションがあれば、Recover は哨兵を取れず何もしない
     /// </summary>
@@ -111,8 +101,9 @@ public sealed class RecoverLivenessTests : IDisposable
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        CrashInjector.Arm(CrashInjector.AfterCommitting);
-        ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults);
         await using (MemoryStream content = LeftoverAddFiles.Utf8Stream("staged"))
         {
             await tx.AddAsync("a.txt", content);
@@ -143,15 +134,14 @@ public sealed class RecoverLivenessTests : IDisposable
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
         await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
-        CrashInjector.Arm(CrashInjector.AfterCommitting);
-        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path))
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("crashed");
             await crashed.AddAsync("a.txt", content);
             await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
         }
-
-        CrashInjector.Reset();
 
         RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
 

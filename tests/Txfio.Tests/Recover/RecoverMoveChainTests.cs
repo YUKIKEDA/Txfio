@@ -2,18 +2,8 @@ using Txfio.Tests.Support;
 
 namespace Txfio.Tests.Recover;
 
-public sealed class RecoverMoveChainTests : IDisposable
+public sealed class RecoverMoveChainTests
 {
-    public RecoverMoveChainTests()
-    {
-        CrashInjector.Reset();
-    }
-
-    public void Dispose()
-    {
-        CrashInjector.Reset();
-    }
-
     /// <summary>
     /// 連鎖の先頭だけ適用して落ちても、Recover が残りの Move を同じ順で終える
     /// </summary>
@@ -31,17 +21,13 @@ public sealed class RecoverMoveChainTests : IDisposable
         string oldest = System.IO.Path.Combine(work.Path, "log.2");
         await File.WriteAllTextAsync(current, "current");
         await File.WriteAllTextAsync(older, "older");
-        CrashInjector.Arm(CrashInjector.AfterApply);
-        try
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterApply);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
             await tx.MoveAsync("log.1", "log.2");
             await tx.MoveAsync("log.txt", "log.1");
             await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
-        }
-        finally
-        {
-            CrashInjector.Reset();
         }
 
         Assert.Equal("older", await File.ReadAllTextAsync(oldest));

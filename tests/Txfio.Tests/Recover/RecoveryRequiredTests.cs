@@ -2,18 +2,8 @@ using Txfio.Tests.Support;
 
 namespace Txfio.Tests.Recover;
 
-public sealed class RecoveryRequiredTests : IDisposable
+public sealed class RecoveryRequiredTests
 {
-    public RecoveryRequiredTests()
-    {
-        CrashInjector.Reset();
-    }
-
-    public void Dispose()
-    {
-        CrashInjector.Reset();
-    }
-
     /// <summary>
     /// 落ちた DeleteTree の残骸があるあいだは、新しいトランザクションを開始できない
     /// </summary>
@@ -136,16 +126,10 @@ public sealed class RecoveryRequiredTests : IDisposable
 
     private static async Task CrashDeleteTreeAsync(string workFolder, string path)
     {
-        CrashInjector.Arm(CrashInjector.AfterCommitting);
-        try
-        {
-            await using ITransaction crashed = await global::Txfio.Txfio.BeginAsync(workFolder);
-            await crashed.DeleteTreeAsync(path);
-            await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
-        }
-        finally
-        {
-            CrashInjector.Reset();
-        }
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using ITransaction crashed = await global::Txfio.Txfio.BeginAsync(workFolder, faults);
+        await crashed.DeleteTreeAsync(path);
+        await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
     }
 }
