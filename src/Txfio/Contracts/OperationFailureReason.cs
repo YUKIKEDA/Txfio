@@ -44,4 +44,9 @@ public enum OperationFailureReason
     /// 記録した実ファイルのサイズか最終更新日時が違う
     /// </summary>
     ExternalChange = 7,
+
+    /// <summary>
+    /// Update の対象、またはファイルの Delete の対象に読み取り専用属性が付いている
+    /// </summary>
+    ReadOnly = 8,
 }

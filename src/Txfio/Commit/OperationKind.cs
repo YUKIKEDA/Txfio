@@ -161,6 +161,12 @@ internal abstract class OperationKind
             return false;
         }
 
+        if (IsReadOnlyFile(operation.Path))
+        {
+            reason = OperationFailureReason.ReadOnly;
+            return false;
+        }
+
         if (!TryCaptureStaging(operation, out PathState after))
         {
             reason = OperationFailureReason.IoFailure;
@@ -295,10 +301,28 @@ internal abstract class OperationKind
             reason = ReasonWhenFileRequired(before);
             return false;
         }
+        else if (IsReadOnlyFile(operation.Path))
+        {
+            reason = OperationFailureReason.ReadOnly;
+            return false;
+        }
 
         projected[operation.Path] = PathState.Absent;
         stamped = operation.WithOutcome(before, PathState.Absent);
         return true;
+    }
+
+    // Windows では読み取り専用のファイルを置き換えも削除もできないので、適用の前に拒む
+    private static bool IsReadOnlyFile(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0;
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return false;
+        }
     }
 
     private static bool TryCaptureStaging(JournalOperation operation, out PathState after)
