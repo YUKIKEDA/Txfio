@@ -365,13 +365,31 @@ public sealed class TextExtensionTests
         Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
     }
 
+    /// 既存ディレクトリへの文字列の書き込みはその場で失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 対象パスに空ディレクトリがある</para>
+    /// <para>手順: WriteAllTextAsync する</para>
+    /// <para>期待: ExternalConflictException になり、.txnew も操作も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task WriteAllTextAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await Assert.ThrowsAsync<ExternalConflictException>(() => tx.WriteAllTextAsync("d", "text"));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
     /// <summary>
     /// 既存ファイルへの追記は、中身に足した Update になる
     /// </summary>
     /// <remarks>
     /// <para>前提: a.txt に "one" がある</para>
     /// <para>手順: "two" を 2 回追記してコミットする</para>
-    /// <para>期待: 操作は Update 1 件で、コミット後の a.txt は "onetwotwo"</para>
+    /// <para>期待: 操作は Update 1 件であり、コミット後の a.txt は "onetwotwo"</para>
     /// </remarks>
     [Fact]
     public async Task AppendAllTextAsync_既存ファイルに足してUpdateになること()
@@ -395,7 +413,7 @@ public sealed class TextExtensionTests
     /// <remarks>
     /// <para>前提: a.txt は無い</para>
     /// <para>手順: 行を追記してコミットする</para>
-    /// <para>期待: 操作は Add で、コミット後の a.txt は行と改行</para>
+    /// <para>期待: 操作は Add 1 件であり、コミット後の a.txt の行は x と y</para>
     /// </remarks>
     [Fact]
     public async Task AppendAllLinesAsync_無いファイルはAddになること()
@@ -416,7 +434,7 @@ public sealed class TextExtensionTests
     /// <remarks>
     /// <para>前提: a.txt は無い</para>
     /// <para>手順: UTF-8（BOM あり）で 2 回追記してコミットする</para>
-    /// <para>期待: ファイルの BOM は先頭の 1 つだけで、中身は 2 回分</para>
+    /// <para>期待: ファイルの BOM は先頭の 1 つだけであり、中身は 2 回分</para>
     /// </remarks>
     [Fact]
     public async Task AppendAllTextAsync_BOMは新しく書くときだけ付けること()
@@ -430,5 +448,26 @@ public sealed class TextExtensionTests
 
         byte[] bytes = await File.ReadAllBytesAsync(System.IO.Path.Combine(work.Path, "a.txt"));
         Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF, (byte)'a', (byte)'b', (byte)'c', (byte)'d' }, bytes);
+    }
+
+    /// <summary>
+    /// 既存ディレクトリへの追記はその場で失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 対象パスに空ディレクトリがある</para>
+    /// <para>手順: AppendAllTextAsync する</para>
+    /// <para>期待: ExternalConflictException になり、.txnew も操作も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task AppendAllTextAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AppendAllTextAsync("d", "text"));
+
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(tx.GetPendingChanges());
     }
 }

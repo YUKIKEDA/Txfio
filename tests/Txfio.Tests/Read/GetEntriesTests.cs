@@ -10,7 +10,7 @@ public sealed class GetEntriesTests
     /// <remarks>
     /// <para>前提: a.txt、b.txt、ディレクトリ d がある</para>
     /// <para>手順: a.txt を Delete、c.txt を Add、b.txt を e.txt へ Move してから、ワークフォルダ自身の直下を一覧する</para>
-    /// <para>期待: c.txt、d、e.txt の 3 件で、d だけディレクトリ、.txfio とステージングファイルは無い</para>
+    /// <para>期待: c.txt、d、e.txt の 3 件であり、d だけディレクトリである</para>
     /// </remarks>
     [Fact]
     public async Task GetEntriesAsync_コミット後の姿の直下を返すこと()

@@ -99,6 +99,11 @@ public sealed class TextOnInterfaceTests
             return Pending(oldPath, newPath, cancellationToken);
         }
 
+        public Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default)
+        {
+            return Pending(oldPath, newPath, overwrite, cancellationToken);
+        }
+
         public Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
         {
             return Pending(path, cancellationToken);
@@ -177,20 +182,22 @@ public sealed class TextOnInterfaceTests
             string archivePath,
             string destinationDir,
             Encoding? entryNameEncoding = null,
+            long? maxExtractedBytes = null,
             IProgress<TransferProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Pending(archivePath, destinationDir, entryNameEncoding, progress, cancellationToken);
+            return Pending(archivePath, destinationDir, entryNameEncoding, maxExtractedBytes, progress, cancellationToken);
         }
 
         public Task ImportArchiveAsync(
             string externalArchivePath,
             string destinationDir,
             Encoding? entryNameEncoding = null,
+            long? maxExtractedBytes = null,
             IProgress<TransferProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Pending(externalArchivePath, destinationDir, entryNameEncoding, progress, cancellationToken);
+            return Pending(externalArchivePath, destinationDir, entryNameEncoding, maxExtractedBytes, progress, cancellationToken);
         }
 
         public Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default)

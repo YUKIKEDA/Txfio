@@ -45,7 +45,7 @@ internal sealed partial class Transaction
             throw new UnsupportedOperationException("ファイルの直下は一覧できません: " + target);
         }
 
-        // 候補はディスク上の直下と、親がこのディレクトリの操作。姿は 1 件ずつ確かめる
+        // 候補はディスク上の直下と、親がこのディレクトリである操作であり、姿は 1 件ずつ確かめる
         string real = appearance.ContentPath;
         HashSet<string> candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string entry in Directory.EnumerateFileSystemEntries(real))
@@ -94,7 +94,7 @@ internal sealed partial class Transaction
             return;
         }
 
-        // ディレクトリ Move の移動先を一覧するとき、移動元の直下の操作も移動先の名前で数える
+        // ディレクトリ Move の移動先を一覧するとき、移動元の直下の操作も移動先の名前で候補に入れる
         if (string.Equals(parent, real, StringComparison.OrdinalIgnoreCase))
         {
             candidates.Add(System.IO.Path.Combine(target, System.IO.Path.GetFileName(path)));
