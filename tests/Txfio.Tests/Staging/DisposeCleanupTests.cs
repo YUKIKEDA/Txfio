@@ -84,4 +84,40 @@ public sealed class DisposeCleanupTests
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
+
+    /// <summary>
+    /// 破棄は操作の .txnew に .prev を付けた退避を消し、操作に無い退避は探さない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt の Add があり、その .txnew.prev と、操作に無い別フォルダの同じトランザクション ID の .txnew.prev を置く</para>
+    /// <para>手順: DisposeAsync する</para>
+    /// <para>期待: Add の .txnew と .prev とジャーナルは消え、操作に無い .prev は残る（ワークフォルダを走査しない）</para>
+    /// </remarks>
+    [Fact]
+    public async Task DisposeAsync_操作の退避だけを消してワークフォルダを走査しないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string metadata = System.IO.Path.Combine(work.Path, ".txfio");
+        string other = System.IO.Path.Combine(work.Path, "other");
+        Directory.CreateDirectory(other);
+        string backup;
+        string unrelated;
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        {
+            await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
+            await tx.AddAsync("a.txt", content);
+            string staging = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
+            backup = staging + ".prev";
+            await File.WriteAllTextAsync(backup, "old");
+            string journal = Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
+            string id = System.IO.Path.GetFileNameWithoutExtension(journal).Substring("tx-".Length);
+            unrelated = System.IO.Path.Combine(other, "b.txt." + id + ".txnew.prev");
+            await File.WriteAllTextAsync(unrelated, "keep");
+        }
+
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.False(File.Exists(backup));
+        Assert.Empty(Directory.GetFiles(metadata, "tx-*.journal"));
+        Assert.True(File.Exists(unrelated));
+    }
 }

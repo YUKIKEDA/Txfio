@@ -129,6 +129,91 @@ internal sealed partial class Transaction
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public Task AppendAllTextAsync(
+        string path,
+        string? contents,
+        CancellationToken cancellationToken = default)
+    {
+        return AppendAllTextAsync(path, contents, _utf8NoBom, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task AppendAllTextAsync(
+        string path,
+        string? contents,
+        Encoding encoding,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(encoding);
+        using CallScope scope = EnterCall();
+        BeginLockAttempt(cancellationToken);
+        await AppendEncodedAsync(
+            path,
+            encoding,
+            async (writer, token) =>
+            {
+                await writer.WriteAsync((contents ?? string.Empty).AsMemory(), token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public Task AppendAllLinesAsync(
+        string path,
+        IEnumerable<string> contents,
+        CancellationToken cancellationToken = default)
+    {
+        return AppendAllLinesAsync(path, contents, _utf8NoBom, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task AppendAllLinesAsync(
+        string path,
+        IEnumerable<string> contents,
+        Encoding encoding,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(contents);
+        ArgumentNullException.ThrowIfNull(encoding);
+        using CallScope scope = EnterCall();
+        BeginLockAttempt(cancellationToken);
+        await AppendEncodedAsync(
+            path,
+            encoding,
+            async (writer, token) =>
+            {
+                foreach (string line in contents)
+                {
+                    await writer.WriteLineAsync(line.AsMemory(), token).ConfigureAwait(false);
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    // 姿の中身のあとに書き足す（中身があれば、StreamWriter は位置が 0 でないので BOM を書かない）
+    private async Task AppendEncodedAsync(
+        string path,
+        Encoding encoding,
+        Func<StreamWriter, CancellationToken, Task> write,
+        CancellationToken cancellationToken)
+    {
+        await using MemoryStream buffer = new MemoryStream();
+        if (FileExistsInCommitView(path))
+        {
+            await using Stream existing = ReadCore(path, cancellationToken);
+            await existing.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (StreamWriter writer = new StreamWriter(buffer, encoding, bufferSize: 1024, leaveOpen: true))
+        {
+            await write(writer, cancellationToken).ConfigureAwait(false);
+        }
+
+        buffer.Position = 0;
+        await StageByCommitViewAsync(path, buffer, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task WriteEncodedAsync(
         string path,
         Encoding encoding,
