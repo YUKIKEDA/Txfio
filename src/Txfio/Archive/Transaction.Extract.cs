@@ -116,48 +116,20 @@ internal sealed partial class Transaction
             files.Add(new PlannedExtractFile(plan.Entry, path));
         }
 
-        int operationCount = _paths.Rows.Count;
-        int directoryCount = _createdDirectories.Count;
-        foreach (string directory in directories)
+        string[] destinations = new string[files.Count];
+        for (int i = 0; i < files.Count; i++)
         {
-            _createdDirectories.Add(directory);
+            destinations[i] = files[i].Path;
         }
 
-        foreach (PlannedExtractFile file in files)
-        {
-            string stagingPath = WorkPath.StagingFilePath(file.Path, _transactionId);
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, file.Path, stagingPath));
-        }
-
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            foreach (string directory in directories)
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            ExtractProgress tracker = new ExtractProgress(progress, totalBytes);
-            foreach (PlannedExtractFile file in files)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                long bytes = await ExtractFileAsync(file.Entry, file.Path, tracker, cancellationToken)
-                    .ConfigureAwait(false);
-                tracker.CompleteFile(bytes);
-            }
-
-            if (!tracker.Reported)
-            {
-                progress?.Report(new TransferProgress(0, totalBytes));
-            }
-        }
-        catch
-        {
-            RollbackAddedOperations(operationCount);
-            DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
-            await TryPersistUndoAsync().ConfigureAwait(false);
-            throw;
-        }
+        await ApplyStagedTreeAsync(
+                directories,
+                destinations,
+                (index, tracker, token) => ExtractFileAsync(files[index].Entry, files[index].Path, tracker, token),
+                progress,
+                totalBytes,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private void RecordExtractDirectory(string destination, string path, List<string> directories)
@@ -220,32 +192,5 @@ internal sealed partial class Transaction
         internal ZipArchiveEntry Entry { get; }
 
         internal string Path { get; }
-    }
-
-    private sealed class ExtractProgress : IProgress<TransferProgress>
-    {
-        private readonly IProgress<TransferProgress>? _inner;
-        private readonly long _totalBytes;
-        private long _completed;
-
-        internal ExtractProgress(IProgress<TransferProgress>? inner, long totalBytes)
-        {
-            _inner = inner;
-            _totalBytes = totalBytes;
-        }
-
-        internal bool Reported { get; private set; }
-
-        /// <inheritdoc />
-        public void Report(TransferProgress value)
-        {
-            Reported = true;
-            _inner?.Report(new TransferProgress(_completed + value.BytesCopied, _totalBytes));
-        }
-
-        internal void CompleteFile(long bytes)
-        {
-            _completed += bytes;
-        }
     }
 }

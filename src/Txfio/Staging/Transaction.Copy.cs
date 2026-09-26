@@ -44,11 +44,6 @@ internal sealed partial class Transaction
         await CopyFileAsync(sourcePath, destinationPath, progress, cancellationToken).ConfigureAwait(false);
     }
 
-    private static bool IsReparsePoint(string path)
-    {
-        return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
-    }
-
     private static int DirectoryDepth(string path)
     {
         int depth = 0;
@@ -154,100 +149,14 @@ internal sealed partial class Transaction
 
         EnsureCopyDestinationFree(destinationPath);
         List<string> directories = new List<string> { destinationPath };
-        List<PlannedCopyFile> files = new List<PlannedCopyFile>();
+        List<PlannedTreeFile> files = new List<PlannedTreeFile>();
         if (!IsReparsePoint(sourcePath))
         {
-            PlanDirectoryEntries(sourcePath, sourcePath, destinationPath, directories, files, cancellationToken);
+            PlanCopiedTree(sourcePath, sourcePath, destinationPath, directories, files, cancellationToken);
         }
 
-        await ApplyPlannedDirectoryCopyAsync(directories, files, progress, cancellationToken)
+        await ApplyCopiedTreeAsync(directories, files, progress, cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    private void PlanDirectoryEntries(
-        string sourceRoot,
-        string current,
-        string destinationRoot,
-        List<string> directories,
-        List<PlannedCopyFile> files,
-        CancellationToken cancellationToken)
-    {
-        foreach (string entry in Directory.EnumerateFileSystemEntries(current))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (IsReparsePoint(entry) || WorkPath.IsThisTransactionStagingFile(entry, _transactionId))
-            {
-                continue;
-            }
-
-            string relative = System.IO.Path.GetRelativePath(sourceRoot, entry);
-            string destination = System.IO.Path.GetFullPath(System.IO.Path.Combine(destinationRoot, relative));
-            if (Directory.Exists(entry))
-            {
-                directories.Add(destination);
-                PlanDirectoryEntries(sourceRoot, entry, destinationRoot, directories, files, cancellationToken);
-                continue;
-            }
-
-            if (File.Exists(entry))
-            {
-                files.Add(new PlannedCopyFile(entry, destination));
-            }
-        }
-    }
-
-    private async Task ApplyPlannedDirectoryCopyAsync(
-        IReadOnlyList<string> directories,
-        IReadOnlyList<PlannedCopyFile> files,
-        IProgress<TransferProgress>? progress,
-        CancellationToken cancellationToken)
-    {
-        int operationCount = _paths.Rows.Count;
-        int directoryCount = _createdDirectories.Count;
-        foreach (string directory in directories)
-        {
-            _createdDirectories.Add(directory);
-        }
-
-        foreach (PlannedCopyFile file in files)
-        {
-            string stagingPath = WorkPath.StagingFilePath(file.DestinationPath, _transactionId);
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, file.DestinationPath, stagingPath));
-        }
-
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            foreach (string directory in directories)
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
-            foreach (PlannedCopyFile file in files)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                long bytes = await WriteCopySourceAsync(
-                        file.SourcePath,
-                        WorkPath.StagingFilePath(file.DestinationPath, _transactionId),
-                        tracker,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                tracker.CompleteFile(bytes);
-            }
-
-            if (!tracker.Reported)
-            {
-                progress?.Report(new TransferProgress(0, null));
-            }
-        }
-        catch
-        {
-            RollbackAddedOperations(operationCount);
-            DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
-            await TryPersistUndoAsync().ConfigureAwait(false);
-            throw;
-        }
     }
 
     private async Task<long> WriteCopySourceAsync(
@@ -321,43 +230,5 @@ internal sealed partial class Transaction
         }
 
         return succeeded;
-    }
-
-    private sealed class PlannedCopyFile
-    {
-        internal PlannedCopyFile(string sourcePath, string destinationPath)
-        {
-            SourcePath = sourcePath;
-            DestinationPath = destinationPath;
-        }
-
-        internal string SourcePath { get; }
-
-        internal string DestinationPath { get; }
-    }
-
-    private sealed class DirectoryCopyProgress : IProgress<TransferProgress>
-    {
-        private readonly IProgress<TransferProgress>? _inner;
-        private long _completed;
-
-        internal DirectoryCopyProgress(IProgress<TransferProgress>? inner)
-        {
-            _inner = inner;
-        }
-
-        internal bool Reported { get; private set; }
-
-        /// <inheritdoc />
-        public void Report(TransferProgress value)
-        {
-            Reported = true;
-            _inner?.Report(new TransferProgress(_completed + value.BytesCopied, null));
-        }
-
-        internal void CompleteFile(long bytes)
-        {
-            _completed += bytes;
-        }
     }
 }
