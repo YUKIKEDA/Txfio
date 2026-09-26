@@ -96,9 +96,13 @@ internal abstract class OperationKind
     /// Before と一致する操作を適用する（適用済みならステージングファイルを消して成功）
     /// </summary>
     /// <param name="operation">適用する操作</param>
+    /// <param name="changedLater">適用順であとの操作も変えるパスなら <see langword="true"/>（そのパスでは適用済みかどうかを判定しない）</param>
     /// <param name="reason">飛ばした理由（成功時は使わない）</param>
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
-    internal abstract bool TryApply(JournalOperation operation, out OperationFailureReason reason);
+    internal abstract bool TryApply(
+        JournalOperation operation,
+        Func<string, bool> changedLater,
+        out OperationFailureReason reason);
 
     /// <summary>
     /// この操作のステージングファイルを消す
@@ -161,6 +165,12 @@ internal abstract class OperationKind
             return false;
         }
 
+        if (IsReadOnlyFile(operation.Path))
+        {
+            reason = OperationFailureReason.ReadOnly;
+            return false;
+        }
+
         if (!TryCaptureStaging(operation, out PathState after))
         {
             reason = OperationFailureReason.IoFailure;
@@ -213,15 +223,17 @@ internal abstract class OperationKind
             return false;
         }
 
-        if (destBefore.Exists)
+        // 置き換えの Move は、移動先がファイルか無いときだけ進める
+        if (destBefore.Exists && !(operation.Overwrite && destBefore.IsFile))
         {
-            reason = OperationFailureReason.AlreadyExists;
+            reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
             return false;
         }
 
+        // 置き換えの Move の移動先の Before は、置き換えられる既存ファイル（無ければ不在）
         projected[operation.Path] = PathState.Absent;
         projected[operation.NewPath] = before;
-        stamped = operation.WithOutcome(before, PathState.Absent, PathState.Absent, before);
+        stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
         return true;
     }
 
@@ -295,10 +307,28 @@ internal abstract class OperationKind
             reason = ReasonWhenFileRequired(before);
             return false;
         }
+        else if (IsReadOnlyFile(operation.Path))
+        {
+            reason = OperationFailureReason.ReadOnly;
+            return false;
+        }
 
         projected[operation.Path] = PathState.Absent;
         stamped = operation.WithOutcome(before, PathState.Absent);
         return true;
+    }
+
+    // Windows では読み取り専用のファイルは置き換えも削除もできないので、適用の前に拒む
+    private static bool IsReadOnlyFile(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0;
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return false;
+        }
     }
 
     private static bool TryCaptureStaging(JournalOperation operation, out PathState after)
@@ -345,11 +375,12 @@ internal abstract class OperationKind
 
     private static bool TryApplyWhenBeforeMatches(
         JournalOperation operation,
+        Func<string, bool> changedLater,
         out OperationFailureReason reason,
         ApplyWhenBefore apply)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
-        if (Matches(operation, after: true))
+        if (MatchesAfter(operation, changedLater))
         {
             return TryDeleteStaging(operation.StagingPath, out reason);
         }
@@ -360,6 +391,29 @@ internal abstract class OperationKind
         }
 
         return apply(operation, out reason);
+    }
+
+    // 適用済みかどうかは、あとの操作が変えないパスだけで判定する（どのパスもあとで変わるときは全部を見る）
+    private static bool MatchesAfter(JournalOperation operation, Func<string, bool> changedLater)
+    {
+        if (operation.Kind != PendingChangeKind.Move || operation.NewPath is null)
+        {
+            return Matches(operation, after: true);
+        }
+
+        bool sourceChanged = changedLater(operation.Path);
+        bool destChanged = changedLater(operation.NewPath);
+        if (sourceChanged == destChanged)
+        {
+            return Matches(operation, after: true);
+        }
+
+        if (sourceChanged)
+        {
+            return operation.DestAfter is not null && operation.DestAfter.Matches(operation.NewPath);
+        }
+
+        return operation.After is not null && operation.After.Matches(operation.Path);
     }
 
     private static bool Matches(JournalOperation operation, bool after)
@@ -381,7 +435,10 @@ internal abstract class OperationKind
             && dest.Matches(operation.NewPath);
     }
 
-    private static bool TryApplyStagedFile(JournalOperation operation, out OperationFailureReason reason)
+    private static bool TryApplyStagedFile(
+        JournalOperation operation,
+        Func<string, bool> changedLater,
+        out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (string.IsNullOrEmpty(operation.StagingPath))
@@ -395,8 +452,7 @@ internal abstract class OperationKind
         {
             try
             {
-                bool overwrite = operation.Kind == PendingChangeKind.Update;
-                File.Move(operation.StagingPath, operation.Path, overwrite);
+                StagingFile.MoveToTarget(operation.StagingPath, operation.Path, replace: operation.Kind == PendingChangeKind.Update);
                 return true;
             }
             catch (IOException exception)
@@ -411,7 +467,7 @@ internal abstract class OperationKind
             }
         }
 
-        if (Matches(operation, after: true))
+        if (MatchesAfter(operation, changedLater))
         {
             return TryDeleteStaging(operation.StagingPath, out reason);
         }
@@ -494,7 +550,7 @@ internal abstract class OperationKind
         }
     }
 
-    private static bool TryMove(string sourcePath, string destPath, out OperationFailureReason reason)
+    private static bool TryMove(string sourcePath, string destPath, bool overwrite, out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (!File.Exists(sourcePath))
@@ -520,7 +576,8 @@ internal abstract class OperationKind
             return false;
         }
 
-        if (File.Exists(destPath) || Directory.Exists(destPath))
+        // 置き換えの Move は、移動先のファイルが Before と一致したことを呼び出し側が確かめている
+        if (Directory.Exists(destPath) || (!overwrite && File.Exists(destPath)))
         {
             reason = OperationFailureReason.AlreadyExists;
             return false;
@@ -528,7 +585,7 @@ internal abstract class OperationKind
 
         try
         {
-            SameVolumeMove.MoveFile(sourcePath, destPath);
+            SameVolumeMove.MoveFile(sourcePath, destPath, overwrite);
             return true;
         }
         catch (IOException exception)
@@ -673,9 +730,12 @@ internal abstract class OperationKind
             return TryProjectAdd(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
-            return TryApplyStagedFile(operation, out reason);
+            return TryApplyStagedFile(operation, changedLater, out reason);
         }
     }
 
@@ -696,9 +756,12 @@ internal abstract class OperationKind
             return TryProjectUpdate(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
-            return TryApplyStagedFile(operation, out reason);
+            return TryApplyStagedFile(operation, changedLater, out reason);
         }
     }
 
@@ -719,10 +782,14 @@ internal abstract class OperationKind
             return TryProjectDelete(operation, operations, transactionId, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     current.IsDirectory
@@ -748,15 +815,19 @@ internal abstract class OperationKind
             return TryProjectMove(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     current.IsDirectory
                         ? TryMoveDirectory(current.Path, current.NewPath!, out failure)
-                        : TryMove(current.Path, current.NewPath!, out failure));
+                        : TryMove(current.Path, current.NewPath!, current.Overwrite, out failure));
         }
     }
 
@@ -777,10 +848,14 @@ internal abstract class OperationKind
             return TryProjectDeleteTree(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     TryDeleteTree(current.Path, out failure));
@@ -804,10 +879,14 @@ internal abstract class OperationKind
             return TryProjectCreateDirectory(operation, projected, out stamped, out reason);
         }
 
-        internal override bool TryApply(JournalOperation operation, out OperationFailureReason reason)
+        internal override bool TryApply(
+            JournalOperation operation,
+            Func<string, bool> changedLater,
+            out OperationFailureReason reason)
         {
             return TryApplyWhenBeforeMatches(
                 operation,
+                changedLater,
                 out reason,
                 static (JournalOperation _, out OperationFailureReason failure) =>
                 {
@@ -823,7 +902,18 @@ internal abstract class OperationKind
                 return true;
             }
 
-            return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true));
+            if (operation.DirectoryCreated)
+            {
+                return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true));
+            }
+
+            // 作る前後で落ちたので、このトランザクションが作ったとは言えない（空のときだけ消し、中身があれば残す）
+            if (Directory.EnumerateFileSystemEntries(operation.Path).Any())
+            {
+                return true;
+            }
+
+            return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path));
         }
     }
 }
