@@ -315,10 +315,10 @@ internal sealed partial class Transaction
 
         EnsureCopyDestinationFree(archive);
         bool directoryInput = roots.Any(static root => root.IsDirectory);
-        _locks.AcquireShared(_workFolder);
-        _locks.Acquire(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray());
-        using PathLockSet.WorkFolderExclusive exclusive = directoryInput
-            ? _locks.EnterExclusive(_workFolder)
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, roots.Select(static root => root.SourcePath).Append(archive).ToArray()).ConfigureAwait(false);
+        await using PathLockSet.WorkFolderExclusive exclusive = directoryInput
+            ? await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false)
             : default;
         foreach (ArchiveRoot root in roots)
         {
