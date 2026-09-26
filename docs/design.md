@@ -29,7 +29,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 
 **コミット時反映**。トランザクション実行中は、原則として本物のパスには触れない。変更内容は対象ファイルと同じディレクトリ内の `.txnew` サイドカーにステージングされる。例外は `CreateDirectoryAsync` で、空ディレクトリだけは呼び出した時点で本物のパスに作る。中身は素のファイル API で書く。同じプロセスでも別プロセスでもよい。配下では、親が最初からあるディレクトリと同じ Txfio の操作もできる。破棄ではそのディレクトリを中身ごと消す。
 
-- Update: 新内容をまず `.txnew` に書き込み→fsync。コミット時に初めて `File.Move(txnew, target, overwrite: true)`（.NET Core 3.0以降のオーバーロード、Win32の`MOVEFILE_REPLACE_EXISTING`相当のアトミックな置換）で元のパスへ rename する。「削除してからMove」のような、対象パスが一瞬存在しなくなる方式は採らない
+- Update: 新内容をまず `.txnew` に書き込み→fsync。コミット時に初めて `File.Replace(txnew, target, destinationBackupFileName: null, ignoreMetadataErrors: true)`（Win32 の `ReplaceFileW`）で元のパスへ置き換える。「削除してからMove」のような、対象パスが一瞬存在しなくなる方式は採らない。`ReplaceFileW` は、置き換えられるファイルの ACL、属性、作成日時、短縮名、代替データストリームを新しいファイルへ移す。`File.Move(overwrite: true)` の rename では、これらが `.txnew` のもの（親フォルダから継承した ACL、コミットした時刻の作成日時）に変わってしまうので採らない。中身と最終更新日時は `.txnew` のものなので、After（サイズと最終更新日時）の照合は変わらない。メタデータを移せない（SMB サーバーが対応していないなど）ときも、中身の置き換えを優先して失敗にしない（`ignoreMetadataErrors`）。Add と Move は今どおり rename である
 - Delete: コミットするまで対象（ファイルまたはディレクトリ）は無傷。ジャーナルに削除予約を記録するだけで、コミット時に初めて実際に削除する。ディレクトリは非再帰の `Directory.Delete`（親が空になってから消す）
 - Add: `.txnew` として新規作成し、コミット時に本物のパスへrename
 - Move/Rename: ジャーナルに「旧パス→新パス」を記録するだけで、コミット時に初めてrename
