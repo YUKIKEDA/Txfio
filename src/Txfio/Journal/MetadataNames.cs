@@ -64,6 +64,17 @@ internal static class MetadataNames
     }
 
     /// <summary>
+    /// ジャーナルのパスから、それを持つワークフォルダを返す
+    /// </summary>
+    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
+    /// <returns>`.txfio` の親のワークフォルダ</returns>
+    internal static string WorkFolderFromJournal(string journalPath)
+    {
+        string metadataFolder = System.IO.Path.GetDirectoryName(journalPath)!;
+        return System.IO.Path.GetDirectoryName(metadataFolder)!;
+    }
+
+    /// <summary>
     /// ジャーナルと組になる生存ロックのパスを返す
     /// </summary>
     /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>

@@ -50,7 +50,8 @@ internal static class JournalStore
         string tempPath = MetadataNames.JournalTempPath(journalPath);
         try
         {
-            await WriteAsync(tempPath, document, FileMode.Create, cancellationToken).ConfigureAwait(false);
+            JournalDocument stored = JournalPaths.ToStored(document, MetadataNames.WorkFolderFromJournal(journalPath));
+            await WriteAsync(tempPath, stored, FileMode.Create, cancellationToken).ConfigureAwait(false);
 
             // File.Move の共有違反は UnauthorizedAccessException になるため、先に開いて閉じる（開けないときの共有違反は IOException のまま返す）
             EnsureReplaceable(journalPath);
@@ -75,7 +76,8 @@ internal static class JournalStore
         try
         {
             byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
+            JournalDocument? document = JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
+            return JournalPaths.ToAbsolute(document, MetadataNames.WorkFolderFromJournal(journalPath));
         }
         catch (JsonException)
         {
