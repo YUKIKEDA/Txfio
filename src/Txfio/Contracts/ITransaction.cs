@@ -88,6 +88,31 @@ public interface ITransaction : IAsyncDisposable
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 同一ボリューム内のファイルまたはディレクトリの移動を予約する
+    /// <paramref name="overwrite"/> が <see langword="true"/> なら、移動先の既存のファイルかディレクトリを移動元で置き換えるか入れ替える
+    /// ファイルどうしは 1 回の rename で置き換え、どちらかがディレクトリなら移動先を `.txold` へ退避してから入れ替える
+    /// </summary>
+    /// <remarks>
+    /// ファイルどうしの置き換えはコミットで 1 回の rename（`MOVEFILE_REPLACE_EXISTING`）であり、バイトはコピーしない
+    /// 移動元か移動先がディレクトリの入れ替えは、移動先を `{名前}.{txid}.txold` へ退避し、移動元を移動先へ rename してから `.txold` を消す
+    /// 移動先にこのトランザクションのファイルの Delete があれば、その Delete をファイルどうしの置き換えに畳む
+    /// 移動先の DeleteTree は、入れ替えに畳む
+    /// 置き換えと入れ替えでは、移動元と移動先へはこのあと続けて操作できない
+    /// 入れ替えでは、移動先の配下へも続けて操作できない
+    /// </remarks>
+    /// <param name="oldPath">移動元パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="overwrite"><see langword="true"/> なら移動先の既存のファイルかディレクトリを移動元で置き換えるか入れ替える（<see langword="false"/> は <see cref="MoveAsync(string, string, CancellationToken)"/> と同じ）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>予約の完了</returns>
+    /// <exception cref="ExternalConflictException">移動元が無い、<paramref name="overwrite"/> が <see langword="false"/> なのに移動先が塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
+    /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動、別操作でステージング済み、置き換えまたは入れ替えの Move の移動元か移動先への操作、入れ替えの移動先の配下への操作、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、リパースポイント、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 空ディレクトリを呼び出した時点で作る（配下では通常の操作ができ、中身は素のファイル API でも書ける）
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
@@ -242,19 +267,22 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="archivePath">展開する ZIP（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パスとし、ステージング済みならその内容を読む）</param>
     /// <param name="destinationDir">展開先の新しいディレクトリ（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="entryNameEncoding">UTF-8 フラグの無いエントリ名の読み方（null のときは .NET の既定）</param>
+    /// <param name="maxExtractedBytes">展開後のバイト数の合計の上限（null のときは上限なし、外から受け取った ZIP では渡す）</param>
     /// <param name="progress">展開後のバイト数と、エントリの合計サイズ（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">ZIP が無い、展開先が既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが展開先またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ZIP のパスがディレクトリである</exception>
-    /// <exception cref="InvalidDataException">展開先の外へ出る名前、Windows で使えない名前、`.txnew` で終わる名前、重複、またはファイルとディレクトリの同名がある（ZIP 自体が読めないときも同じ）</exception>
+    /// <exception cref="InvalidDataException">展開先の外へ出る名前がある、Windows で使えない名前がある、`.txnew` で終わる名前がある、名前が重複している、ファイルとディレクトリの同名がある、または申告した展開後のサイズの合計か実際に読んだバイト数が <paramref name="maxExtractedBytes"/> を超える（合計が long に収まらないとき、ファイルの Length が 0 未満のとき、ZIP 自体が読めないときも同じ）</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxExtractedBytes"/> が 0 未満である</exception>
     /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、展開先の配下に操作がある、リパースポイント、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
     Task ExtractArchiveAsync(
         string archivePath,
         string destinationDir,
         Encoding? entryNameEncoding = null,
+        long? maxExtractedBytes = null,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
@@ -264,19 +292,22 @@ public interface ITransaction : IAsyncDisposable
     /// <param name="externalArchivePath">ワークフォルダの外にある ZIP</param>
     /// <param name="destinationDir">展開先の新しいディレクトリ（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
     /// <param name="entryNameEncoding">UTF-8 フラグの無いエントリ名の読み方（null のときは .NET の既定）</param>
+    /// <param name="maxExtractedBytes">展開後のバイト数の合計の上限（null のときは上限なし、外から受け取った ZIP では渡す）</param>
     /// <param name="progress">展開後のバイト数と、エントリの合計サイズ（null のときは通知しない）</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>ステージングの完了</returns>
     /// <exception cref="ExternalConflictException">ZIP が無い、展開先が既にある、または親ディレクトリが無い</exception>
     /// <exception cref="LockContentionException">他のトランザクションが展開先またはワークフォルダを押さえている</exception>
     /// <exception cref="UnsupportedOperationException">ZIP のパスがディレクトリである</exception>
-    /// <exception cref="InvalidDataException">展開先の外へ出る名前、Windows で使えない名前、`.txnew` で終わる名前、重複、またはファイルとディレクトリの同名がある（ZIP 自体が読めないときも同じ）</exception>
+    /// <exception cref="InvalidDataException">展開先の外へ出る名前がある、Windows で使えない名前がある、`.txnew` で終わる名前がある、名前が重複している、ファイルとディレクトリの同名がある、または申告した展開後のサイズの合計か実際に読んだバイト数が <paramref name="maxExtractedBytes"/> を超える（合計が long に収まらないとき、ファイルの Length が 0 未満のとき、ZIP 自体が読めないときも同じ）</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxExtractedBytes"/> が 0 未満である</exception>
     /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、展開先の配下に操作がある、リパースポイント、またはメタデータ配下である</exception>
     /// <exception cref="ArgumentException">ZIP のパスがワークフォルダの中、または展開先がワークフォルダの外である</exception>
     Task ImportArchiveAsync(
         string externalArchivePath,
         string destinationDir,
         Encoding? entryNameEncoding = null,
+        long? maxExtractedBytes = null,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default);
 

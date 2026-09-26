@@ -159,10 +159,10 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// ファイルの Delete か、ファイル Move の移動元をステージしたとき、消えるか動く実ファイルを記録する（読み取りの記録があればそれを使う）
+    /// ファイルの Delete か、ファイルの Move の移動元をステージしたとき、消えるか動く実ファイルを記録する（読み取りの記録があればそれを使う）
     /// </summary>
     /// <param name="operations">ステージする前の操作一覧</param>
-    /// <param name="logicalPath">Delete するパス、または移動元</param>
+    /// <param name="logicalPath">Delete するパス、または Move の移動元</param>
     /// <param name="transactionId">このトランザクションの ID</param>
     internal void NoteRemoval(IReadOnlyList<JournalOperation> operations, string logicalPath, Guid transactionId)
     {
@@ -202,7 +202,7 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// この操作が、記録と違う実ファイルの Update（または畳んだ残り）なら <see langword="true"/>
+    /// この操作が、記録と違うファイルの Update、ファイルの Delete、ファイルの Move、または畳んだ残りなら <see langword="true"/>
     /// </summary>
     /// <param name="operation">検証中の操作</param>
     /// <returns>サイズか最終更新日時が違い、実ファイルがまだファイルなら <see langword="true"/></returns>
@@ -220,7 +220,7 @@ internal sealed class ExternalChangeSet
             return Differs(foldedReal);
         }
 
-        // ファイルの Delete とファイル Move の元は、操作のパスが消えるか動く実ファイルである
+        // ファイルの Delete とファイルの Move の移動元では、操作のパスが消えるか動く実ファイルである
         if (operation.Kind is PendingChangeKind.Delete or PendingChangeKind.Move
             && !operation.IsDirectory
             && _removals.Contains(operation.Path))

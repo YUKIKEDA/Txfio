@@ -33,7 +33,7 @@ public sealed class ExternalChangeTests
     /// サイズが違う Update は ExternalChange で Failed になり、本物を戻してからコミットできる
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true で Update したあと、本物のサイズが変わっている</para>
+    /// <para>前提: detectExternalChanges が true であり、Update したあと、本物のサイズが変わっている</para>
     /// <para>手順: CommitAsync し、本物の内容と最終更新日時を戻してもう一度 CommitAsync する</para>
     /// <para>期待: 1 回目は Failed で ExternalChange（本物は外部の内容のまま）、2 回目は Succeeded</para>
     /// </remarks>
@@ -70,7 +70,7 @@ public sealed class ExternalChangeTests
     /// 最終更新日時だけ違っても ExternalChange になる
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true で Update したあと、本物の最終更新日時だけが進んでいる</para>
+    /// <para>前提: detectExternalChanges が true であり、Update したあと、本物の最終更新日時だけが進んでいる</para>
     /// <para>手順: CommitAsync する</para>
     /// <para>期待: Failed で ExternalChange、本物の内容は変わらない</para>
     /// </remarks>
@@ -95,7 +95,7 @@ public sealed class ExternalChangeTests
     /// 同じサイズで同じ最終更新日時の書き換えは見逃す
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true で Update したあと、同じ長さの別内容に書き換え、最終更新日時は元に戻してある</para>
+    /// <para>前提: detectExternalChanges が true であり、Update したあと、同じ長さの別内容に書き換え、最終更新日時は元に戻してある</para>
     /// <para>手順: CommitAsync する</para>
     /// <para>期待: Succeeded で、ファイルはステージした内容</para>
     /// </remarks>
@@ -346,9 +346,9 @@ public sealed class ExternalChangeTests
     /// ステージ後に書き換えられたファイルの Delete は ExternalChange で Failed になる
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true で a.txt を Delete したあと、本物のサイズが変わっている</para>
+    /// <para>前提: detectExternalChanges が true であり、a.txt を Delete したあと、本物のサイズが変わっている</para>
     /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で理由は ExternalChange、a.txt は外部の内容のまま残る</para>
+    /// <para>期待: Failed であり、理由は ExternalChange、a.txt は外部の内容のまま残る</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_書き換えられたファイルのDeleteはExternalChangeで失敗すること()
@@ -373,9 +373,9 @@ public sealed class ExternalChangeTests
     /// ステージ後に書き換えられたファイルの Move は ExternalChange で Failed になる
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true で Move(a.txt→b.txt) したあと、a.txt のサイズが変わっている</para>
+    /// <para>前提: detectExternalChanges が true であり、Move(a.txt→b.txt) したあと、a.txt のサイズが変わっている</para>
     /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で理由は ExternalChange、a.txt は残り b.txt は無い</para>
+    /// <para>期待: Failed であり、理由は ExternalChange、a.txt は残り、b.txt は無い</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_書き換えられたファイルのMoveはExternalChangeで失敗すること()
@@ -399,9 +399,9 @@ public sealed class ExternalChangeTests
     /// 読んだあとで書き換えられたファイルの Delete も、読んだ時点と比べて Failed になる
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true で a.txt を読んだあと、本物のサイズが変わってから Delete している</para>
+    /// <para>前提: detectExternalChanges が true であり、a.txt を読んだあと、本物のサイズが変わってから Delete している</para>
     /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で理由は ExternalChange</para>
+    /// <para>期待: Failed であり、理由は ExternalChange</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_読んだあとで書き換えられたファイルのDeleteも失敗すること()
@@ -421,12 +421,12 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// Move のあとの移動先の Delete に畳んでも、元のファイルの記録で比べる
+    /// Move のあと移動先を Delete して元の Delete に畳んでも、元のファイルの記録で比べる
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true で Move(a.txt→b.txt) のあと b.txt を Delete し（元の Delete に畳む）、a.txt のサイズが変わっている</para>
+    /// <para>前提: detectExternalChanges が true であり、Move(a.txt→b.txt) のあと b.txt を Delete し（元の Delete に畳む）、a.txt のサイズが変わっている</para>
     /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で理由は ExternalChange、a.txt は残る</para>
+    /// <para>期待: Failed であり、理由は ExternalChange、a.txt は残る</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_畳んだDeleteも元のファイルの記録で比べること()
@@ -452,7 +452,7 @@ public sealed class ExternalChangeTests
     /// <remarks>
     /// <para>前提: detectExternalChanges を渡さず a.txt を Delete したあと、本物のサイズが変わっている</para>
     /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で a.txt は無い</para>
+    /// <para>期待: Succeeded であり、a.txt は無い</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_既定では書き換えられたファイルのDeleteを失敗にしないこと()

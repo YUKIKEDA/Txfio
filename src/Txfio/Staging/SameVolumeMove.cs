@@ -8,15 +8,18 @@ namespace Txfio;
 /// </summary>
 internal static partial class SameVolumeMove
 {
+    private const uint MoveFileReplaceExisting = 0x1;
+
     /// <summary>
     /// ファイルを rename で移動する
     /// </summary>
     /// <param name="sourcePath">移動元</param>
     /// <param name="destPath">移動先</param>
+    /// <param name="replace"><see langword="true"/> なら移動先の既存ファイルを置き換える（`MOVEFILE_REPLACE_EXISTING`）</param>
     /// <exception cref="IOException">rename できない</exception>
-    internal static void MoveFile(string sourcePath, string destPath)
+    internal static void MoveFile(string sourcePath, string destPath, bool replace = false)
     {
-        Move(sourcePath, destPath, directory: false);
+        Move(sourcePath, destPath, directory: false, replace);
     }
 
     /// <summary>
@@ -27,10 +30,10 @@ internal static partial class SameVolumeMove
     /// <exception cref="IOException">rename できない</exception>
     internal static void MoveDirectory(string sourcePath, string destPath)
     {
-        Move(sourcePath, destPath, directory: true);
+        Move(sourcePath, destPath, directory: true, replace: false);
     }
 
-    private static void Move(string sourcePath, string destPath, bool directory)
+    private static void Move(string sourcePath, string destPath, bool directory, bool replace)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -40,14 +43,15 @@ internal static partial class SameVolumeMove
             }
             else
             {
-                File.Move(sourcePath, destPath);
+                File.Move(sourcePath, destPath, replace);
             }
 
             return;
         }
 
-        // フラグは 0 のままにする（コピーを許すと別ボリュームでコピーと削除になる）
-        if (!MoveFileEx(ExtendIfNeeded(sourcePath), ExtendIfNeeded(destPath), 0))
+        // コピーを許すフラグは付けない（付けると別ボリュームでコピーと削除になる）
+        uint flags = replace ? MoveFileReplaceExisting : 0;
+        if (!MoveFileEx(ExtendIfNeeded(sourcePath), ExtendIfNeeded(destPath), flags))
         {
             ThrowLastError();
         }
