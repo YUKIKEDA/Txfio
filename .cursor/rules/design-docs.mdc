@@ -18,6 +18,11 @@ alwaysApply: true
 - **Docs-only clarifications** (typos, wording, examples): may ship in the same PR as code
 - Do not implement first and "update the design later"
 
+## Where a rule lives
+
+- `docs/design.md` is the single source for behavior. XML docs on the public surface state only what a caller needs (what it does, arguments, exception types with a short condition, return value) and point to the design section for details
+- Per-API sections in `docs/design.md` use the fixed headings in `docs/conventions.md` (設計書と XML ドキュメントの分担). Cross-cutting rules (lock order, journal order, commit steps) are written once in their own section and referenced from API sections
+
 When implementing, follow `docs/design.md`. If code and design conflict, stop and fix the design via the process above.
 
 ## Judge the current optimum

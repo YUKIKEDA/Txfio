@@ -12,8 +12,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
@@ -44,21 +43,6 @@ internal sealed partial class Transaction
         await CopyFileAsync(sourcePath, destinationPath, progress, cancellationToken).ConfigureAwait(false);
     }
 
-    private static int DirectoryDepth(string path)
-    {
-        int depth = 0;
-        foreach (char character in path)
-        {
-            if (character == System.IO.Path.DirectorySeparatorChar
-                || character == System.IO.Path.AltDirectorySeparatorChar)
-            {
-                depth++;
-            }
-        }
-
-        return depth;
-    }
-
     private static void EnsureCopySourceAvailable(string sourcePath)
     {
         if (Directory.Exists(sourcePath))
@@ -71,7 +55,7 @@ internal sealed partial class Transaction
             throw new ExternalConflictException("コピー元が存在しません: " + sourcePath, sourcePath);
         }
 
-        if (IsReparsePoint(sourcePath))
+        if (WorkPath.IsReparsePoint(sourcePath))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
         }
@@ -103,34 +87,28 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, sourcePath, destinationPath).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, new[] { sourcePath, destinationPath }, _lockAttempt).ConfigureAwait(false);
         if (!File.Exists(sourcePath))
         {
             throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
         }
 
-        if (IsReparsePoint(sourcePath))
+        if (WorkPath.IsReparsePoint(sourcePath))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
         }
 
         EnsureCopyDestinationFree(destinationPath);
-        int operationCount = _paths.Rows.Count;
         string stagingPath = WorkPath.StagingFilePath(destinationPath, _transactionId);
-        _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            await WriteCopySourceAsync(sourcePath, stagingPath, progress, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch
-        {
-            RollbackAddedOperations(operationCount);
-            await TryPersistUndoAsync().ConfigureAwait(false);
-            throw;
-        }
+        JournalOperation added = new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath);
+        await RecordThenMaterializeAsync(
+                () => _paths.Add(added),
+                async () => await WriteCopySourceAsync(sourcePath, stagingPath, progress, cancellationToken)
+                    .ConfigureAwait(false),
+                () => StagingFile.TryDelete(stagingPath),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task CopyDirectoryAsync(
@@ -139,9 +117,14 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { sourcePath, destinationPath }, destinationPath).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
+                _workFolder,
+                new[] { sourcePath, destinationPath },
+                new[] { destinationPath },
+                new[] { sourcePath },
+                _lockAttempt)
+            .ConfigureAwait(false);
         if (!Directory.Exists(sourcePath))
         {
             throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);
@@ -150,7 +133,7 @@ internal sealed partial class Transaction
         EnsureCopyDestinationFree(destinationPath);
         List<string> directories = new List<string> { destinationPath };
         List<PlannedTreeFile> files = new List<PlannedTreeFile>();
-        if (!IsReparsePoint(sourcePath))
+        if (!WorkPath.IsReparsePoint(sourcePath))
         {
             PlanCopiedTree(sourcePath, sourcePath, destinationPath, directories, files, cancellationToken);
         }
@@ -172,16 +155,15 @@ internal sealed partial class Transaction
             FileShare.Read | FileShare.Delete,
             bufferSize: 4096,
             FileOptions.Asynchronous);
-        await StagingFile.WriteAsync(stagingPath, source, progress, cancellationToken).ConfigureAwait(false);
-        return new FileInfo(stagingPath).Length;
+        return await StagingFile.WriteAsync(stagingPath, source, progress, cancellationToken).ConfigureAwait(false);
     }
 
     private void RollbackAddedOperations(int operationCount)
     {
-        while (_paths.Rows.Count > operationCount)
+        while (_paths.Count > operationCount)
         {
-            JournalOperation operation = _paths.Rows[_paths.Rows.Count - 1];
-            _paths.Rows.RemoveAt(_paths.Rows.Count - 1);
+            JournalOperation operation = _paths.Rows[_paths.Count - 1];
+            _paths.RemoveAt(_paths.Count - 1);
             StagingFile.TryDelete(operation.StagingPath);
         }
     }
@@ -194,16 +176,7 @@ internal sealed partial class Transaction
         }
 
         List<string> pending = _createdDirectories.GetRange(start, _createdDirectories.Count - start);
-        pending.Sort(static (left, right) =>
-        {
-            int byDepth = DirectoryDepth(right).CompareTo(DirectoryDepth(left));
-            if (byDepth != 0)
-            {
-                return byDepth;
-            }
-
-            return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
-        });
+        PathMath.SortDeepestFirst(pending);
 
         bool succeeded = true;
         foreach (string path in pending)
@@ -217,12 +190,7 @@ internal sealed partial class Transaction
 
                 _createdDirectories.Remove(path);
             }
-            catch (IOException) when (ignoreIoFailures)
-            {
-                // 失敗したコピーの後始末では、元の例外を残す
-                succeeded = false;
-            }
-            catch (UnauthorizedAccessException) when (ignoreIoFailures)
+            catch (Exception exception) when (ignoreIoFailures && IoErrors.IsIo(exception))
             {
                 // 失敗したコピーの後始末では、元の例外を残す
                 succeeded = false;

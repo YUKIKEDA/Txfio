@@ -12,8 +12,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);
@@ -25,7 +24,7 @@ internal sealed partial class Transaction
             return;
         }
 
-        if (File.Exists(external) && IsReparsePoint(external))
+        if (File.Exists(external) && WorkPath.IsReparsePoint(external))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + external);
         }
@@ -60,7 +59,7 @@ internal sealed partial class Transaction
             throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
         }
 
-        if (IsReparsePoint(appearance.ContentPath))
+        if (WorkPath.IsReparsePoint(appearance.ContentPath))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
         }
@@ -105,16 +104,7 @@ internal sealed partial class Transaction
 
     private static void DeleteExportedDirectories(List<string> createdDirectories)
     {
-        createdDirectories.Sort(static (left, right) =>
-        {
-            int byDepth = DirectoryDepth(right).CompareTo(DirectoryDepth(left));
-            if (byDepth != 0)
-            {
-                return byDepth;
-            }
-
-            return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
-        });
+        PathMath.SortDeepestFirst(createdDirectories);
 
         foreach (string path in createdDirectories)
         {
@@ -125,11 +115,7 @@ internal sealed partial class Transaction
                     Directory.Delete(path);
                 }
             }
-            catch (IOException)
-            {
-                // 失敗したコピーの後始末では、元の例外を残す
-            }
-            catch (UnauthorizedAccessException)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
                 // 失敗したコピーの後始末では、元の例外を残す
             }
@@ -168,9 +154,8 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, target);
         ThrowIfCopyPathIsStaged(target);
         EnsureCopyDestinationFree(target);
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { target }, target).ConfigureAwait(false);
-        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { target }, new[] { target }, _lockAttempt).ConfigureAwait(false);
         if (!Directory.Exists(external))
         {
             throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + external, external);
@@ -179,7 +164,7 @@ internal sealed partial class Transaction
         EnsureCopyDestinationFree(target);
         List<string> directories = new List<string> { target };
         List<PlannedTreeFile> files = new List<PlannedTreeFile>();
-        if (!IsReparsePoint(external))
+        if (!WorkPath.IsReparsePoint(external))
         {
             PlanCopiedTree(external, external, target, directories, files, cancellationToken);
         }
@@ -207,7 +192,7 @@ internal sealed partial class Transaction
             EnsureExportDestination(destinationPath);
             CreateExportDirectory(destinationPath, createdDirectories);
             DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
-            if (!IsReparsePoint(sourcePath))
+            if (!WorkPath.IsReparsePoint(sourcePath))
             {
                 await ExportDirectoryEntriesAsync(
                         sourcePath,
@@ -242,17 +227,18 @@ internal sealed partial class Transaction
         List<string> createdFiles,
         CancellationToken cancellationToken)
     {
-        foreach (string entry in Directory.EnumerateFileSystemEntries(current))
+        foreach (FileSystemInfo info in new DirectoryInfo(current).EnumerateFileSystemInfos())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (SkipIntakeEntry(entry))
+            if (SkipIntakeEntry(info))
             {
                 continue;
             }
 
+            string entry = info.FullName;
             string relative = System.IO.Path.GetRelativePath(sourceRoot, entry);
             string destination = System.IO.Path.GetFullPath(System.IO.Path.Combine(destinationRoot, relative));
-            if (Directory.Exists(entry))
+            if (info is DirectoryInfo)
             {
                 CreateExportDirectory(destination, createdDirectories);
                 await ExportDirectoryEntriesAsync(
@@ -267,22 +253,18 @@ internal sealed partial class Transaction
                 continue;
             }
 
-            if (!File.Exists(entry))
-            {
-                continue;
-            }
-
             await using FileStream source = OpenExportSource(entry);
-            await StagingFile.CopyToNewFileAsync(source, destination, progress, cancellationToken)
+            long written = await StagingFile.CopyToNewFileAsync(source, destination, progress, cancellationToken)
                 .ConfigureAwait(false);
             createdFiles.Add(destination);
-            progress.CompleteFile(new FileInfo(destination).Length);
+            progress.CompleteFile(written);
         }
     }
 
     private FileStream OpenExportSource(string sourcePath)
     {
-        string? stagingPath = FindStagingPath(sourcePath);
+        int index = FindOperationIndex(sourcePath);
+        string? stagingPath = index < 0 ? null : _paths.Rows[index].StagingPath;
         if (!string.IsNullOrEmpty(stagingPath))
         {
             return OpenExternalFile(stagingPath, "コピー元のファイルが存在しません: " + sourcePath, sourcePath);
