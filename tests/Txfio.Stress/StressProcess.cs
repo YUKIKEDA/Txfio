@@ -87,6 +87,76 @@ internal sealed class StressProcess : IAsyncDisposable
     }
 
     /// <summary>
+    /// クラッシュ耐久の子プロセスを起動する。開始ファイルができるまでは何もしない
+    /// </summary>
+    /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="transactions">繰り返すトランザクション数</param>
+    /// <param name="maxBytes">1 ファイルの長さ</param>
+    /// <param name="logFile">成功したトランザクションの番号を書く記録</param>
+    /// <param name="intentFile">これから始めるトランザクションの番号を書くファイル</param>
+    /// <param name="startFile">できるまで待つ開始ファイル</param>
+    /// <returns>起動した子プロセス</returns>
+    public static StressProcess StartCrash(
+        string workFolder,
+        int transactions,
+        int maxBytes,
+        string logFile,
+        string intentFile,
+        string startFile)
+    {
+        ProcessStartInfo start = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        start.ArgumentList.Add("exec");
+        start.ArgumentList.Add(typeof(StressWriter).Assembly.Location);
+        start.ArgumentList.Add(CrashStressWriter.Command);
+        start.ArgumentList.Add(workFolder);
+        start.ArgumentList.Add(transactions.ToString(CultureInfo.InvariantCulture));
+        start.ArgumentList.Add(maxBytes.ToString(CultureInfo.InvariantCulture));
+        start.ArgumentList.Add(logFile);
+        start.ArgumentList.Add(intentFile);
+        start.ArgumentList.Add(startFile);
+        Process process = new Process
+        {
+            StartInfo = start,
+            EnableRaisingEvents = true,
+        };
+        StressProcess started = new StressProcess(process);
+        process.ErrorDataReceived += (_, eventArgs) =>
+        {
+            if (eventArgs.Data is not null)
+            {
+                lock (started._errorGate)
+                {
+                    started._error.AppendLine(eventArgs.Data);
+                }
+            }
+        };
+        process.Start();
+        process.BeginErrorReadLine();
+        process.BeginOutputReadLine();
+        return started;
+    }
+
+    /// <summary>
+    /// 子プロセスを殺して終了を待つ
+    /// </summary>
+    /// <returns>終了したこと</returns>
+    public async Task KillAsync()
+    {
+        if (!_process.HasExited)
+        {
+            _process.Kill(entireProcessTree: true);
+            await _process.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
     /// 子プロセスの終了を待ち、終了コード 0 でなければ失敗にする
     /// </summary>
     /// <param name="timeout">待つ上限</param>

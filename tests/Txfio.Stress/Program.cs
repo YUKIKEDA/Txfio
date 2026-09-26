@@ -21,6 +21,7 @@ public static class Program
         {
             Stress.StressWriter.Command => Stress.StressWriter.RunAsync(args),
             Stress.DirectoryStressWriter.Command => Stress.DirectoryStressWriter.RunAsync(args),
+            Stress.CrashStressWriter.Command => Stress.CrashStressWriter.RunAsync(args),
             _ => Task.FromResult(2),
         };
     }
