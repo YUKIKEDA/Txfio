@@ -165,11 +165,11 @@ internal static class JournalStore
             FileAccess.Write,
             FileShare.None,
             bufferSize: 4096,
-            FileOptions.Asynchronous | FileOptions.WriteThrough);
+            FileOptions.Asynchronous);
         try
         {
             await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await StagingFile.FlushToDiskAsync(stream, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -218,11 +218,11 @@ internal static class JournalStore
             FileAccess.Write,
             FileShare.None,
             bufferSize: 4096,
-            FileOptions.Asynchronous | FileOptions.WriteThrough);
+            FileOptions.Asynchronous);
         try
         {
             await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await StagingFile.FlushToDiskAsync(stream, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

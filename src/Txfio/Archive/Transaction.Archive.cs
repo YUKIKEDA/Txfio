@@ -164,7 +164,7 @@ internal sealed partial class Transaction
                 FileAccess.Write,
                 FileShare.None,
                 bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough);
+                FileOptions.Asynchronous);
         }
         catch (IOException exception) when (exception is DirectoryNotFoundException || File.Exists(destinationPath))
         {
@@ -221,7 +221,7 @@ internal sealed partial class Transaction
     }
 
     private static async Task WriteArchiveAsync(
-        Stream output,
+        FileStream output,
         List<PlannedArchiveEntry> planned,
         CompressionLevel compressionLevel,
         Func<string, FileStream> openFile,
@@ -251,7 +251,7 @@ internal sealed partial class Transaction
             progress?.Report(new TransferProgress(0, null));
         }
 
-        await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+        await StagingFile.FlushToDiskAsync(output, cancellationToken).ConfigureAwait(false);
     }
 
     private IReadOnlyList<ArchiveRoot> ToArchiveRoots(IEnumerable<ArchiveEntrySource> entries)
@@ -350,7 +350,7 @@ internal sealed partial class Transaction
                 FileAccess.Write,
                 FileShare.None,
                 bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough))
+                FileOptions.Asynchronous))
             {
                 await WriteArchiveAsync(
                         output,
