@@ -44,8 +44,7 @@ internal static class StagingApplier
         List<JournalOperation> nondestructive = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && behavior.ApplyPhase == OperationKind.Phase.Nondestructive)
+            if (OperationKind.For(operation.Kind).ApplyPhase == OperationKind.Phase.Nondestructive)
             {
                 nondestructive.Add(operation);
             }
@@ -55,8 +54,7 @@ internal static class StagingApplier
 
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && behavior.ApplyPhase == OperationKind.Phase.Update)
+            if (OperationKind.For(operation.Kind).ApplyPhase == OperationKind.Phase.Update)
             {
                 ordered.Add(operation);
             }
@@ -65,8 +63,7 @@ internal static class StagingApplier
         List<JournalOperation> deletes = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && behavior.ApplyPhase == OperationKind.Phase.Delete)
+            if (OperationKind.For(operation.Kind).ApplyPhase == OperationKind.Phase.Delete)
             {
                 deletes.Add(operation);
             }
@@ -122,33 +119,7 @@ internal static class StagingApplier
             return false;
         }
 
-        if (OperationKind.TryGet(operation.Kind, out OperationKind behavior))
-        {
-            return behavior.TryApply(operation, out reason);
-        }
-
-        if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-
-        try
-        {
-            bool overwrite = operation.Kind == PendingChangeKind.Update;
-            File.Move(operation.StagingPath, operation.Path, overwrite);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
+        return OperationKind.For(operation.Kind).TryApply(operation, out reason);
     }
 
     /// <summary>
@@ -267,8 +238,7 @@ internal static class StagingApplier
         bool succeeded = true;
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && !behavior.TryDeleteCreatedTree(operation, ignoreIoFailures))
+            if (!OperationKind.For(operation.Kind).TryDeleteCreatedTree(operation, ignoreIoFailures))
             {
                 succeeded = false;
             }

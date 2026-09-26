@@ -265,9 +265,7 @@ public sealed class StagingApplierTests
         string dest,
         out OperationFailureReason reason)
     {
-        System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
-            methodName,
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        System.Reflection.MethodInfo method = FindMethod(methodName);
         object?[] args = { source, dest, null };
         bool applied = (bool)method.Invoke(null, args)!;
         reason = (OperationFailureReason)args[2]!;
@@ -276,9 +274,7 @@ public sealed class StagingApplierTests
 
     private static bool InvokePath(string methodName, string path, out OperationFailureReason reason)
     {
-        System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
-            methodName,
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        System.Reflection.MethodInfo method = FindMethod(methodName);
         object?[] args = { path, null };
         bool applied = (bool)method.Invoke(null, args)!;
         reason = (OperationFailureReason)args[1]!;
@@ -287,12 +283,32 @@ public sealed class StagingApplierTests
 
     private static bool InvokeStaged(JournalOperation operation, out OperationFailureReason reason)
     {
-        System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
-            "TryApplyStagedFile",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        System.Reflection.MethodInfo method = FindMethod("TryApplyStagedFile");
         object?[] args = { operation, null };
         bool applied = (bool)method.Invoke(null, args)!;
         reason = (OperationFailureReason)args[1]!;
         return applied;
+    }
+
+    // 種別ごとの処理は OperationKind の入れ子の型にあるので、入れ子も探す
+    private static System.Reflection.MethodInfo FindMethod(string name)
+    {
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+        System.Reflection.MethodInfo? method = typeof(OperationKind).GetMethod(name, flags);
+        if (method is not null)
+        {
+            return method;
+        }
+
+        foreach (Type nested in typeof(OperationKind).GetNestedTypes(System.Reflection.BindingFlags.NonPublic))
+        {
+            method = nested.GetMethod(name, flags);
+            if (method is not null)
+            {
+                return method;
+            }
+        }
+
+        throw new MissingMethodException(nameof(OperationKind), name);
     }
 }
