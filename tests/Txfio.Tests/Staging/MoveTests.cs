@@ -656,7 +656,7 @@ public sealed class MoveTests
     /// 置き換えの Move でも、ファイルとディレクトリは入れ替えない
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt、ディレクトリ d がある</para>
+    /// <para>前提: a.txt とディレクトリ d がある</para>
     /// <para>手順: Move(a.txt→d, overwrite: true) と Move(d→a.txt, overwrite: true) をする</para>
     /// <para>期待: どちらも ExternalConflictException であり、操作は無い</para>
     /// </remarks>

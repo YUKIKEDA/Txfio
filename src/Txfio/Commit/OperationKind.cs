@@ -551,7 +551,7 @@ internal abstract class OperationKind
         }
     }
 
-    // 入れ替え: (1) 移動先を .txold へ、(2) 移動元を移動先へ、(3) .txold を消す。落ちたあとは残っている段階から続ける
+    // 入れ替え: (1) 移動先を .txold へ、(2) 移動元を移動先へ、(3) .txold を消す（落ちたあとは残っている段階から続ける）
     private static bool TryReplaceDirectory(JournalOperation operation, out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;

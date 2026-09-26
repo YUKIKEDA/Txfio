@@ -205,10 +205,10 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// Import で作ったディレクトリでの入れ替えをすべて適用してから落ちても、Recover は RolledForward になる
+    /// 入れ替えを手で済ませたあとの Recover は、移動元配下の Add も済んだとみなし RolledForward になる
     /// </summary>
     /// <remarks>
-    /// <para>前提: site/old.txt と、外の incoming/a.txt がある。incoming を site.new へ Import し、Move(site.new→site, overwrite: true) を予約した</para>
+    /// <para>前提: site/old.txt と、外の incoming/a.txt があり、incoming を site.new へ Import し、Move(site.new→site, overwrite: true) を予約した</para>
     /// <para>手順: 最初の適用（Add）の直後に止め、入れ替えを手で済ませてから RecoverAsync する</para>
     /// <para>期待: RolledForward であり、飛ばした操作は無く、site には a.txt だけがある</para>
     /// </remarks>

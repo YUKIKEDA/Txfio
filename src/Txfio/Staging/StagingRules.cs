@@ -44,7 +44,7 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ディレクトリの入れ替えで、移動元と移動先の配下の操作を確かめる（移動元が作成ディレクトリなら、配下の Add だけを許す）
+    /// ディレクトリの入れ替えで、移動元と移動先の配下に重なる操作を拒否する（移動元が作成ディレクトリなら、配下の Add だけを許す）
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="createdDirectories">このトランザクションが作ったディレクトリ</param>

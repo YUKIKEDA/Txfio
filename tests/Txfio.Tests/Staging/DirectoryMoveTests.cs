@@ -443,7 +443,7 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// ディレクトリの置き換えの Move は、移動先の既存ディレクトリを中身ごと入れ替える
+    /// ディレクトリの入れ替えは、移動先の既存ディレクトリを中身ごと入れ替える
     /// </summary>
     /// <remarks>
     /// <para>前提: site/old.txt と build/new.txt がある</para>
