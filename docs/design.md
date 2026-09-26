@@ -68,6 +68,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - `ExportAsync(path, externalPath, IProgress<TransferProgress>? progress, CancellationToken)`: ファイルは `ReadAsync` と同じバイトを、ディレクトリは配下の各ファイルを `ReadAsync` と同じバイトで、ワークフォルダの外へコピーする。ジャーナルには残さず、ワークフォルダのファイルは変えず、ロックもしない。ディレクトリでもロックしない。コピー先がワークフォルダの中なら `ArgumentException`。外にファイルかディレクトリがある、または親が無いときは `ExternalConflictException`。上書きも、コピー先の親の自動作成もしない。コピー先のディレクトリ自身とその空のサブディレクトリは、この操作が作る。ジャンクションとシンボリックリンクは辿らず、そのエントリもコピーしない。作りかけは失敗か取り消しで消し、成功したファイルとディレクトリは Dispose しても残る。`progress` は省略でき、null のときは通知しない
 - `ReadAsync(path, CancellationToken)`: 「コミット後の姿」のファイルを、位置 0 の読み取りストリームで返す。破棄は呼び出し側。全体はメモリにコピーしない。ロックは取らず、ジャーナルにも書かない。姿でファイルが無いときは `ExternalConflictException`。ディレクトリは未対応。開き方は `FileShare.Read | FileShare.Delete` なので、ストリームを閉じる前でもコミットの rename は進む。同じパスの再ステージは、ストリームを閉じるまで失敗しうる。取り消しは呼び出し開始時だけ有効。`detectExternalChanges` が true のときは、開いた実ファイルのサイズと最終更新日時（UTC）をトランザクションのメモリに記録する（「ステージ後の外部変更」）。このトランザクションの `.txnew` を読んだときは、その記録を更新しない
 - `ExistsAsync(path, CancellationToken)`: 「コミット後の姿」でファイルかディレクトリがあるなら true、無ければ false。無いことは例外にしない。ディレクトリだからという理由では失敗しない。ロックは取らず、ジャーナルにも書かない。パスがワークフォルダの外なら `ArgumentException`。メタデータ配下、および呼び出しが重なっているときは `InvalidOperationException`。取り消しは呼び出し開始時だけ有効
+- `GetEntriesAsync(directoryPath, CancellationToken)`: 「コミット後の姿」で、ディレクトリの直下にあるファイルとディレクトリを返す。戻り値は `DirectoryEntry`（絶対パスの `Path` と `IsDirectory`）の一覧で、パスの大文字小文字を無視した辞書順である。再帰はしない。直下の候補は、ディスク上の直下（姿の元の実ディレクトリ。ディレクトリ Move の移動先ならその移動元）と、このトランザクションの操作のうち親がそのディレクトリのもの（Add、Update、Move の移動先、`CreateDirectory`）から集め、1 件ずつ「コミット後の姿」で確かめる。このトランザクションの `.txnew`、`.txnew.prev`、`.txold` は含めない。別のトランザクションのステージングファイルは、ディスクにあるので見える（ダーティリード）。姿でディレクトリが無ければ `ExternalConflictException`、ファイルなら `UnsupportedOperationException`。ロックは取らず、ジャーナルにも書かない。パスの解決と例外は `ExistsAsync` と同じ。直下の列挙を 1 回と、候補ごとの存在の確認をするので、IO は直下の数に比例する
 - `tx.GetPendingChanges()`: 現在のジャーナル内容（Add/Update/Delete/DeleteTree/Move/CreateDirectory 一覧）を返す。ディレクトリのコピーは各ファイルの Add として見える。作成ディレクトリの一覧は出さない。`CreateDirectory` の配下で予約した操作は、その操作として見える。素のファイル API で書いたファイルは出ない。実装コストはほぼゼロ（ジャーナルをそのまま返すだけ）で、git status に相当するデバッグや UI 表示に使う
 
 **ZIP アーカイブ**
@@ -99,6 +100,7 @@ C# で、ファイルサーバーなど IO が遅い環境でも動く、git の
 - `ReadAllTextAsync` / `ReadAllLinesAsync`: `ReadAsync` と同じバイトを文字列、または行の配列にする。行の区切りと、戻り値に改行を含めないことは `File.ReadAllLinesAsync` に合わせる。エンコーディングを省略した読みは `File` と同じ BOM 検出。エンコーディング引数のあるオーバーロードも持つ。ディレクトリ、および対象が無いときは `ReadAsync` と同じ例外
 - `WriteAllTextAsync` / `WriteAllLinesAsync`: 「コミット後の姿」でファイルが無ければ `Add`、あれば `Update`。`Move` の移動先は `Update`。ファイルなら移動先の Add と元の Delete に畳む。ファイル `Move` の移動元は `Add`。ディレクトリ `Move` の移動先も移動元も `InvalidOperationException`。同じトランザクションで続けて書くと、既存の再ステージに乗る（新規のままなら `Add`、既存なら `Update`。`Delete` のあとは、姿では無いので選ぶ時点は `Add` だが、畳み込みで記録は `Update`）。エンコーディングを省略した書きは BOM なし UTF-8。`WriteAllLinesAsync` の改行は `File.WriteAllLinesAsync` に合わせる。`WriteAllTextAsync` の内容が null なら空文字列として書く。`WriteAllLinesAsync` の内容が null、またはエンコーディング引数が null なら `ArgumentNullException`
 - `ReadFromJsonAsync<T>`: `ReadAsync` のバイトを `System.Text.Json` でデシリアライズする。失敗は `System.Text.Json` の例外のまま。`JsonSerializerOptions` は省略でき、省略時は既定
+- `AppendAllTextAsync` / `AppendAllLinesAsync`: 「コミット後の姿」のファイルの末尾に足す。姿でファイルが無ければ、`WriteAllTextAsync` / `WriteAllLinesAsync` と同じく新しく書く（Add）。あれば、姿の中身をメモリに読み、足した全体を `WriteAllTextAsync` と同じ Add / Update の規則で書く（既存の中身もいったんメモリに載るので、大きいファイルは `Stream` の API で組み立てる）。エンコーディングを省略したときは BOM なし UTF-8。足す部分には BOM を付けない（新しく書くときだけ、エンコーディングの BOM を付ける。`File.AppendAllTextAsync` と同じ）。改行の扱いは `File.AppendAllLinesAsync` に合わせる。内容が null のときの扱いは `WriteAllTextAsync` / `WriteAllLinesAsync` と同じ
 - `WriteAsJsonAsync<T>`: シリアライズした JSON を、`WriteAllTextAsync` と同じ Add / Update の規則で書く。`JsonSerializerOptions` は省略でき、省略時は既定
 
 **共通方針**
@@ -252,7 +254,9 @@ true のときはファイルの `Update`、ファイルの `Delete`、ファイ
 
 ## スコープと非対応範囲
 
-**対象操作**: ファイル・ディレクトリの Create/Update/Delete/DeleteTree/Rename・Move、ワークフォルダ内の Copy、ディレクトリの Import / Export、`CreateDirectory`、ZIP アーカイブの作成・Export・展開・Import。ディレクトリの `ReadAsync` と、ZIP 以外のアーカイブ形式（tar、GZip 単体、Brotli）は未対応
+**対象操作**: ファイル・ディレクトリの Create/Update/Delete/DeleteTree/Rename・Move、ワークフォルダ内の Copy、ディレクトリの Import / Export、`CreateDirectory`、ZIP アーカイブの作成・Export・展開・Import、文字列の追記、コミット後の姿での直下の一覧。ディレクトリの `ReadAsync` と、ZIP 以外のアーカイブ形式（tar、GZip 単体、Brotli）は未対応
+
+**対象外（明記）**: 属性（読み取り専用、隠しなど）、日時、ACL をトランザクションで設定する操作は持たない。設定は操作種別が増え、Before / After の照合にメタデータを足す必要があるわりに、コミット後に素のファイル API で設定すれば足りる。Update は置き換えられるファイルの ACL、属性、作成日時を保つ（「書き込みモデル」）。コミットの件数の進捗（`CommitAsync` の `IProgress`）も持たない（ロードマップに残す）
 
 **Moveの制約**: 同一ボリューム内の移動のみサポート。別ボリューム（別ドライブ、別のファイルサーバー共有）への移動はエラーとする。ボリューム跨ぎのrenameはOSレベルでアトミックに保証されず、コピー＋削除相当の重い処理になる。この重い処理をライブラリが暗黙に実行してしまうと、ユーザーが気づかないうちに高コストな操作を実行することになるため、跨ぎたい場合は明示的な `ImportAsync`/`ExportAsync` を使わせる。呼び出し時点でワークフォルダの内側にあるマウントポイントは、リパースポイントとして `InvalidOperationException` にする。コミットと復旧が移動を適用するときは、コピーを許すフラグを付けず rename する。その rename が別ボリュームなら、コピーと削除にはせず、適用の IO 失敗にする
 
