@@ -365,6 +365,7 @@ public sealed class TextExtensionTests
         Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
     }
 
+    /// <summary>
     /// 既存ディレクトリへの文字列の書き込みはその場で失敗する
     /// </summary>
     /// <remarks>
