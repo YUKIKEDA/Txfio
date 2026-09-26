@@ -20,9 +20,9 @@ internal sealed record DirectoryScenario(
     /// </summary>
     public static readonly IReadOnlyList<string> RootDirectories = new[] { "d", "e" };
 
-    private static readonly IReadOnlyList<string> _directoryPaths = new[] { "d", "e", "d/c", "e/c", "f" };
+    internal static readonly IReadOnlyList<string> DirectoryPaths = new[] { "d", "e", "d/c", "e/c", "f" };
 
-    private static readonly IReadOnlyList<string> _filePaths = new[] { "a.txt", "d/a.txt", "e/b.txt", "d/c/a.txt", "e/c/b.txt", "f/a.txt" };
+    internal static readonly IReadOnlyList<string> FilePaths = new[] { "a.txt", "d/a.txt", "e/b.txt", "d/c/a.txt", "e/c/b.txt", "f/a.txt" };
 
     /// <summary>
     /// シードから操作列を作る。各手は、それまでの手がすべてモデルどおり通った前提で打てるものを選ぶ
@@ -34,28 +34,7 @@ internal sealed record DirectoryScenario(
     public static DirectoryScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);
-        DirectoryTree initial = new DirectoryTree();
-        foreach (string path in RootDirectories)
-        {
-            initial.AddDirectory(path);
-        }
-
-        foreach (string path in _directoryPaths)
-        {
-            if (!initial.Contains(path) && initial.IsDirectory(DirectoryTree.Parent(path)) && random.Next(2) == 0)
-            {
-                initial.AddDirectory(path);
-            }
-        }
-
-        foreach (string path in _filePaths)
-        {
-            if (initial.IsDirectory(DirectoryTree.Parent(path)) && random.Next(2) == 0)
-            {
-                initial.PutFile(path, StressContent.Create(random, maxBytes));
-            }
-        }
-
+        DirectoryTree initial = CreateInitial(random, maxBytes);
         DirectoryTree model = initial.Clone();
         List<DirectoryOperation> operations = new List<DirectoryOperation>();
         int count = random.Next(1, maxOperations + 1);
@@ -68,6 +47,39 @@ internal sealed record DirectoryScenario(
 
         bool commit = random.Next(5) != 0;
         return new DirectoryScenario(seed, initial, operations, commit);
+    }
+
+    /// <summary>
+    /// 開始前の木を作る。d と e はいつもある
+    /// </summary>
+    /// <param name="random">置くものを決める乱数</param>
+    /// <param name="maxBytes">ファイルの長さの上限</param>
+    /// <returns>開始前の木</returns>
+    public static DirectoryTree CreateInitial(Random random, int maxBytes)
+    {
+        DirectoryTree initial = new DirectoryTree();
+        foreach (string path in RootDirectories)
+        {
+            initial.AddDirectory(path);
+        }
+
+        foreach (string path in DirectoryPaths)
+        {
+            if (!initial.Contains(path) && initial.IsDirectory(DirectoryTree.Parent(path)) && random.Next(2) == 0)
+            {
+                initial.AddDirectory(path);
+            }
+        }
+
+        foreach (string path in FilePaths)
+        {
+            if (initial.IsDirectory(DirectoryTree.Parent(path)) && random.Next(2) == 0)
+            {
+                initial.PutFile(path, StressContent.Create(random, maxBytes));
+            }
+        }
+
+        return initial;
     }
 
     /// <summary>
@@ -100,13 +112,13 @@ internal sealed record DirectoryScenario(
             DirectoryOperationKind kind = (DirectoryOperationKind)random.Next(7);
             DirectoryOperation operation = kind switch
             {
-                DirectoryOperationKind.CreateDirectory => new DirectoryOperation(kind, Pick(random, _directoryPaths), null, null),
-                DirectoryOperationKind.Add => new DirectoryOperation(kind, Pick(random, _filePaths), null, StressContent.Create(random, maxBytes)),
-                DirectoryOperationKind.Update => new DirectoryOperation(kind, Pick(random, _filePaths), null, StressContent.Create(random, maxBytes)),
+                DirectoryOperationKind.CreateDirectory => new DirectoryOperation(kind, Pick(random, DirectoryPaths), null, null),
+                DirectoryOperationKind.Add => new DirectoryOperation(kind, Pick(random, FilePaths), null, StressContent.Create(random, maxBytes)),
+                DirectoryOperationKind.Update => new DirectoryOperation(kind, Pick(random, FilePaths), null, StressContent.Create(random, maxBytes)),
                 DirectoryOperationKind.Delete => new DirectoryOperation(kind, Pick(random, AllPaths()), null, null),
-                DirectoryOperationKind.DeleteTree => new DirectoryOperation(kind, Pick(random, _directoryPaths), null, null),
+                DirectoryOperationKind.DeleteTree => new DirectoryOperation(kind, Pick(random, DirectoryPaths), null, null),
                 DirectoryOperationKind.Move => new DirectoryOperation(kind, Pick(random, AllPaths()), Pick(random, AllPaths()), null),
-                _ => new DirectoryOperation(DirectoryOperationKind.Read, Pick(random, _filePaths), null, null),
+                _ => new DirectoryOperation(DirectoryOperationKind.Read, Pick(random, FilePaths), null, null),
             };
             if (operation.CanApply(model, applied))
             {
@@ -118,8 +130,8 @@ internal sealed record DirectoryScenario(
     private static IReadOnlyList<string> AllPaths()
     {
         List<string> paths = new List<string>();
-        paths.AddRange(_directoryPaths);
-        paths.AddRange(_filePaths);
+        paths.AddRange(DirectoryPaths);
+        paths.AddRange(FilePaths);
         return paths;
     }
 
