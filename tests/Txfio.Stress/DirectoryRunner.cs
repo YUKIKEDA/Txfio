@@ -201,7 +201,7 @@ internal static class DirectoryRunner
                 await tx.DeleteTreeAsync(operation.Path);
                 break;
             case DirectoryOperationKind.Move:
-                await tx.MoveAsync(operation.Path, operation.NewPath!);
+                await tx.MoveAsync(operation.Path, operation.NewPath!, operation.Overwrite);
                 break;
         }
     }

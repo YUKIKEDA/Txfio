@@ -7,7 +7,13 @@ namespace Txfio.Tests.Stress;
 /// <param name="Path">対象の相対パス</param>
 /// <param name="NewPath">Move の移動先。Move 以外は null</param>
 /// <param name="Content">Add と Update で書くバイト列。それ以外は null</param>
-internal sealed record DirectoryOperation(DirectoryOperationKind Kind, string Path, string? NewPath, byte[]? Content)
+/// <param name="Overwrite">Move が移動先を置き換えるなら true</param>
+internal sealed record DirectoryOperation(
+    DirectoryOperationKind Kind,
+    string Path,
+    string? NewPath,
+    byte[]? Content,
+    bool Overwrite = false)
 {
     /// <summary>
     /// いまの木と、すでに通した手の上で、この手を打てるか
@@ -17,6 +23,11 @@ internal sealed record DirectoryOperation(DirectoryOperationKind Kind, string Pa
     /// <returns>打てるとき true</returns>
     public bool CanApply(DirectoryTree tree, IReadOnlyList<DirectoryOperation> applied)
     {
+        if (IsFrozen(applied, Path) || (NewPath is not null && IsFrozen(applied, NewPath)))
+        {
+            return false;
+        }
+
         switch (Kind)
         {
             case DirectoryOperationKind.CreateDirectory:
@@ -31,7 +42,7 @@ internal sealed record DirectoryOperation(DirectoryOperationKind Kind, string Pa
             case DirectoryOperationKind.DeleteTree:
                 return tree.IsDirectory(Path) && !Touches(applied, Path);
             case DirectoryOperationKind.Move:
-                return CanMove(tree, applied);
+                return Overwrite ? CanOverwrite(tree, applied) : CanMove(tree, applied);
             default:
                 return false;
         }
@@ -59,6 +70,18 @@ internal sealed record DirectoryOperation(DirectoryOperationKind Kind, string Pa
                 tree.RemoveTree(Path);
                 break;
             case DirectoryOperationKind.Move:
+                if (Overwrite && tree.Contains(NewPath!))
+                {
+                    if (tree.IsDirectory(NewPath!))
+                    {
+                        tree.RemoveTree(NewPath!);
+                    }
+                    else
+                    {
+                        tree.Remove(NewPath!);
+                    }
+                }
+
                 tree.Move(Path, NewPath!);
                 break;
         }
@@ -70,7 +93,9 @@ internal sealed record DirectoryOperation(DirectoryOperationKind Kind, string Pa
         return Kind switch
         {
             DirectoryOperationKind.Add or DirectoryOperationKind.Update => $"{Kind}({Path}, {StressContent.Describe(Content!)})",
-            DirectoryOperationKind.Move => $"Move({Path} -> {NewPath})",
+            DirectoryOperationKind.Move => Overwrite
+                ? $"Move({Path} -> {NewPath}, overwrite)"
+                : $"Move({Path} -> {NewPath})",
             _ => $"{Kind}({Path})",
         };
     }
@@ -93,6 +118,42 @@ internal sealed record DirectoryOperation(DirectoryOperationKind Kind, string Pa
         }
 
         return !tree.IsDirectory(Path) || !Touches(applied, Path);
+    }
+
+    private bool CanOverwrite(DirectoryTree tree, IReadOnlyList<DirectoryOperation> applied)
+    {
+        if (NewPath is null || Path == NewPath || !tree.Contains(Path) || !tree.Contains(NewPath))
+        {
+            return false;
+        }
+
+        if (DirectoryTree.IsUnder(NewPath, Path) || DirectoryTree.IsUnder(Path, NewPath))
+        {
+            return false;
+        }
+
+        return !Touches(applied, Path) && !Touches(applied, NewPath);
+    }
+
+    private static bool IsFrozen(IReadOnlyList<DirectoryOperation> applied, string path)
+    {
+        foreach (DirectoryOperation operation in applied)
+        {
+            if (!operation.Overwrite || operation.NewPath is null)
+            {
+                continue;
+            }
+
+            if (path == operation.Path
+                || path == operation.NewPath
+                || DirectoryTree.IsUnder(path, operation.Path)
+                || DirectoryTree.IsUnder(path, operation.NewPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool Touches(IReadOnlyList<DirectoryOperation> applied, string directory)
