@@ -49,29 +49,28 @@ internal abstract class OperationKind
     internal abstract Phase ApplyPhase { get; }
 
     /// <summary>
-    /// 種別の実装があれば返す
+    /// 種別の実装を返す（未知の種別は読み込み時に拒むので、ここに来たら呼び出し側の誤り）
     /// </summary>
     /// <param name="kind">操作種別</param>
-    /// <param name="behavior">見つかった実装</param>
-    /// <returns>実装があれば <see langword="true"/></returns>
-    internal static bool TryGet(PendingChangeKind kind, out OperationKind behavior)
+    /// <returns>その種別の実装</returns>
+    /// <exception cref="InvalidOperationException">未知の種別</exception>
+    internal static OperationKind For(PendingChangeKind kind)
     {
-        return _byKind.TryGetValue(kind, out behavior!);
+        if (!_byKind.TryGetValue(kind, out OperationKind? behavior))
+        {
+            throw new InvalidOperationException("未知の操作種別です: " + kind);
+        }
+
+        return behavior;
     }
 
     /// <summary>
-    /// 操作のステージングファイルを消す（無い種別は <see cref="StagingFile.TryDelete"/>）
+    /// 操作のステージングファイルを消す
     /// </summary>
     /// <param name="operation">対象の操作</param>
     internal static void DeleteStaging(JournalOperation operation)
     {
-        if (!TryGet(operation.Kind, out OperationKind behavior))
-        {
-            StagingFile.TryDelete(operation.StagingPath);
-            return;
-        }
-
-        behavior.DeleteOwnStaging(operation);
+        For(operation.Kind).DeleteOwnStaging(operation);
     }
 
     /// <summary>
@@ -122,214 +121,6 @@ internal abstract class OperationKind
     internal virtual bool TryDeleteCreatedTree(JournalOperation operation, bool ignoreIoFailures)
     {
         return true;
-    }
-
-    private static bool TryProjectAdd(
-        JournalOperation operation,
-        Dictionary<string, PathState> projected,
-        out JournalOperation stamped,
-        out OperationFailureReason reason)
-    {
-        stamped = operation;
-        reason = OperationFailureReason.Missing;
-        PathState before = Current(projected, operation.Path);
-        if (before.Exists)
-        {
-            reason = OperationFailureReason.AlreadyExists;
-            return false;
-        }
-
-        if (!TryCaptureStaging(operation, out PathState after))
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-
-        projected[operation.Path] = after;
-        stamped = operation.WithOutcome(before, after);
-        return true;
-    }
-
-    private static bool TryProjectUpdate(
-        JournalOperation operation,
-        Dictionary<string, PathState> projected,
-        out JournalOperation stamped,
-        out OperationFailureReason reason)
-    {
-        stamped = operation;
-        reason = OperationFailureReason.Missing;
-        PathState before = Current(projected, operation.Path);
-        if (!before.IsFile)
-        {
-            reason = ReasonWhenFileRequired(before);
-            return false;
-        }
-
-        if (IsReadOnlyFile(operation.Path))
-        {
-            reason = OperationFailureReason.ReadOnly;
-            return false;
-        }
-
-        if (!TryCaptureStaging(operation, out PathState after))
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-
-        projected[operation.Path] = after;
-        stamped = operation.WithOutcome(before, after);
-        return true;
-    }
-
-    private static bool TryProjectMove(
-        JournalOperation operation,
-        Dictionary<string, PathState> projected,
-        out JournalOperation stamped,
-        out OperationFailureReason reason)
-    {
-        stamped = operation;
-        reason = OperationFailureReason.Missing;
-        if (string.IsNullOrEmpty(operation.NewPath))
-        {
-            return false;
-        }
-
-        PathState before = Current(projected, operation.Path);
-        PathState destBefore = Current(projected, operation.NewPath);
-        if (operation.IsDirectory)
-        {
-            if (!before.IsDirectory)
-            {
-                reason = ReasonWhenDirectoryRequired(before);
-                return false;
-            }
-
-            // 入れ替えは、移動先が無いか、.txold へ退避するときだけ進める（移動先の種類は問わない）
-            if (destBefore.Exists && !(operation.Overwrite && operation.StagingPath is not null))
-            {
-                reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
-                return false;
-            }
-
-            projected[operation.Path] = PathState.Absent;
-            projected[operation.NewPath] = before;
-            stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
-            return true;
-        }
-
-        if (!before.IsFile)
-        {
-            reason = ReasonWhenFileRequired(before);
-            return false;
-        }
-
-        // ファイルの overwrite Move は、移動先がファイルか無いときだけ進める（入れ替えで .txold へ退避するときは種類を問わない）
-        if (destBefore.Exists && !(operation.Overwrite && (destBefore.IsFile || operation.StagingPath is not null)))
-        {
-            reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
-            return false;
-        }
-
-        // 置き換えの Move の移動先の Before は、置き換えられる既存ファイル（無ければ不在）
-        projected[operation.Path] = PathState.Absent;
-        projected[operation.NewPath] = before;
-        stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
-        return true;
-    }
-
-    private static bool TryProjectCreateDirectory(
-        JournalOperation operation,
-        Dictionary<string, PathState> projected,
-        out JournalOperation stamped,
-        out OperationFailureReason reason)
-    {
-        stamped = operation;
-        reason = OperationFailureReason.Missing;
-        PathState current = Current(projected, operation.Path);
-        if (!current.IsDirectory)
-        {
-            reason = ReasonWhenDirectoryRequired(current);
-            return false;
-        }
-
-        projected[operation.Path] = current;
-        stamped = operation.WithOutcome(current, current);
-        return true;
-    }
-
-    private static bool TryProjectDeleteTree(
-        JournalOperation operation,
-        Dictionary<string, PathState> projected,
-        out JournalOperation stamped,
-        out OperationFailureReason reason)
-    {
-        stamped = operation;
-        reason = OperationFailureReason.Missing;
-        PathState before = Current(projected, operation.Path);
-        if (!before.IsDirectory)
-        {
-            reason = ReasonWhenDirectoryRequired(before);
-            return false;
-        }
-
-        projected[operation.Path] = PathState.Absent;
-        stamped = operation.WithOutcome(before, PathState.Absent);
-        return true;
-    }
-
-    private static bool TryProjectDelete(
-        JournalOperation operation,
-        IReadOnlyList<JournalOperation> operations,
-        Guid transactionId,
-        Dictionary<string, PathState> projected,
-        out JournalOperation stamped,
-        out OperationFailureReason reason)
-    {
-        stamped = operation;
-        reason = OperationFailureReason.Missing;
-        PathState before = Current(projected, operation.Path);
-        if (operation.IsDirectory)
-        {
-            if (!before.IsDirectory)
-            {
-                reason = ReasonWhenDirectoryRequired(before);
-                return false;
-            }
-
-            if (!StagingRules.MatchesDirectoryDeletePreconditions(operation.Path, operations, transactionId))
-            {
-                reason = OperationFailureReason.DirectoryPreconditions;
-                return false;
-            }
-        }
-        else if (!before.IsFile)
-        {
-            reason = ReasonWhenFileRequired(before);
-            return false;
-        }
-        else if (IsReadOnlyFile(operation.Path))
-        {
-            reason = OperationFailureReason.ReadOnly;
-            return false;
-        }
-
-        projected[operation.Path] = PathState.Absent;
-        stamped = operation.WithOutcome(before, PathState.Absent);
-        return true;
-    }
-
-    // Windows では読み取り専用のファイルは置き換えも削除もできないので、適用の前に拒む
-    private static bool IsReadOnlyFile(string path)
-    {
-        try
-        {
-            return (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0;
-        }
-        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return false;
-        }
     }
 
     private static bool TryCaptureStaging(JournalOperation operation, out PathState after)
@@ -502,277 +293,6 @@ internal abstract class OperationKind
         }
     }
 
-    private static bool TryMoveDirectory(string sourcePath, string destPath, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (!Directory.Exists(sourcePath))
-        {
-            if (File.Exists(sourcePath))
-            {
-                reason = OperationFailureReason.ReplacedByFile;
-                return false;
-            }
-
-            if (Directory.Exists(destPath))
-            {
-                return true;
-            }
-
-            if (File.Exists(destPath))
-            {
-                reason = OperationFailureReason.AlreadyExists;
-                return false;
-            }
-
-            reason = OperationFailureReason.Missing;
-            return false;
-        }
-
-        if (File.Exists(destPath) || Directory.Exists(destPath))
-        {
-            reason = OperationFailureReason.AlreadyExists;
-            return false;
-        }
-
-        try
-        {
-            SameVolumeMove.MoveDirectory(sourcePath, destPath);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    // 入れ替え: (1) 移動先を .txold へ、(2) 移動元を移動先へ、(3) .txold を消す（落ちたあとは残っている段階から続ける）
-    // 移動元と移動先は、ファイルでもディレクトリでもよい
-    private static bool TryReplaceWithBackup(JournalOperation operation, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        string sourcePath = operation.Path;
-        string destPath = operation.NewPath!;
-        string? oldPath = operation.StagingPath;
-        if (string.IsNullOrEmpty(oldPath))
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-
-        bool sourceIsDirectory = operation.IsDirectory;
-        if (sourceIsDirectory ? File.Exists(sourcePath) : Directory.Exists(sourcePath))
-        {
-            reason = OperationFailureReason.ReplacedByFile;
-            return false;
-        }
-
-        bool source = sourceIsDirectory ? Directory.Exists(sourcePath) : File.Exists(sourcePath);
-        bool dest = ExistsAny(destPath);
-        bool old = ExistsAny(oldPath);
-        try
-        {
-            if (source && dest && !old)
-            {
-                MoveAny(destPath, oldPath);
-                MoveAny(sourcePath, destPath);
-            }
-            else if (source && !dest && old)
-            {
-                MoveAny(sourcePath, destPath);
-            }
-            else if (source || !dest)
-            {
-                return false;
-            }
-
-            if (Directory.Exists(oldPath))
-            {
-                Directory.Delete(oldPath, recursive: true);
-            }
-            else if (File.Exists(oldPath))
-            {
-                File.Delete(oldPath);
-            }
-
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool ExistsAny(string path)
-    {
-        return File.Exists(path) || Directory.Exists(path);
-    }
-
-    private static void MoveAny(string sourcePath, string destPath)
-    {
-        if (Directory.Exists(sourcePath))
-        {
-            SameVolumeMove.MoveDirectory(sourcePath, destPath);
-            return;
-        }
-
-        SameVolumeMove.MoveFile(sourcePath, destPath);
-    }
-
-    private static bool TryMove(string sourcePath, string destPath, bool overwrite, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (!File.Exists(sourcePath))
-        {
-            if (Directory.Exists(sourcePath))
-            {
-                reason = OperationFailureReason.ReplacedByFile;
-                return false;
-            }
-
-            if (File.Exists(destPath))
-            {
-                return true;
-            }
-
-            if (Directory.Exists(destPath))
-            {
-                reason = OperationFailureReason.AlreadyExists;
-                return false;
-            }
-
-            reason = OperationFailureReason.Missing;
-            return false;
-        }
-
-        // 置き換えの Move は、移動先のファイルが Before と一致したことを呼び出し側が確かめている
-        if (Directory.Exists(destPath) || (!overwrite && File.Exists(destPath)))
-        {
-            reason = OperationFailureReason.AlreadyExists;
-            return false;
-        }
-
-        try
-        {
-            SameVolumeMove.MoveFile(sourcePath, destPath, overwrite);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool TryDeleteTree(string path, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (File.Exists(path))
-        {
-            reason = OperationFailureReason.ReplacedByFile;
-            return false;
-        }
-
-        if (!Directory.Exists(path))
-        {
-            return true;
-        }
-
-        try
-        {
-            Directory.Delete(path, recursive: true);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool TryDeleteDirectory(string path, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.BeforeAfterMismatch;
-        if (File.Exists(path))
-        {
-            reason = OperationFailureReason.ReplacedByFile;
-            return false;
-        }
-
-        if (!Directory.Exists(path))
-        {
-            return true;
-        }
-
-        try
-        {
-            Directory.Delete(path);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
-    private static bool TryDeleteFile(string path, out OperationFailureReason reason)
-    {
-        reason = OperationFailureReason.IoFailure;
-        if (Directory.Exists(path))
-        {
-            reason = OperationFailureReason.ReplacedByFile;
-            return false;
-        }
-
-        if (!File.Exists(path))
-        {
-            return true;
-        }
-
-        try
-        {
-            File.Delete(path);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-    }
-
     private static bool DeleteOne(bool ignoreIoFailures, Action delete)
     {
         try
@@ -781,6 +301,19 @@ internal abstract class OperationKind
             return true;
         }
         catch (Exception exception) when (ignoreIoFailures && exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    // Windows では読み取り専用のファイルは置き換えも削除もできないので、適用の前に拒む
+    private static bool IsReadOnlyFile(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0;
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
             return false;
         }
@@ -817,6 +350,32 @@ internal abstract class OperationKind
         {
             return TryApplyStagedFile(operation, changedLater, out reason);
         }
+
+        private static bool TryProjectAdd(
+            JournalOperation operation,
+            Dictionary<string, PathState> projected,
+            out JournalOperation stamped,
+            out OperationFailureReason reason)
+        {
+            stamped = operation;
+            reason = OperationFailureReason.Missing;
+            PathState before = Current(projected, operation.Path);
+            if (before.Exists)
+            {
+                reason = OperationFailureReason.AlreadyExists;
+                return false;
+            }
+
+            if (!TryCaptureStaging(operation, out PathState after))
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
+
+            projected[operation.Path] = after;
+            stamped = operation.WithOutcome(before, after);
+            return true;
+        }
     }
 
     private sealed class UpdateKind : OperationKind
@@ -842,6 +401,38 @@ internal abstract class OperationKind
             out OperationFailureReason reason)
         {
             return TryApplyStagedFile(operation, changedLater, out reason);
+        }
+
+        private static bool TryProjectUpdate(
+            JournalOperation operation,
+            Dictionary<string, PathState> projected,
+            out JournalOperation stamped,
+            out OperationFailureReason reason)
+        {
+            stamped = operation;
+            reason = OperationFailureReason.Missing;
+            PathState before = Current(projected, operation.Path);
+            if (!before.IsFile)
+            {
+                reason = ReasonWhenFileRequired(before);
+                return false;
+            }
+
+            if (IsReadOnlyFile(operation.Path))
+            {
+                reason = OperationFailureReason.ReadOnly;
+                return false;
+            }
+
+            if (!TryCaptureStaging(operation, out PathState after))
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
+
+            projected[operation.Path] = after;
+            stamped = operation.WithOutcome(before, after);
+            return true;
         }
     }
 
@@ -875,6 +466,109 @@ internal abstract class OperationKind
                     current.IsDirectory
                         ? TryDeleteDirectory(current.Path, out failure)
                         : TryDeleteFile(current.Path, out failure));
+        }
+
+        private static bool TryProjectDelete(
+            JournalOperation operation,
+            IReadOnlyList<JournalOperation> operations,
+            Guid transactionId,
+            Dictionary<string, PathState> projected,
+            out JournalOperation stamped,
+            out OperationFailureReason reason)
+        {
+            stamped = operation;
+            reason = OperationFailureReason.Missing;
+            PathState before = Current(projected, operation.Path);
+            if (operation.IsDirectory)
+            {
+                if (!before.IsDirectory)
+                {
+                    reason = ReasonWhenDirectoryRequired(before);
+                    return false;
+                }
+
+                if (!StagingRules.MatchesDirectoryDeletePreconditions(operation.Path, operations, transactionId))
+                {
+                    reason = OperationFailureReason.DirectoryPreconditions;
+                    return false;
+                }
+            }
+            else if (!before.IsFile)
+            {
+                reason = ReasonWhenFileRequired(before);
+                return false;
+            }
+            else if (IsReadOnlyFile(operation.Path))
+            {
+                reason = OperationFailureReason.ReadOnly;
+                return false;
+            }
+
+            projected[operation.Path] = PathState.Absent;
+            stamped = operation.WithOutcome(before, PathState.Absent);
+            return true;
+        }
+
+        private static bool TryDeleteDirectory(string path, out OperationFailureReason reason)
+        {
+            reason = OperationFailureReason.BeforeAfterMismatch;
+            if (File.Exists(path))
+            {
+                reason = OperationFailureReason.ReplacedByFile;
+                return false;
+            }
+
+            if (!Directory.Exists(path))
+            {
+                return true;
+            }
+
+            try
+            {
+                Directory.Delete(path);
+                return true;
+            }
+            catch (IOException exception)
+            {
+                reason = ClassifyIo(exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
+        }
+
+        private static bool TryDeleteFile(string path, out OperationFailureReason reason)
+        {
+            reason = OperationFailureReason.IoFailure;
+            if (Directory.Exists(path))
+            {
+                reason = OperationFailureReason.ReplacedByFile;
+                return false;
+            }
+
+            if (!File.Exists(path))
+            {
+                return true;
+            }
+
+            try
+            {
+                File.Delete(path);
+                return true;
+            }
+            catch (IOException exception)
+            {
+                reason = ClassifyIo(exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
         }
     }
 
@@ -921,6 +615,240 @@ internal abstract class OperationKind
                         ? TryMoveDirectory(current.Path, current.NewPath!, out failure)
                         : TryMove(current.Path, current.NewPath!, current.Overwrite, out failure));
         }
+
+        private static bool TryProjectMove(
+            JournalOperation operation,
+            Dictionary<string, PathState> projected,
+            out JournalOperation stamped,
+            out OperationFailureReason reason)
+        {
+            stamped = operation;
+            reason = OperationFailureReason.Missing;
+            if (string.IsNullOrEmpty(operation.NewPath))
+            {
+                return false;
+            }
+
+            PathState before = Current(projected, operation.Path);
+            PathState destBefore = Current(projected, operation.NewPath);
+            if (operation.IsDirectory)
+            {
+                if (!before.IsDirectory)
+                {
+                    reason = ReasonWhenDirectoryRequired(before);
+                    return false;
+                }
+
+                // 入れ替えは、移動先が無いか、.txold へ退避するときだけ進める（移動先の種類は問わない）
+                if (destBefore.Exists && !(operation.Overwrite && operation.StagingPath is not null))
+                {
+                    reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
+                    return false;
+                }
+
+                projected[operation.Path] = PathState.Absent;
+                projected[operation.NewPath] = before;
+                stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
+                return true;
+            }
+
+            if (!before.IsFile)
+            {
+                reason = ReasonWhenFileRequired(before);
+                return false;
+            }
+
+            // ファイルの overwrite Move は、移動先がファイルか無いときだけ進める（入れ替えで .txold へ退避するときは種類を問わない）
+            if (destBefore.Exists && !(operation.Overwrite && (destBefore.IsFile || operation.StagingPath is not null)))
+            {
+                reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
+                return false;
+            }
+
+            // 置き換えの Move の移動先の Before は、置き換えられる既存ファイル（無ければ不在）
+            projected[operation.Path] = PathState.Absent;
+            projected[operation.NewPath] = before;
+            stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
+            return true;
+        }
+
+        // 入れ替え: (1) 移動先を .txold へ、(2) 移動元を移動先へ、(3) .txold を消す（落ちたあとは残っている段階から続ける）
+        // 移動元と移動先は、ファイルでもディレクトリでもよい
+        private static bool TryReplaceWithBackup(JournalOperation operation, out OperationFailureReason reason)
+        {
+            reason = OperationFailureReason.BeforeAfterMismatch;
+            string sourcePath = operation.Path;
+            string destPath = operation.NewPath!;
+            string? oldPath = operation.StagingPath;
+            if (string.IsNullOrEmpty(oldPath))
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
+
+            bool sourceIsDirectory = operation.IsDirectory;
+            if (sourceIsDirectory ? File.Exists(sourcePath) : Directory.Exists(sourcePath))
+            {
+                reason = OperationFailureReason.ReplacedByFile;
+                return false;
+            }
+
+            bool source = sourceIsDirectory ? Directory.Exists(sourcePath) : File.Exists(sourcePath);
+            bool dest = ExistsAny(destPath);
+            bool old = ExistsAny(oldPath);
+            try
+            {
+                if (source && dest && !old)
+                {
+                    MoveAny(destPath, oldPath);
+                    MoveAny(sourcePath, destPath);
+                }
+                else if (source && !dest && old)
+                {
+                    MoveAny(sourcePath, destPath);
+                }
+                else if (source || !dest)
+                {
+                    return false;
+                }
+
+                if (Directory.Exists(oldPath))
+                {
+                    Directory.Delete(oldPath, recursive: true);
+                }
+                else if (File.Exists(oldPath))
+                {
+                    File.Delete(oldPath);
+                }
+
+                return true;
+            }
+            catch (IOException exception)
+            {
+                reason = ClassifyIo(exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
+        }
+
+        private static bool ExistsAny(string path)
+        {
+            return File.Exists(path) || Directory.Exists(path);
+        }
+
+        private static void MoveAny(string sourcePath, string destPath)
+        {
+            if (Directory.Exists(sourcePath))
+            {
+                SameVolumeMove.MoveDirectory(sourcePath, destPath);
+                return;
+            }
+
+            SameVolumeMove.MoveFile(sourcePath, destPath);
+        }
+
+        private static bool TryMoveDirectory(string sourcePath, string destPath, out OperationFailureReason reason)
+        {
+            reason = OperationFailureReason.BeforeAfterMismatch;
+            if (!Directory.Exists(sourcePath))
+            {
+                if (File.Exists(sourcePath))
+                {
+                    reason = OperationFailureReason.ReplacedByFile;
+                    return false;
+                }
+
+                if (Directory.Exists(destPath))
+                {
+                    return true;
+                }
+
+                if (File.Exists(destPath))
+                {
+                    reason = OperationFailureReason.AlreadyExists;
+                    return false;
+                }
+
+                reason = OperationFailureReason.Missing;
+                return false;
+            }
+
+            if (File.Exists(destPath) || Directory.Exists(destPath))
+            {
+                reason = OperationFailureReason.AlreadyExists;
+                return false;
+            }
+
+            try
+            {
+                SameVolumeMove.MoveDirectory(sourcePath, destPath);
+                return true;
+            }
+            catch (IOException exception)
+            {
+                reason = ClassifyIo(exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
+        }
+
+        private static bool TryMove(string sourcePath, string destPath, bool overwrite, out OperationFailureReason reason)
+        {
+            reason = OperationFailureReason.BeforeAfterMismatch;
+            if (!File.Exists(sourcePath))
+            {
+                if (Directory.Exists(sourcePath))
+                {
+                    reason = OperationFailureReason.ReplacedByFile;
+                    return false;
+                }
+
+                if (File.Exists(destPath))
+                {
+                    return true;
+                }
+
+                if (Directory.Exists(destPath))
+                {
+                    reason = OperationFailureReason.AlreadyExists;
+                    return false;
+                }
+
+                reason = OperationFailureReason.Missing;
+                return false;
+            }
+
+            // 置き換えの Move は、移動先のファイルが Before と一致したことを呼び出し側が確かめている
+            if (Directory.Exists(destPath) || (!overwrite && File.Exists(destPath)))
+            {
+                reason = OperationFailureReason.AlreadyExists;
+                return false;
+            }
+
+            try
+            {
+                SameVolumeMove.MoveFile(sourcePath, destPath, overwrite);
+                return true;
+            }
+            catch (IOException exception)
+            {
+                reason = ClassifyIo(exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
+        }
     }
 
     private sealed class DeleteTreeKind : OperationKind
@@ -951,6 +879,57 @@ internal abstract class OperationKind
                 out reason,
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     TryDeleteTree(current.Path, out failure));
+        }
+
+        private static bool TryProjectDeleteTree(
+            JournalOperation operation,
+            Dictionary<string, PathState> projected,
+            out JournalOperation stamped,
+            out OperationFailureReason reason)
+        {
+            stamped = operation;
+            reason = OperationFailureReason.Missing;
+            PathState before = Current(projected, operation.Path);
+            if (!before.IsDirectory)
+            {
+                reason = ReasonWhenDirectoryRequired(before);
+                return false;
+            }
+
+            projected[operation.Path] = PathState.Absent;
+            stamped = operation.WithOutcome(before, PathState.Absent);
+            return true;
+        }
+
+        private static bool TryDeleteTree(string path, out OperationFailureReason reason)
+        {
+            reason = OperationFailureReason.BeforeAfterMismatch;
+            if (File.Exists(path))
+            {
+                reason = OperationFailureReason.ReplacedByFile;
+                return false;
+            }
+
+            if (!Directory.Exists(path))
+            {
+                return true;
+            }
+
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return true;
+            }
+            catch (IOException exception)
+            {
+                reason = ClassifyIo(exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                reason = OperationFailureReason.IoFailure;
+                return false;
+            }
         }
     }
 
@@ -1006,6 +985,26 @@ internal abstract class OperationKind
             }
 
             return DeleteOne(ignoreIoFailures, () => Directory.Delete(operation.Path));
+        }
+
+        private static bool TryProjectCreateDirectory(
+            JournalOperation operation,
+            Dictionary<string, PathState> projected,
+            out JournalOperation stamped,
+            out OperationFailureReason reason)
+        {
+            stamped = operation;
+            reason = OperationFailureReason.Missing;
+            PathState current = Current(projected, operation.Path);
+            if (!current.IsDirectory)
+            {
+                reason = ReasonWhenDirectoryRequired(current);
+                return false;
+            }
+
+            projected[operation.Path] = current;
+            stamped = operation.WithOutcome(current, current);
+            return true;
         }
     }
 }
