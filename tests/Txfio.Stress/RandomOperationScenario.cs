@@ -6,12 +6,12 @@ namespace Txfio.Tests.Stress;
 /// 1 トランザクション分のランダム操作列と、開始時のファイル
 /// </summary>
 /// <param name="Seed">この列を作ったシード</param>
-/// <param name="InitialFiles">開始前にディスクへ置くファイル（相対パスから内容）</param>
+/// <param name="InitialFiles">開始前にディスクへ置くファイル（相対パスからバイト列）</param>
 /// <param name="Operations">順に打つ操作</param>
 /// <param name="Commit">最後に Commit するなら true、Dispose だけなら false</param>
 internal sealed record RandomOperationScenario(
     int Seed,
-    IReadOnlyDictionary<string, string> InitialFiles,
+    IReadOnlyDictionary<string, byte[]> InitialFiles,
     IReadOnlyList<RandomOperation> Operations,
     bool Commit)
 {
@@ -30,25 +30,26 @@ internal sealed record RandomOperationScenario(
     /// </summary>
     /// <param name="seed">シード</param>
     /// <param name="maxOperations">操作数の上限</param>
+    /// <param name="maxBytes">1 ファイルの長さの上限</param>
     /// <returns>作った操作列</returns>
-    public static RandomOperationScenario Generate(int seed, int maxOperations)
+    public static RandomOperationScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);
-        Dictionary<string, string> initial = new Dictionary<string, string>(StringComparer.Ordinal);
+        Dictionary<string, byte[]> initial = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (string path in Paths)
         {
             if (random.Next(2) == 0)
             {
-                initial[path] = "init-" + path;
+                initial[path] = StressContent.Create(random, maxBytes);
             }
         }
 
-        Dictionary<string, string> model = new Dictionary<string, string>(initial, StringComparer.Ordinal);
+        Dictionary<string, byte[]> model = new Dictionary<string, byte[]>(initial, StringComparer.Ordinal);
         List<RandomOperation> operations = new List<RandomOperation>();
         int count = random.Next(1, maxOperations + 1);
         for (int i = 0; i < count; i++)
         {
-            RandomOperation operation = Next(random, model, i);
+            RandomOperation operation = Next(random, model, maxBytes);
             operation.ApplyTo(model);
             operations.Add(operation);
         }
@@ -65,7 +66,7 @@ internal sealed record RandomOperationScenario(
     {
         StringBuilder text = new StringBuilder();
         text.Append("seed=").Append(Seed).AppendLine();
-        text.Append("initial=[").Append(string.Join(", ", InitialFiles.Keys.Order(StringComparer.Ordinal))).AppendLine("]");
+        text.Append("initial=[").Append(string.Join(", ", InitialFiles.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => pair.Key + " " + StressContent.Describe(pair.Value)))).AppendLine("]");
         for (int i = 0; i < Operations.Count; i++)
         {
             text.Append("  ").Append(i).Append(": ").Append(Operations[i]).AppendLine();
@@ -75,19 +76,18 @@ internal sealed record RandomOperationScenario(
         return text.ToString();
     }
 
-    private static RandomOperation Next(Random random, Dictionary<string, string> model, int index)
+    private static RandomOperation Next(Random random, Dictionary<string, byte[]> model, int maxBytes)
     {
         List<string> present = Paths.Where(model.ContainsKey).ToList();
         List<string> absent = Paths.Where(path => !model.ContainsKey(path)).ToList();
-        string content = "v" + index;
         while (true)
         {
             switch (random.Next(5))
             {
                 case 0 when absent.Count > 0:
-                    return new RandomOperation(RandomOperationKind.Add, Pick(random, absent), null, content);
+                    return new RandomOperation(RandomOperationKind.Add, Pick(random, absent), null, StressContent.Create(random, maxBytes));
                 case 1 when present.Count > 0:
-                    return new RandomOperation(RandomOperationKind.Update, Pick(random, present), null, content);
+                    return new RandomOperation(RandomOperationKind.Update, Pick(random, present), null, StressContent.Create(random, maxBytes));
                 case 2 when present.Count > 0:
                     return new RandomOperation(RandomOperationKind.Delete, Pick(random, present), null, null);
                 case 3 when present.Count > 0 && absent.Count > 0:

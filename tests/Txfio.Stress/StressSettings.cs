@@ -6,7 +6,7 @@ namespace Txfio.Tests.Stress;
 /// 耐久テストの規模を環境変数から読む
 /// </summary>
 /// <remarks>
-/// 既定は通常の <c>dotnet test</c> で短く終わる小ささにする。手元で長く回すときだけ環境変数で大きくする
+/// 既定は明示的な実行で短く終わる小ささにする。長く、または大きく回すときだけ環境変数で変える
 /// </remarks>
 internal static class StressSettings
 {
@@ -29,6 +29,11 @@ internal static class StressSettings
     /// 子プロセスが奪い合うファイルの数
     /// </summary>
     public const string FilesVariable = "TXFIO_STRESS_FILES";
+
+    /// <summary>
+    /// ランダム操作列が書くファイルの長さの上限（バイト）
+    /// </summary>
+    public const string MaxBytesVariable = "TXFIO_STRESS_MAX_BYTES";
 
     /// <summary>
     /// 環境変数のシード。無ければ既定値
@@ -57,6 +62,13 @@ internal static class StressSettings
     /// <param name="defaultValue">環境変数が無いときの値</param>
     /// <returns>ファイル数</returns>
     public static int Files(int defaultValue) => Read(FilesVariable, defaultValue);
+
+    /// <summary>
+    /// 環境変数の長さの上限。無ければ既定値
+    /// </summary>
+    /// <param name="defaultValue">環境変数が無いときの値</param>
+    /// <returns>バイト数</returns>
+    public static int MaxBytes(int defaultValue) => Read(MaxBytesVariable, defaultValue);
 
     private static int Read(string name, int defaultValue)
     {
