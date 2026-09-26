@@ -24,9 +24,9 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
         }
 
-        _locks.AcquireShared(_workFolder);
-        _locks.Acquire(_workFolder, targetPath);
-        using PathLockSet.WorkFolderExclusive exclusive = _locks.EnterExclusive(_workFolder);
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, targetPath).ConfigureAwait(false);
+        await using PathLockSet.WorkFolderExclusive exclusive = await _locks.EnterExclusiveAsync(_workFolder).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (File.Exists(targetPath) || Directory.Exists(targetPath))
         {
