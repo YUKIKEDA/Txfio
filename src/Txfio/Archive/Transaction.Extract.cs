@@ -13,9 +13,15 @@ internal sealed partial class Transaction
         string archivePath,
         string destinationDir,
         Encoding? entryNameEncoding = null,
+        long? maxExtractedBytes = null,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        if (maxExtractedBytes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxExtractedBytes));
+        }
+
         using CallScope scope = EnterCall();
         BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
@@ -25,7 +31,7 @@ internal sealed partial class Transaction
         string destination = ValidateExtractDestination(destinationDir);
         using PathLockSet.WorkFolderExclusive exclusive = AcquireExtractLocks(destination);
         await using Stream content = ReadCore(archive, cancellationToken);
-        await ExtractAsync(content, destination, entryNameEncoding, progress, cancellationToken)
+        await ExtractAsync(content, destination, entryNameEncoding, maxExtractedBytes, progress, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -34,9 +40,15 @@ internal sealed partial class Transaction
         string externalArchivePath,
         string destinationDir,
         Encoding? entryNameEncoding = null,
+        long? maxExtractedBytes = null,
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        if (maxExtractedBytes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxExtractedBytes));
+        }
+
         using CallScope scope = EnterCall();
         BeginLockAttempt(cancellationToken);
         ThrowIfCannotMutate();
@@ -53,7 +65,7 @@ internal sealed partial class Transaction
             external,
             "ZIP が存在しません: " + external,
             external);
-        await ExtractAsync(content, destination, entryNameEncoding, progress, cancellationToken)
+        await ExtractAsync(content, destination, entryNameEncoding, maxExtractedBytes, progress, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -81,6 +93,7 @@ internal sealed partial class Transaction
         Stream content,
         string destination,
         Encoding? entryNameEncoding,
+        long? maxExtractedBytes,
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -93,6 +106,13 @@ internal sealed partial class Transaction
             {
                 totalBytes += plan.Entry.Length;
             }
+        }
+
+        // .NET はエントリを Length までしか読まないので、申告の合計で上限を判断できる（書く前に止め、何も作らない）
+        if (maxExtractedBytes is long limit && totalBytes > limit)
+        {
+            throw new InvalidDataException(
+                "ZIP の展開後のサイズの合計が上限を超えています: " + totalBytes + " > " + limit);
         }
 
         EnsureCopyDestinationFree(destination);

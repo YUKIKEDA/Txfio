@@ -457,10 +457,12 @@ await tx.ExportArchiveAsync(
 ```csharp
 await tx.ExportArchiveAsync("reports", @"D:\outgoing\reports.zip");
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-await tx.ImportArchiveAsync(@"D:\incoming\drop.zip", "incoming", Encoding.GetEncoding(932));
+await tx.ImportArchiveAsync(@"D:\incoming\drop.zip", "incoming", Encoding.GetEncoding(932), maxExtractedBytes: 1L << 30);
 ```
 
 展開は、書き始める前にエントリ名を全部確かめます。1 つでも次に当たれば、何もステージせず、展開先も作らずに `InvalidDataException` です。展開先の外へ出る名前（`..`、先頭の `/`、ドライブ指定）、Windows のパスに使えない名前（`<>:"|?*`、末尾の `.` や空白、`CON` や `NUL` などの予約名）、`.txnew` で終わる名前、大文字と小文字だけが違う重複、同じ名前のファイルとディレクトリです。ZIP 自体が壊れているときも `InvalidDataException` です。
+
+`maxExtractedBytes` を渡すと、エントリの展開後のサイズの合計が上限を超える ZIP も、同じく何もステージせずに `InvalidDataException` になります。圧縮率の高い ZIP で共有のディスクを埋めないよう、外から受け取った ZIP では上限を渡してください。省略すると上限はありません。
 
 ```mermaid
 flowchart TD

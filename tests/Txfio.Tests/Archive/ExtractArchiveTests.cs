@@ -250,6 +250,58 @@ public sealed class ExtractArchiveTests
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew", SearchOption.AllDirectories));
     }
 
+    /// <summary>
+    /// 展開後のサイズの合計が上限を超える ZIP は、何もステージせずに失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 5 バイトの a.txt と 4 バイトの b.txt を持つ ZIP がワークフォルダにある</para>
+    /// <para>手順: 上限 8 バイトで ExtractArchiveAsync し、そのあと上限 9 バイトでもう一度展開する</para>
+    /// <para>期待: 1 回目は InvalidDataException で、展開先も .txnew も操作も無い。2 回目は成功し Add が 2 件</para>
+    /// </remarks>
+    [Fact]
+    public async Task ExtractArchiveAsync_展開後の合計が上限を超えると何もステージしないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await CreateZipAsync(
+            System.IO.Path.Combine(work.Path, "in.zip"),
+            ("a.txt", "alpha"),
+            ("b.txt", "beta"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => tx.ExtractArchiveAsync("in.zip", "out", maxExtractedBytes: 8));
+
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "out")));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew", SearchOption.AllDirectories));
+        Assert.Empty(tx.GetPendingChanges());
+
+        await tx.ExtractArchiveAsync("in.zip", "out", maxExtractedBytes: 9);
+        Assert.Equal(2, tx.GetPendingChanges().Count);
+    }
+
+    /// <summary>
+    /// 上限が 0 未満なら ArgumentOutOfRangeException になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ZIP がワークフォルダの外にある</para>
+    /// <para>手順: 上限 -1 で ImportArchiveAsync する</para>
+    /// <para>期待: ArgumentOutOfRangeException で、操作は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task ImportArchiveAsync_上限が負ならArgumentOutOfRangeExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using TempDirectory outside = TempDirectory.Create();
+        string archive = System.IO.Path.Combine(outside.Path, "in.zip");
+        await CreateZipAsync(archive, ("a.txt", "alpha"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => tx.ImportArchiveAsync(archive, "out", maxExtractedBytes: -1));
+
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
     private static Task CreateZipAsync(string path, params (string Name, string? Content)[] entries)
     {
         return CreateZipAsync(path, null, entries);
