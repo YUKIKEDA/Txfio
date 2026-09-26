@@ -139,32 +139,14 @@ internal sealed partial class Transaction
                 PendingChangeKind.Delete,
                 targetPath,
                 isDirectory: true);
-            _paths.Add(directoryDelete);
-            try
-            {
-                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            }
-            catch
-            {
-                _paths.Remove(directoryDelete);
-                throw;
-            }
+            await RecordAsync(() => _paths.Add(directoryDelete), cancellationToken).ConfigureAwait(false);
 
             return;
         }
 
         StagingRules.EnsureTargetMatchesKind(PendingChangeKind.Delete, targetPath);
         JournalOperation operation = new JournalOperation(PendingChangeKind.Delete, targetPath);
-        _paths.Add(operation);
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _paths.Remove(operation);
-            throw;
-        }
+        await RecordAsync(() => _paths.Add(operation), cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -462,16 +444,7 @@ internal sealed partial class Transaction
             destPath,
             overwrite: replaces);
         ThrowIfMoveChainCloses(operation, replaceIndex: -1);
-        _paths.Add(operation);
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _paths.Remove(operation);
-            throw;
-        }
+        await RecordAsync(() => _paths.Add(operation), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task PersistReplacingOperationAsync(
@@ -480,33 +453,20 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken)
     {
         JournalOperation existing = _paths.Rows[existingIndex];
-        if (replacement is null)
-        {
-            _paths.RemoveAt(existingIndex);
-        }
-        else
-        {
-            _paths.Set(existingIndex, replacement);
-        }
-
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            if (replacement is null)
-            {
-                _paths.Insert(existingIndex, existing);
-            }
-            else
-            {
-                _paths.Set(existingIndex, existing);
-            }
-
-            throw;
-        }
-
+        await RecordAsync(
+                () =>
+                {
+                    if (replacement is null)
+                    {
+                        _paths.RemoveAt(existingIndex);
+                    }
+                    else
+                    {
+                        _paths.Set(existingIndex, replacement);
+                    }
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
         StagingFile.TryDelete(existing.StagingPath);
     }
 
@@ -635,16 +595,7 @@ internal sealed partial class Transaction
             newPath: destPath,
             isDirectory: true);
         ThrowIfMoveChainCloses(operation, replaceIndex: -1);
-        _paths.Add(operation);
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _paths.Remove(operation);
-            throw;
-        }
+        await RecordAsync(() => _paths.Add(operation), cancellationToken).ConfigureAwait(false);
     }
 
     private bool IsDirectoryMove(string sourcePath, int sourceIndex, int moveToSource)
@@ -708,16 +659,7 @@ internal sealed partial class Transaction
             return;
         }
 
-        _paths.Add(operation);
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _paths.Remove(operation);
-            throw;
-        }
+        await RecordAsync(() => _paths.Add(operation), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task MovePendingSourceAsync(
@@ -883,17 +825,7 @@ internal sealed partial class Transaction
     {
         List<JournalOperation> folded = new List<JournalOperation>(_paths.Rows);
         fold(folded);
-        JournalOperation[] previous = _paths.ToArray();
-        _paths.Load(folded);
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _paths.Load(previous);
-            throw;
-        }
+        await RecordAsync(() => _paths.Load(folded), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task StageAsync(
@@ -951,71 +883,45 @@ internal sealed partial class Transaction
         string stagingPath = previous?.StagingPath
             ?? WorkPath.StagingFilePath(targetPath, _transactionId);
         string? backupPath = null;
-        JournalOperation? staged = null;
-        bool journalUpdated = false;
-        try
-        {
-            staged = new JournalOperation(recordedKind, targetPath, stagingPath);
-            if (existingIndex >= 0)
-            {
-                _paths.Set(existingIndex, staged);
-            }
-            else
-            {
-                _paths.Add(staged);
-            }
-
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            journalUpdated = true;
-            if (previous?.StagingPath is not null
-                && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase)
-                && File.Exists(stagingPath))
-            {
-                backupPath = WorkPath.StagingBackupPath(stagingPath);
-                StagingFile.MoveReplacing(stagingPath, backupPath);
-            }
-
-            await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            if (staged is not null)
-            {
-                if (existingIndex < 0)
+        JournalOperation staged = new JournalOperation(recordedKind, targetPath, stagingPath);
+        bool restagesSameFile = previous?.StagingPath is not null
+            && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase);
+        await RecordThenMaterializeAsync(
+                () =>
                 {
-                    _paths.Remove(staged);
-                }
-                else
+                    if (existingIndex >= 0)
+                    {
+                        _paths.Set(existingIndex, staged);
+                    }
+                    else
+                    {
+                        _paths.Add(staged);
+                    }
+                },
+                async () =>
                 {
-                    _paths.Set(existingIndex, previous!);
-                }
-            }
+                    // 同じ .txnew を書き直すときは、失敗したら戻せるよう退避しておく
+                    if (restagesSameFile && File.Exists(stagingPath))
+                    {
+                        backupPath = WorkPath.StagingBackupPath(stagingPath);
+                        StagingFile.MoveReplacing(stagingPath, backupPath);
+                    }
 
-            if (backupPath is not null)
-            {
-                try
+                    await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
+                },
+                () =>
                 {
-                    StagingFile.MoveReplacing(backupPath, stagingPath);
-                }
-                catch (IOException)
-                {
-                    // 退避の復元に失敗しても、元の例外を投げる
-                }
-            }
-            else if (existingIndex < 0
-                || previous?.StagingPath is null
-                || !string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase))
-            {
-                StagingFile.TryDelete(stagingPath);
-            }
-
-            if (journalUpdated)
-            {
-                await TryPersistUndoAsync().ConfigureAwait(false);
-            }
-
-            throw;
-        }
+                    if (backupPath is not null)
+                    {
+                        StagingFile.MoveReplacing(backupPath, stagingPath);
+                    }
+                    else if (!restagesSameFile)
+                    {
+                        StagingFile.TryDelete(stagingPath);
+                    }
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
 
         StagingFile.TryDelete(backupPath);
         if (previous?.StagingPath is not null

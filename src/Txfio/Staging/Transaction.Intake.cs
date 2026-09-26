@@ -137,47 +137,53 @@ internal sealed partial class Transaction
         long? totalBytes,
         CancellationToken cancellationToken)
     {
-        int operationCount = _paths.Count;
         int directoryCount = _createdDirectories.Count;
-        foreach (string directory in directories)
-        {
-            _createdDirectories.Add(directory);
-        }
-
+        List<JournalOperation> added = new List<JournalOperation>(filePaths.Count);
         foreach (string filePath in filePaths)
         {
-            string stagingPath = WorkPath.StagingFilePath(filePath, _transactionId);
-            _paths.Add(new JournalOperation(PendingChangeKind.Add, filePath, stagingPath));
+            added.Add(new JournalOperation(PendingChangeKind.Add, filePath, WorkPath.StagingFilePath(filePath, _transactionId)));
         }
 
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            foreach (string directory in directories)
-            {
-                Directory.CreateDirectory(directory);
-            }
+        await RecordThenMaterializeAsync(
+                () =>
+                {
+                    _createdDirectories.AddRange(directories);
+                    foreach (JournalOperation operation in added)
+                    {
+                        _paths.Add(operation);
+                    }
+                },
+                async () =>
+                {
+                    foreach (string directory in directories)
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
 
-            DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress, totalBytes);
-            for (int i = 0; i < filePaths.Count; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                long bytes = await writeFile(i, tracker, cancellationToken).ConfigureAwait(false);
-                tracker.CompleteFile(bytes);
-            }
+                    DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress, totalBytes);
+                    for (int i = 0; i < filePaths.Count; i++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        long bytes = await writeFile(i, tracker, cancellationToken).ConfigureAwait(false);
+                        tracker.CompleteFile(bytes);
+                    }
 
-            if (!tracker.Reported)
-            {
-                progress?.Report(new TransferProgress(0, totalBytes));
-            }
-        }
-        catch
-        {
-            RollbackAddedOperations(operationCount);
-            DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
-            await TryPersistUndoAsync().ConfigureAwait(false);
-            throw;
-        }
+                    if (!tracker.Reported)
+                    {
+                        progress?.Report(new TransferProgress(0, totalBytes));
+                    }
+                },
+                () =>
+                {
+                    foreach (JournalOperation operation in added)
+                    {
+                        TryCleanup(() => StagingFile.TryDelete(operation.StagingPath));
+                    }
+
+                    DeleteCreatedDirectoriesFrom(directoryCount, ignoreIoFailures: true);
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private sealed class PlannedTreeFile

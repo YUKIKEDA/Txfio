@@ -116,21 +116,15 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(destinationPath);
-        int operationCount = _paths.Count;
         string stagingPath = WorkPath.StagingFilePath(destinationPath, _transactionId);
-        _paths.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
-        try
-        {
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            await WriteCopySourceAsync(sourcePath, stagingPath, progress, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch
-        {
-            RollbackAddedOperations(operationCount);
-            await TryPersistUndoAsync().ConfigureAwait(false);
-            throw;
-        }
+        JournalOperation added = new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath);
+        await RecordThenMaterializeAsync(
+                () => _paths.Add(added),
+                async () => await WriteCopySourceAsync(sourcePath, stagingPath, progress, cancellationToken)
+                    .ConfigureAwait(false),
+                () => StagingFile.TryDelete(stagingPath),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task CopyDirectoryAsync(
