@@ -63,8 +63,10 @@ CommitReport report = await tx.CommitAsync();
 | `ImportArchiveAsync`                       | ワークフォルダの外の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す。ZIP は消さない                                                 |
 | `ReadAsync`                                | コミット後の姿のファイルを開く。ロックは取らない                                                                                                   |
 | `ExistsAsync`                              | コミット後の姿で、ファイルかディレクトリがあるかを返す。ロックは取らない                                                                           |
+| `GetEntriesAsync`                          | コミット後の姿で、ディレクトリの直下のファイルとディレクトリを返す（再帰しない）。ロックは取らない                                                 |
 | `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                                                 |
 | `WriteAllTextAsync` / `WriteAllLinesAsync` | コミット後の姿でファイルが無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                        |
+| `AppendAllTextAsync` / `AppendAllLinesAsync` | コミット後の姿の末尾に足す。無ければ Add、あれば中身に足した Update。既存の中身もメモリに読む                                                 |
 | `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                                  |
 | `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                                   |
 | `CommitAsync`                              | 検証してから rename と削除を適用する。結果は `CommitReport`                                                                                        |
