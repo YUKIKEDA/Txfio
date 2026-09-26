@@ -20,9 +20,43 @@ dotnet_style_qualification_for_event = false:warning
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:suggestion
 csharp_using_directive_placement = outside_namespace:warning
-csharp_style_var_for_built_in_types = false:suggestion
-csharp_style_var_when_type_is_apparent = true:suggestion
-csharp_style_var_elsewhere = false:suggestion
+# Explicit types. Do not suggest var, target-typed new, collection expressions, or primary constructors.
+csharp_style_var_for_built_in_types = false:none
+csharp_style_var_when_type_is_apparent = false:none
+csharp_style_var_elsewhere = false:none
+csharp_style_implicit_object_creation_when_type_is_apparent = false:none
+csharp_style_prefer_primary_constructors = false:none
+csharp_style_prefer_index_operator = false:none
+csharp_style_prefer_range_operator = false:none
+dotnet_style_collection_initializer = false:none
+dotnet_style_object_initializer = false:none
+dotnet_style_prefer_collection_expression = false:none
+dotnet_style_null_propagation = false:none
+
+# Namespace stays Txfio (and Txfio.Tests). Folders are not namespaces.
+dotnet_diagnostic.IDE0130.severity = none
+dotnet_diagnostic.IDE0007.severity = none
+dotnet_diagnostic.IDE0017.severity = none
+dotnet_diagnostic.IDE0028.severity = none
+dotnet_diagnostic.IDE0031.severity = none
+dotnet_diagnostic.IDE0056.severity = none
+dotnet_diagnostic.IDE0057.severity = none
+dotnet_diagnostic.IDE0059.severity = none
+dotnet_diagnostic.IDE0090.severity = none
+dotnet_diagnostic.IDE0290.severity = none
+dotnet_diagnostic.IDE0300.severity = none
+dotnet_diagnostic.IDE0301.severity = none
+dotnet_diagnostic.IDE0305.severity = none
+dotnet_diagnostic.IDE0306.severity = none
+dotnet_diagnostic.IDE0350.severity = none
+
+# Performance and parameter-order suggestions that fight this library's shape.
+dotnet_diagnostic.CA1068.severity = none
+dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.CA1859.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA2208.severity = none
+dotnet_diagnostic.CA2219.severity = none
 
 # .NET naming: private fields are _camelCase
 dotnet_naming_style.underscore_camel_case.required_prefix = _
