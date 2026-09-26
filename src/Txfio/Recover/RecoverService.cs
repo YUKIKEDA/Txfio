@@ -33,6 +33,7 @@ internal static class RecoverService
             sentinel.BeginAttempt(lockWait, cancellationToken);
             sentinel.AcquireExclusive(workFolder);
             sentinel.RejectForeignLocks(workFolder);
+            DeleteLockFiles(workFolder);
             string[] journals = Directory.GetFiles(
                 metadataFolder,
                 MetadataNames.JournalSearchPattern,
@@ -45,6 +46,28 @@ internal static class RecoverService
         finally
         {
             sentinel.Release();
+        }
+    }
+
+    // 排他のあいだは、他のトランザクションはパスロックも意図ロックも持っていない（持つには共有の哨兵か、しるしが要る）
+    private static void DeleteLockFiles(string workFolder)
+    {
+        string lockFolder = MetadataNames.LockFolderPath(workFolder);
+        if (!Directory.Exists(lockFolder))
+        {
+            return;
+        }
+
+        foreach (string path in Directory.EnumerateFiles(lockFolder, "*.lock", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // 消せないものは残す（次の Recover でまた試す）
+            }
         }
     }
 
