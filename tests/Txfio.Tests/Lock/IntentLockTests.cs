@@ -133,7 +133,7 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// 別のトランザクションがステージ中でも、ディレクトリを作れる
+    /// 別のトランザクションがステージしていても、ディレクトリを作れる
     /// </summary>
     /// <remarks>
     /// <para>前提: 別トランザクションが a.txt を Add している</para>
@@ -141,7 +141,7 @@ public sealed class IntentLockTests
     /// <para>期待: d ができ、pending は 1 件である</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_別のトランザクションがステージ中でも作れること()
+    public async Task CreateDirectoryAsync_別のトランザクションがステージしていても作れること()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -164,7 +164,7 @@ public sealed class IntentLockTests
     /// <para>期待: LockContentionException で Path は src、dest はできず、pending は空である</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_コピー元の配下がステージ中なら失敗すること()
+    public async Task CopyAsync_コピー元の配下がステージされていると失敗すること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");

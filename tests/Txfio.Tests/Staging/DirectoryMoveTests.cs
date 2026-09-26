@@ -251,7 +251,7 @@ public sealed class DirectoryMoveTests
     /// 別のトランザクションが無関係なパスを押さえていても、ディレクトリ Move は積める
     /// </summary>
     /// <remarks>
-    /// <para>前提: 別トランザクションが a.txt を Add し、sub がある</para>
+    /// <para>前提: 別トランザクションが a.txt を Add しており、sub がある</para>
     /// <para>手順: sub を Move する</para>
     /// <para>期待: Move は成功し、pending は 1 件である</para>
     /// </remarks>
@@ -440,6 +440,114 @@ public sealed class DirectoryMoveTests
         await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path, default));
         mover.Release();
         third.Release();
+    }
+
+    /// <summary>
+    /// ディレクトリの入れ替えは、移動先の既存ディレクトリを中身ごと入れ替える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: site/old.txt と build/new.txt がある</para>
+    /// <para>手順: Move(build→site, overwrite: true) を予約し、コミット後の姿とディスクを見る</para>
+    /// <para>期待: コミット前は site/old.txt が残り、姿では site/new.txt があり site/old.txt は無く、コミット後は site に new.txt だけがあり、build も .txold も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_overwriteでディレクトリを入れ替えること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string site = System.IO.Path.Combine(work.Path, "site");
+        string build = System.IO.Path.Combine(work.Path, "build");
+        Directory.CreateDirectory(site);
+        Directory.CreateDirectory(build);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(site, "old.txt"), "old");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(build, "new.txt"), "new");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await tx.MoveAsync("build", "site", overwrite: true);
+
+        Assert.True(File.Exists(System.IO.Path.Combine(site, "old.txt")));
+        Assert.Equal("new", await tx.ReadAllTextAsync("site/new.txt"));
+        Assert.False(await tx.ExistsAsync("site/old.txt"));
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+        Assert.Equal(new[] { "new.txt" }, Directory.GetFileSystemEntries(site).Select(System.IO.Path.GetFileName).ToArray());
+        Assert.False(Directory.Exists(build));
+        Assert.Empty(Directory.GetDirectories(work.Path, "*.txold"));
+    }
+
+    /// <summary>
+    /// Import で作ったディレクトリで、既存のディレクトリを同じトランザクションのなかで入れ替えられる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: site/old.txt と、ワークフォルダの外の incoming/a.txt がある</para>
+    /// <para>手順: incoming を site.new へ ImportAsync し、Move(site.new→site, overwrite: true) してコミットする</para>
+    /// <para>期待: コミット後の site には a.txt だけがあり、site.new は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_Importで作ったディレクトリで入れ替えられること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using TempDirectory outside = TempDirectory.Create();
+        string site = System.IO.Path.Combine(work.Path, "site");
+        Directory.CreateDirectory(site);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(site, "old.txt"), "old");
+        string incoming = System.IO.Path.Combine(outside.Path, "incoming");
+        Directory.CreateDirectory(incoming);
+        await File.WriteAllTextAsync(System.IO.Path.Combine(incoming, "a.txt"), "alpha");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await tx.ImportAsync(incoming, "site.new");
+        await tx.MoveAsync("site.new", "site", overwrite: true);
+
+        Assert.Equal("alpha", await tx.ReadAllTextAsync("site/a.txt"));
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+        Assert.Equal(new[] { "a.txt" }, Directory.GetFileSystemEntries(site).Select(System.IO.Path.GetFileName).ToArray());
+        Assert.Equal("alpha", await File.ReadAllTextAsync(System.IO.Path.Combine(site, "a.txt")));
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "site.new")));
+    }
+
+    /// <summary>
+    /// 移動先の DeleteTree はディレクトリの入れ替えに畳み、入れ替えの配下へは続けて操作できない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: site/old.txt と build/new.txt がある</para>
+    /// <para>手順: DeleteTree(site) のあと Move(build→site, overwrite: true) し、site/x.txt へ書く</para>
+    /// <para>期待: 操作は Move 1 件であり、書き込みは InvalidOperationException</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_移動先のDeleteTreeを入れ替えに畳むこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "site"));
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "build"));
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "site", "old.txt"), "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await tx.DeleteTreeAsync("site");
+        await tx.MoveAsync("build", "site", overwrite: true);
+
+        Assert.Equal(PendingChangeKind.Move, Assert.Single(tx.GetPendingChanges()).Kind);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.WriteAllTextAsync("site/x.txt", "x"));
+    }
+
+    /// <summary>
+    /// 作成ディレクトリでない移動元の配下に操作があると、入れ替えられない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: site と build があり、build/a.txt を Add した</para>
+    /// <para>手順: Move(build→site, overwrite: true) する</para>
+    /// <para>期待: InvalidOperationException であり、操作は Add 1 件のまま</para>
+    /// </remarks>
+    [Fact]
+    public async Task MoveAsync_作成ディレクトリでない移動元の配下に操作があれば入れ替えないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "site"));
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "build"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("build/a.txt", "a");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("build", "site", overwrite: true));
+
+        Assert.Single(tx.GetPendingChanges());
     }
 
     private static IOException SharingViolation()

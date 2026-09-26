@@ -28,7 +28,7 @@ internal sealed class PathLockSet
 
     private WorkFolderState _workFolderState;
 
-    // パスか意図ロックを持ったまま、ワークフォルダ全体のロックを持っていないあいだ開く
+    // パスロックか意図ロックを持ったまま、ワークフォルダ全体のロックを持っていないあいだ開く
     private FileStream? _shareLost;
 
     /// <summary>
@@ -199,16 +199,7 @@ internal sealed class PathLockSet
 
             throw Contention(workFolder);
         }
-        catch (IOException)
-        {
-            if (restoreSharedOnFailure)
-            {
-                await RestoreOrMarkLostAsync(workFolder, attempt).ConfigureAwait(false);
-            }
-
-            throw;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             if (restoreSharedOnFailure)
             {
@@ -220,13 +211,13 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// しるし（`.txfio/share-lost.lock`）が使用中なら、排他をやめて共有に戻す
+    /// しるし（`.txfio/share-lost.lock`）が使用中なら空くまで待つ（空かなければ排他をやめて共有に戻す）
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <param name="attempt">この呼び出しのロック待ち</param>
     /// <exception cref="LockContentionException">期限までにしるしが空かない</exception>
     /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
-    /// <returns>取れたこと（取れなければ例外）</returns>
+    /// <returns>しるしが空いていること（空かなければ例外）</returns>
     internal async Task RejectForeignLocksAsync(string workFolder, LockAttempt attempt)
     {
         try
@@ -580,12 +571,7 @@ internal sealed class PathLockSet
         {
             _workFolderState = WorkFolderState.Lost;
         }
-        catch (IOException)
-        {
-            _workFolderState = WorkFolderState.Lost;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             _workFolderState = WorkFolderState.Lost;
             throw;
@@ -603,12 +589,7 @@ internal sealed class PathLockSet
             _workFolderState = WorkFolderState.Lost;
             throw;
         }
-        catch (IOException)
-        {
-            _workFolderState = WorkFolderState.Lost;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             _workFolderState = WorkFolderState.Lost;
             throw;
@@ -740,12 +721,7 @@ internal sealed class PathLockSet
                 {
                     _workFolderState = WorkFolderState.Lost;
                 }
-                catch (IOException)
-                {
-                    _workFolderState = WorkFolderState.Lost;
-                    throw;
-                }
-                catch (UnauthorizedAccessException)
+                catch (Exception exception) when (IoErrors.IsIo(exception))
                 {
                     _workFolderState = WorkFolderState.Lost;
                     throw;
@@ -765,11 +741,7 @@ internal sealed class PathLockSet
         {
             _intents.Add(directory, OpenLockFile(IntentFilePath(workFolder, directory), FileShare.ReadWrite));
         }
-        catch (IOException)
-        {
-            // 共有へ戻せなくても、呼び出し側が元の例外を返す
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // 共有へ戻せなくても、呼び出し側が元の例外を返す
         }

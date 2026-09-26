@@ -6,9 +6,9 @@ public sealed class LockAttemptTests
     /// 既定値と待ち時間ゼロは待たずに諦める
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既定値の LockAttempt と、TimeSpan.Zero で始めた LockAttempt</para>
+    /// <para>前提: 既定値の LockAttempt と、TimeSpan.Zero で始めた LockAttempt がある</para>
     /// <para>手順: それぞれ WaitForRetryAsync する</para>
-    /// <para>期待: どちらも false</para>
+    /// <para>期待: どちらも <see langword="false"/></para>
     /// </remarks>
     [Fact]
     public async Task WaitForRetryAsync_既定値とゼロは待たないこと()
@@ -24,7 +24,7 @@ public sealed class LockAttemptTests
     /// 期限が無い待ちも、取り消せば OperationCanceledException になる
     /// </summary>
     /// <remarks>
-    /// <para>前提: 取り消し済みのトークンで、Timeout.InfiniteTimeSpan の LockAttempt を始める</para>
+    /// <para>前提: 取り消し済みのトークンで、Timeout.InfiniteTimeSpan の LockAttempt を始めている</para>
     /// <para>手順: WaitForRetryAsync する</para>
     /// <para>期待: OperationCanceledException</para>
     /// </remarks>
@@ -42,9 +42,9 @@ public sealed class LockAttemptTests
     /// 期限の中では待ってからもう一度試す
     /// </summary>
     /// <remarks>
-    /// <para>前提: 1 分の LockAttempt</para>
+    /// <para>前提: 1 分の LockAttempt がある</para>
     /// <para>手順: WaitForRetryAsync する</para>
-    /// <para>期待: true</para>
+    /// <para>期待: <see langword="true"/></para>
     /// </remarks>
     [Fact]
     public async Task WaitForRetryAsync_期限の中ではもう一度試すこと()

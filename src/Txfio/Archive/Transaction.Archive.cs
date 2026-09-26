@@ -336,9 +336,14 @@ internal sealed partial class Transaction
         }
 
         string stagingPath = WorkPath.StagingFilePath(archive, _transactionId);
-        int operationCount = _paths.Rows.Count;
+        int operationCount = _paths.Count;
+        bool journalUpdated = false;
         try
         {
+            // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
+            _paths.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
+            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journalUpdated = true;
             await using (FileStream output = new FileStream(
                 stagingPath,
                 FileMode.Create,
@@ -356,14 +361,16 @@ internal sealed partial class Transaction
                         cancellationToken)
                     .ConfigureAwait(false);
             }
-
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
-            await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             RollbackAddedOperations(operationCount);
             StagingFile.TryDelete(stagingPath);
+            if (journalUpdated)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
             throw;
         }
     }
@@ -385,7 +392,7 @@ internal sealed partial class Transaction
                 continue;
             }
 
-            if (File.Exists(root.SourcePath) && IsReparsePoint(root.SourcePath))
+            if (File.Exists(root.SourcePath) && WorkPath.IsReparsePoint(root.SourcePath))
             {
                 throw new InvalidOperationException("シンボリックリンクは ZIP に入れられません: " + root.SourcePath);
             }
@@ -437,7 +444,7 @@ internal sealed partial class Transaction
             }
 
             string prefix = root.EntryName.Length > 0 ? root.EntryName + "/" : string.Empty;
-            bool plannedChild = !IsReparsePoint(root.SourcePath)
+            bool plannedChild = !WorkPath.IsReparsePoint(root.SourcePath)
                 && PlanArchivedTree(root.SourcePath, root.SourcePath, prefix, planned, cancellationToken);
             if (!plannedChild && prefix.Length > 0)
             {

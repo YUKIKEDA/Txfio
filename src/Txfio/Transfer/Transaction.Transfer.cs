@@ -24,7 +24,7 @@ internal sealed partial class Transaction
             return;
         }
 
-        if (File.Exists(external) && IsReparsePoint(external))
+        if (File.Exists(external) && WorkPath.IsReparsePoint(external))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + external);
         }
@@ -59,7 +59,7 @@ internal sealed partial class Transaction
             throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
         }
 
-        if (IsReparsePoint(appearance.ContentPath))
+        if (WorkPath.IsReparsePoint(appearance.ContentPath))
         {
             throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
         }
@@ -104,16 +104,7 @@ internal sealed partial class Transaction
 
     private static void DeleteExportedDirectories(List<string> createdDirectories)
     {
-        createdDirectories.Sort(static (left, right) =>
-        {
-            int byDepth = DirectoryDepth(right).CompareTo(DirectoryDepth(left));
-            if (byDepth != 0)
-            {
-                return byDepth;
-            }
-
-            return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
-        });
+        PathMath.SortDeepestFirst(createdDirectories);
 
         foreach (string path in createdDirectories)
         {
@@ -124,11 +115,7 @@ internal sealed partial class Transaction
                     Directory.Delete(path);
                 }
             }
-            catch (IOException)
-            {
-                // 失敗したコピーの後始末では、元の例外を残す
-            }
-            catch (UnauthorizedAccessException)
+            catch (Exception exception) when (IoErrors.IsIo(exception))
             {
                 // 失敗したコピーの後始末では、元の例外を残す
             }
@@ -177,7 +164,7 @@ internal sealed partial class Transaction
         EnsureCopyDestinationFree(target);
         List<string> directories = new List<string> { target };
         List<PlannedTreeFile> files = new List<PlannedTreeFile>();
-        if (!IsReparsePoint(external))
+        if (!WorkPath.IsReparsePoint(external))
         {
             PlanCopiedTree(external, external, target, directories, files, cancellationToken);
         }
@@ -205,7 +192,7 @@ internal sealed partial class Transaction
             EnsureExportDestination(destinationPath);
             CreateExportDirectory(destinationPath, createdDirectories);
             DirectoryCopyProgress tracker = new DirectoryCopyProgress(progress);
-            if (!IsReparsePoint(sourcePath))
+            if (!WorkPath.IsReparsePoint(sourcePath))
             {
                 await ExportDirectoryEntriesAsync(
                         sourcePath,
@@ -280,7 +267,8 @@ internal sealed partial class Transaction
 
     private FileStream OpenExportSource(string sourcePath)
     {
-        string? stagingPath = FindStagingPath(sourcePath);
+        int index = FindOperationIndex(sourcePath);
+        string? stagingPath = index < 0 ? null : _paths.Rows[index].StagingPath;
         if (!string.IsNullOrEmpty(stagingPath))
         {
             return OpenExternalFile(stagingPath, "コピー元のファイルが存在しません: " + sourcePath, sourcePath);

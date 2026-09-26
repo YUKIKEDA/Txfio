@@ -8,75 +8,21 @@ internal sealed class ExternalChangeSet
     private readonly Dictionary<string, Snapshot> _snapshots = new Dictionary<string, Snapshot>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _updateToReal = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _foldedOperationToReal = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _removals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// コミット後の姿の元になっている実ファイルを探す
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="logicalPath">問い合わせたパス</param>
-    /// <param name="transactionId">このトランザクションの ID</param>
     /// <param name="realPath">見つかった実ファイル</param>
     /// <returns>ディスク上に実ファイルがあるなら <see langword="true"/></returns>
     internal static bool TryRealFile(
         IReadOnlyList<JournalOperation> operations,
         string logicalPath,
-        Guid transactionId,
         out string realPath)
     {
-        realPath = string.Empty;
-        CommitAppearance appearance = CommitView.Resolve(operations, logicalPath);
-        if (!appearance.Exists || appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
-        {
-            return false;
-        }
-
-        string contentPath = appearance.ContentPath;
-        if (!WorkPath.IsThisTransactionStagingFile(contentPath, transactionId))
-        {
-            if (!File.Exists(contentPath))
-            {
-                return false;
-            }
-
-            realPath = contentPath;
-            return true;
-        }
-
-        if (!TryStagingTarget(contentPath, transactionId, out string stagedTarget) || !File.Exists(stagedTarget))
-        {
-            return false;
-        }
-
-        realPath = stagedTarget;
-        return true;
-    }
-
-    /// <summary>
-    /// ステージングファイルのパスから、対象ファイルのパスを戻す
-    /// </summary>
-    /// <param name="stagingPath">このトランザクションのステージングファイル（<c>.txnew</c>）</param>
-    /// <param name="transactionId">このトランザクションの ID</param>
-    /// <param name="targetPath">対象ファイルのパス</param>
-    /// <returns>名前を戻せたなら <see langword="true"/></returns>
-    internal static bool TryStagingTarget(string stagingPath, Guid transactionId, out string targetPath)
-    {
-        targetPath = string.Empty;
-        string suffix = "." + transactionId.ToString("D") + ".txnew";
-        string fileName = System.IO.Path.GetFileName(stagingPath);
-        if (!fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        string originalName = fileName.Substring(0, fileName.Length - suffix.Length);
-        string? directory = System.IO.Path.GetDirectoryName(stagingPath);
-        if (directory is null || originalName.Length == 0)
-        {
-            return false;
-        }
-
-        targetPath = System.IO.Path.Combine(directory, originalName);
-        return true;
+        return TryRealFile(CommitView.Resolve(operations, logicalPath), out realPath);
     }
 
     /// <summary>
@@ -104,19 +50,13 @@ internal sealed class ExternalChangeSet
     /// <summary>
     /// 実ファイルを読むたび、記録をその時点へ更新する（このトランザクションのステージングファイル（<c>.txnew</c>）を読んだときは更新しない）
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
     /// <param name="logicalPath">読み取ったパス</param>
-    /// <param name="contentPath">開いた実体のパス</param>
-    /// <param name="transactionId">このトランザクションの ID</param>
-    internal void NoteRead(
-        IReadOnlyList<JournalOperation> operations,
-        string logicalPath,
-        string contentPath,
-        Guid transactionId)
+    /// <param name="appearance">読んだときのコミット後の姿</param>
+    internal void NoteRead(string logicalPath, CommitAppearance appearance)
     {
-        if (WorkPath.IsThisTransactionStagingFile(contentPath, transactionId))
+        if (appearance.StagedFor is not null)
         {
-            if (!TryRealFile(operations, logicalPath, transactionId, out string realPath)
+            if (!TryRealFile(appearance, out string realPath)
                 && !TryKnownReal(logicalPath, out realPath))
             {
                 return;
@@ -126,7 +66,10 @@ internal sealed class ExternalChangeSet
             return;
         }
 
-        Observe(contentPath, replace: true);
+        if (!string.IsNullOrEmpty(appearance.ContentPath))
+        {
+            Observe(appearance.ContentPath, replace: true);
+        }
     }
 
     /// <summary>
@@ -134,10 +77,9 @@ internal sealed class ExternalChangeSet
     /// </summary>
     /// <param name="operations">Update を足す前の操作一覧</param>
     /// <param name="logicalPath">Update の対象パス</param>
-    /// <param name="transactionId">このトランザクションの ID</param>
-    internal void NoteUpdate(IReadOnlyList<JournalOperation> operations, string logicalPath, Guid transactionId)
+    internal void NoteUpdate(IReadOnlyList<JournalOperation> operations, string logicalPath)
     {
-        if (!TryRealFile(operations, logicalPath, transactionId, out string realPath))
+        if (!TryRealFile(operations, logicalPath, out string realPath))
         {
             return;
         }
@@ -158,6 +100,31 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
+    /// ファイルの Delete か、ファイルの Move の移動元をステージしたとき、消えるか動く実ファイルを記録する（読み取りの記録があればそれを使う）
+    /// </summary>
+    /// <param name="operations">ステージする前の操作一覧</param>
+    /// <param name="logicalPath">Delete するパス、または Move の移動元</param>
+    internal void NoteRemoval(IReadOnlyList<JournalOperation> operations, string logicalPath)
+    {
+        if (!TryRealFile(operations, logicalPath, out string realPath))
+        {
+            return;
+        }
+
+        if (!_snapshots.ContainsKey(realPath))
+        {
+            if (!TryCapture(realPath, out long length, out DateTime lastWriteTimeUtc))
+            {
+                return;
+            }
+
+            _snapshots[realPath] = new Snapshot(length, lastWriteTimeUtc, fromRead: false);
+        }
+
+        _removals.Add(realPath);
+    }
+
+    /// <summary>
     /// Move 先への Update を畳んだあと、残る Add と Delete を同じ実ファイルの記録に紐づける
     /// </summary>
     /// <param name="updatePath">畳む前の Update 対象（残る Add のパス）</param>
@@ -175,7 +142,7 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// この操作が、記録と違う実ファイルの Update（または畳んだ残り）なら <see langword="true"/>
+    /// この操作が、記録と違うファイルの Update、ファイルの Delete、ファイルの Move、または畳んだ残りなら <see langword="true"/>
     /// </summary>
     /// <param name="operation">検証中の操作</param>
     /// <returns>サイズか最終更新日時が違い、実ファイルがまだファイルなら <see langword="true"/></returns>
@@ -193,7 +160,34 @@ internal sealed class ExternalChangeSet
             return Differs(foldedReal);
         }
 
+        // ファイルの Delete とファイルの Move の移動元では、操作のパスが消えるか動く実ファイルである
+        if (operation.Kind is PendingChangeKind.Delete or PendingChangeKind.Move
+            && !operation.IsDirectory
+            && _removals.Contains(operation.Path))
+        {
+            return Differs(operation.Path);
+        }
+
         return false;
+    }
+
+    private static bool TryRealFile(CommitAppearance appearance, out string realPath)
+    {
+        realPath = string.Empty;
+        if (!appearance.Exists || appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
+        {
+            return false;
+        }
+
+        // ステージングファイルなら、それが置き換える対象パスが実ファイル
+        string candidate = appearance.StagedFor ?? appearance.ContentPath;
+        if (!File.Exists(candidate))
+        {
+            return false;
+        }
+
+        realPath = candidate;
+        return true;
     }
 
     private void Observe(string realPath, bool replace)

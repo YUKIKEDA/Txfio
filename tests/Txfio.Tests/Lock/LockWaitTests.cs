@@ -225,7 +225,7 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// しるしが使われていても、ディレクトリ作成はワークフォルダ全体を待たない
+    /// しるしが使用中でも、ディレクトリ作成はワークフォルダ全体のロックを待たない
     /// </summary>
     /// <remarks>
     /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちはゼロ</para>
@@ -233,7 +233,7 @@ public sealed class LockWaitTests
     /// <para>期待: sub ができる（ワークフォルダ全体を排他にするのは Recover だけ）</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_しるしがあってもワークフォルダ全体を待たないこと()
+    public async Task CreateDirectoryAsync_しるしが使用中でもワークフォルダ全体のロックを待たないこと()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));

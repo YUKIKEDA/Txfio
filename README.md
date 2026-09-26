@@ -63,8 +63,10 @@ CommitReport report = await tx.CommitAsync();
 | `ImportArchiveAsync`                       | ワークフォルダの外の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す。ZIP は消さない                                                 |
 | `ReadAsync`                                | コミット後の姿のファイルを開く。ロックは取らない                                                                                                   |
 | `ExistsAsync`                              | コミット後の姿で、ファイルかディレクトリがあるかを返す。ロックは取らない                                                                           |
+| `GetEntriesAsync`                          | コミット後の姿で、ディレクトリの直下のファイルとディレクトリを返す（再帰しない）、ロックは取らない                                                 |
 | `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                                                 |
 | `WriteAllTextAsync` / `WriteAllLinesAsync` | コミット後の姿でファイルが無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                        |
+| `AppendAllTextAsync` / `AppendAllLinesAsync` | コミット後の姿で、末尾に足す（無ければ Add、あれば中身に足した Update、既存の中身もメモリに読む）                                                 |
 | `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                                  |
 | `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                                   |
 | `CommitAsync`                              | 検証してから rename と削除を適用する。結果は `CommitReport`                                                                                        |
@@ -129,7 +131,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 
 適用の途中で、ほかのプロセスがファイルを変えていたときや、ファイルを開けなかったときは `PartialConflict` です。戻り値は例外ではありません。確定は進んでいます。適用しなかった操作の `.txnew` とジャーナルは消えます。飛ばした操作は `Operations` に載ります。理由は、Before と After のどちらとも一致しない、対象が無い、移動先が既にある、ファイルかディレクトリにすり替わった、共有違反、それ以外の IO 失敗、です。共有違反は自動では再試行しません。同じインスタンスではやり直せません。`Succeeded` と見比べて扱ってください。
 
-検証で失敗したときは `Failed` です。拒んだ操作は `Operations` に載ります。理由は、対象が無い、既にある、ファイルかディレクトリにすり替わった、ディレクトリの直下条件を満たさない、です。`detectExternalChanges` が true のときは、記録したファイルのサイズか最終更新日時が違う、も入ります。本物のパスはまだ変えていません。状態を直したあと、同じトランザクションでもう一度 `CommitAsync` できます。
+検証で失敗したときは `Failed` です。拒んだ操作は `Operations` に載ります。理由は、対象が無い、既にある、ファイルかディレクトリにすり替わった、ディレクトリの直下条件を満たさない、Update かファイルの Delete の対象が読み取り専用（`ReadOnly`）、です。`detectExternalChanges` が true のときは、記録したファイルのサイズか最終更新日時が違う、も入ります。本物のパスはまだ変えていません。状態を直したあと、同じトランザクションでもう一度 `CommitAsync` できます。
 
 ### コミットせず破棄すると
 
@@ -166,7 +168,7 @@ flowchart TD
 
 同じトランザクションの公開メンバーは、重なって呼べません。先に入った呼び出しは最後まで行い、後から重なった呼び出しは状態を変える前に `InvalidOperationException` です。進行中の progress から同じインスタンスを呼ぶのも同じです。呼び出しが終わったあとは、また 1 つずつ呼べます。別のトランザクションは、別のパスなら今までどおり並行できます。
 
-変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで共有で持ちます。別のパスを触るトランザクションは並行できます。パスの親ディレクトリ（ワークフォルダ自身は除く）には、共有の意図ロックを終わりまで取ります。ワークフォルダ全体を排他にするのは `RecoverAsync` だけで、ディレクトリの操作も共有のまま、別のパスを触るトランザクションと並行できます。配下を予約するのは、`DeleteTreeAsync`（そのディレクトリ）、ディレクトリの Move（元と先）、ディレクトリの `CopyAsync` とディレクトリの `ImportAsync`（先だけ）、`ExtractArchiveAsync` と `ImportArchiveAsync`（展開先）、ディレクトリの `DeleteAsync`（そのディレクトリ）です。予約は排他の意図ロックで、トランザクションが終わるまで残ります。配下をステージしようとすると `LockContentionException` で、`Path` はそのディレクトリです。`CreateDirectoryAsync` と `CreateArchiveAsync` は配下を予約しません。ディレクトリの `CopyAsync` のコピー元と、`CreateArchiveAsync` の入力ディレクトリは、呼び出しのあいだだけ排他の意図ロックで押さえ、呼び出しが終わると閉じます（読んでいるあいだに配下が変わらないようにするため）。`BeginAsync` か `RecoverAsync` に待ち時間を渡すと、その呼び出しの開始からその時間まで、共有違反のときだけ 100ms 間隔で開き直します。時間切れは同じ例外で、待ちの取り消しは `OperationCanceledException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、待ち時間を渡さないときは何もせず `LockContentionException` です。`.lock` ファイルは消しません。
+変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで共有で持ちます。別のパスを触るトランザクションは並行できます。パスの親ディレクトリ（ワークフォルダ自身は除く）には、共有の意図ロックを終わりまで取ります。ワークフォルダ全体を排他にするのは `RecoverAsync` だけで、ディレクトリの操作も共有のまま、別のパスを触るトランザクションと並行できます。配下を予約するのは、`DeleteTreeAsync`（そのディレクトリ）、ディレクトリの Move（元と先）、ディレクトリの `CopyAsync` とディレクトリの `ImportAsync`（先だけ）、`ExtractArchiveAsync` と `ImportArchiveAsync`（展開先）、ディレクトリの `DeleteAsync`（そのディレクトリ）です。予約は排他の意図ロックで、トランザクションが終わるまで残ります。配下をステージしようとすると `LockContentionException` で、`Path` はそのディレクトリです。`CreateDirectoryAsync` と `CreateArchiveAsync` は配下を予約しません。ディレクトリの `CopyAsync` のコピー元と、`CreateArchiveAsync` の入力ディレクトリは、呼び出しのあいだだけ排他の意図ロックで押さえ、呼び出しが終わると閉じます（読んでいるあいだに配下が変わらないようにするため）。`BeginAsync` か `RecoverAsync` に待ち時間を渡すと、その呼び出しの開始からその時間まで、共有違反のときだけ 100ms 間隔で開き直します。時間切れは同じ例外で、待ちの取り消しは `OperationCanceledException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、待ち時間を渡さないときは何もせず `LockContentionException` です。しるしが空いていることを確かめたあと、ジャーナルを処理する前に `.txfio/locks/` の `.lock` を消します。消せないものは残します。生存ロックとしるしは消しません。
 
 ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExistsAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
 
@@ -196,7 +198,7 @@ flowchart TD
 
 `UpdateAsync` は、既にあるファイルの新しい内容を `.txnew` へ書きます。本物はコミットまで旧内容のままです。コミットすると本物を置換し、破棄すると `.txnew` だけ消えて本物は旧のまま残ります。印が無ければ `.txnew` を消し、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
 
-`BeginAsync` の `detectExternalChanges` を true にすると、ファイルの Update だけ、ステージした時点（またはその前に `ReadAsync` した時点）のサイズと最終更新日時（UTC）を覚えます。コミット前にその実ファイルがまだファイルで、どちらかが違えば `Failed` になり、本物は変えません。理由は `ExternalChange` です。既定の false は、中身だけ変わった Update を失敗にせず、Before をコミット時点のディスクにします。同じサイズで同じ最終更新日時の書き換えは見逃します。記録はメモリだけで、ジャーナルには書きません。`ReadAsync` は実ファイルを読むたびに記録を更新します。このトランザクションの `.txnew` を読んだときは更新しません。Read の記録があるパスは、もう一度ステージしても記録を更新しません。
+`BeginAsync` の `detectExternalChanges` を true にすると、ファイルの Update、ファイルの Delete、ファイルの Move の移動元について、ステージした時点（またはその前に `ReadAsync` した時点）のサイズと最終更新日時（UTC）を覚えます。コミット前にその実ファイルがまだファイルであり、どちらかが違えば `Failed` になり、本物は変えません。理由は `ExternalChange` です。既定の false は、中身だけ変わった Update を失敗にせず、Before をコミット時点のディスクにします。同じサイズで同じ最終更新日時の書き換えは見逃します（FAT は 2 秒、SMB サーバーによっては秒単位に日時を丸めます）。ディレクトリの配下の変更は見ません。記録はメモリだけで、ジャーナルには書きません。`ReadAsync` は実ファイルを読むたびに記録を更新します。このトランザクションの `.txnew` を読んだときは更新しません。Read の記録があるパスは、もう一度ステージしても記録を更新しません。
 
 ワークフォルダ全体は共有で押さえ、そのファイルもロックします。81920 バイトごとに通知します。
 
@@ -313,7 +315,7 @@ flowchart TD
 
 `MoveAsync` は、同一ボリューム内のファイルまたはディレクトリの移動を予約します。対象はコミットまで元の場所に残り、コミット時に 1 回 rename します。ディレクトリの中身はジャーナルに書かず、rename に付いていきます。破棄しても何も消えません。印が無ければディスクは変えず、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
 
-ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリでも、ワークフォルダ全体は共有で押さえます。元と先をロックし、その意図ロックは排他で終わりまで持ちます。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。そのときはジャーナルに載せず、ロックも取りません。移動先は、空いているか、既にこのトランザクションの別の Move の移動元であるときだけ受け付けます。呼び出しは空いている端からで、空いている端が無い循環は受け付けません。適用もその端からで、ファイルの移動元への Add はその Move のあとです。存在するファイルを上書きする Move はしません。
+ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリでも、ワークフォルダ全体は共有で押さえます。元と先をロックし、その意図ロックは排他で終わりまで持ちます。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。そのときはジャーナルに載せず、ロックも取りません。移動先は、空いているか、既にこのトランザクションの別の Move の移動元であるときだけ受け付けます。呼び出しは空いている端からで、空いている端が無い循環は受け付けません。適用もその端からで、ファイルの移動元への Add はその Move のあとです。存在するファイルを上書きする Move は、`MoveAsync(oldPath, newPath, overwrite: true)` と明示したときだけです。コミットで 1 回の rename で置き換え、バイトはコピーしません（移動先の ACL は移動元のものになります）。移動先にこのトランザクションの Delete があれば、その Delete を置き換えの Move に畳みます。置き換えの Move の元と先へは、そのあと続けて操作できません。移動元か移動先がディレクトリで `overwrite: true` にすると、移動先の既存のファイルかディレクトリを入れ替えます。コミットでは、既存を `{名前}.{txid}.txold` へ退避してから rename し、`.txold` を消します。ファイルでディレクトリを入れ替えると、コミット後の姿ではその配下は無くなります。移動元は、同じトランザクションの `ImportAsync` や `CopyAsync` が作ったディレクトリでも構いません（`ImportAsync(外, "site.new")` のあと `MoveAsync("site.new", "site", overwrite: true)`）。移動先の `DeleteTreeAsync` は入れ替えに畳みます。同じパスの種類を変えるときは、新しい方を別の名前で用意してからこの入れ替えを使います。`Delete` のあとの `CreateDirectoryAsync` と、空ディレクトリの `Delete` のあとの Add は受け付けません。
 
 ```csharp
 await tx.MoveAsync("tree", "archive");
@@ -457,10 +459,12 @@ await tx.ExportArchiveAsync(
 ```csharp
 await tx.ExportArchiveAsync("reports", @"D:\outgoing\reports.zip");
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-await tx.ImportArchiveAsync(@"D:\incoming\drop.zip", "incoming", Encoding.GetEncoding(932));
+await tx.ImportArchiveAsync(@"D:\incoming\drop.zip", "incoming", Encoding.GetEncoding(932), maxExtractedBytes: 1L << 30);
 ```
 
 展開は、書き始める前にエントリ名を全部確かめます。1 つでも次に当たれば、何もステージせず、展開先も作らずに `InvalidDataException` です。展開先の外へ出る名前（`..`、先頭の `/`、ドライブ指定）、Windows のパスに使えない名前（`<>:"|?*`、末尾の `.` や空白、`CON` や `NUL` などの予約名）、`.txnew` で終わる名前、大文字と小文字だけが違う重複、同じ名前のファイルとディレクトリです。ZIP 自体が壊れているときも `InvalidDataException` です。
+
+`maxExtractedBytes` を渡すと、エントリが申告した展開後のサイズの合計が上限を超える ZIP は、何もステージせずに `InvalidDataException` になります。無圧縮のエントリは申告より多く読めるので、実際に読んだバイト数が上限を超えたときも同じ例外になり、書きかけは消します。圧縮率の高い ZIP で共有のディスクを埋めないよう、外から受け取った ZIP では上限を渡してください。省略すると上限はありません。
 
 ```mermaid
 flowchart TD
@@ -472,7 +476,9 @@ flowchart TD
   blocked -->|はい| conflict["ExternalConflictException"]
   blocked -->|いいえ| names{"危険なエントリ名がある?"}
   names -->|はい| data["InvalidDataException。何も残さない"]
-  names -->|いいえ| add["各ファイルを Add"]
+  names -->|いいえ| size{"申告の合計か読んだバイト数が上限を超える?"}
+  size -->|はい| data
+  size -->|いいえ| add["各ファイルを Add"]
 ```
 
 ## 同じパスへ続けて呼ぶ
