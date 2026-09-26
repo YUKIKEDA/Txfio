@@ -19,7 +19,7 @@ internal sealed class JournalOperation
     /// <param name="destBefore">Move の移動先の適用直前状態（それ以外は null）</param>
     /// <param name="destAfter">Move の移動先の適用直後状態（それ以外は null）</param>
     /// <param name="isDirectory">ディレクトリの Delete、DeleteTree、Move、または CreateDirectory なら <see langword="true"/></param>
-    /// <param name="directoryCreated">CreateDirectory がディレクトリを作り終えたあとなら <see langword="true"/></param>
+    /// <param name="directoryCreated">CreateDirectory がディレクトリを作り終えたなら <see langword="true"/></param>
     [JsonConstructor]
     public JournalOperation(
         PendingChangeKind kind,
@@ -96,7 +96,7 @@ internal sealed class JournalOperation
     public bool IsDirectory { get; }
 
     /// <summary>
-    /// CreateDirectory がディレクトリを作り終えたあとなら <see langword="true"/>（未作成のまま落ちたときは、同じ名前を他が作ったかもしれない）
+    /// CreateDirectory がディレクトリを作り終えたなら <see langword="true"/>（未作成のまま落ちたときは、同じ名前のディレクトリを他が作ったかもしれない）
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool DirectoryCreated { get; }
@@ -129,9 +129,9 @@ internal sealed class JournalOperation
     }
 
     /// <summary>
-    /// CreateDirectory がディレクトリを作り終えたことを付けたコピーを返す
+    /// 作成済みを付けたコピーを返す
     /// </summary>
-    /// <returns>作成済みの操作</returns>
+    /// <returns>作成済みを記録した操作</returns>
     internal JournalOperation WithDirectoryCreated()
     {
         return new JournalOperation(

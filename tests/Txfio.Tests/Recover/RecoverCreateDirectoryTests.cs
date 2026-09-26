@@ -111,7 +111,7 @@ public sealed class RecoverCreateDirectoryTests
     }
 
     /// <summary>
-    /// 作成済みが書かれていない CreateDirectory は、中身があれば消さずに残す
+    /// 作成済みが書かれていない CreateDirectory は、中身があれば Recover で残す
     /// </summary>
     /// <remarks>
     /// <para>前提: 未コミットの CreateDirectory の journal に作成済みが無く、同じ名前のディレクトリに子ファイルがある（落ちたあとに他が作った）</para>
@@ -132,7 +132,7 @@ public sealed class RecoverCreateDirectoryTests
     }
 
     /// <summary>
-    /// 作成済みが書かれていない CreateDirectory でも、空のディレクトリは消す
+    /// 作成済みが書かれていない CreateDirectory でも、空のディレクトリは Recover で消す
     /// </summary>
     /// <remarks>
     /// <para>前提: 未コミットの CreateDirectory の journal に作成済みが無く、同じ名前の空ディレクトリがある（作った直後に落ちた）</para>
@@ -150,13 +150,14 @@ public sealed class RecoverCreateDirectoryTests
 
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(Directory.Exists(target));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
     /// <summary>
     /// CreateDirectoryAsync は作ったあとでジャーナルに作成済みを書く
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダ</para>
+    /// <para>前提: ワークフォルダだけがある</para>
     /// <para>手順: CreateDirectoryAsync してからジャーナルを読む</para>
     /// <para>期待: ディレクトリがあり、ジャーナルに directoryCreated が true で書いてある</para>
     /// </remarks>

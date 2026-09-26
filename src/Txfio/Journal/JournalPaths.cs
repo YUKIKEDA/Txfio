@@ -66,7 +66,8 @@ internal static class JournalPaths
                 operation.After,
                 operation.DestBefore,
                 operation.DestAfter,
-                operation.IsDirectory);
+                operation.IsDirectory,
+                operation.DirectoryCreated);
         }
 
         string[] createdDirectories = new string[document.CreatedDirectories.Count];
