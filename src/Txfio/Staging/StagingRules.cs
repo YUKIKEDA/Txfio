@@ -22,6 +22,15 @@ internal static class StagingRules
             return;
         }
 
+        if (Directory.Exists(targetPath))
+        {
+            // ディレクトリへファイルを書くと、コミットの検証まで失敗が分からない
+            string message = kind == PendingChangeKind.Add
+                ? "追加対象のパスにディレクトリが既に存在します: "
+                : "更新対象のパスはディレクトリです: ";
+            throw new ExternalConflictException(message + targetPath, targetPath);
+        }
+
         bool exists = File.Exists(targetPath);
         if (kind == PendingChangeKind.Add && exists)
         {
