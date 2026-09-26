@@ -22,6 +22,15 @@ internal static class StagingRules
             return;
         }
 
+        if (Directory.Exists(targetPath))
+        {
+            // ディレクトリへファイルを書くと、コミットの検証まで失敗が分からない
+            string message = kind == PendingChangeKind.Add
+                ? "追加対象のパスにディレクトリが既に存在します: "
+                : "更新対象のパスはディレクトリです: ";
+            throw new ExternalConflictException(message + targetPath, targetPath);
+        }
+
         bool exists = File.Exists(targetPath);
         if (kind == PendingChangeKind.Add && exists)
         {
@@ -72,7 +81,7 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 置き換えの Move の移動元か移動先なら、続けて操作させない
+    /// 置き換えの Move の移動元か移動先なら、続けて操作できない
     /// </summary>
     /// <param name="operations">現在の操作一覧</param>
     /// <param name="path">操作するパス</param>

@@ -89,7 +89,7 @@ public sealed class RecoverMoveTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
     /// <para>手順: Committing の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward で、b.txt は旧 a.txt の中身、a.txt は無い</para>
+    /// <para>期待: RolledForward であり、b.txt は旧 a.txt の中身、a.txt は無い</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_置き換えのMoveを完了すること()
@@ -117,7 +117,7 @@ public sealed class RecoverMoveTests
     /// <remarks>
     /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
     /// <para>手順: 適用の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward で飛ばした操作は無く、b.txt は旧 a.txt の中身</para>
+    /// <para>期待: RolledForward であり、飛ばした操作は無く、b.txt は旧 a.txt の中身</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_適用済みの置き換えのMoveはRolledForwardになること()
@@ -145,7 +145,7 @@ public sealed class RecoverMoveTests
     /// <remarks>
     /// <para>前提: site/old.txt と build/new.txt があり、Move(build→site, overwrite: true) を予約した</para>
     /// <para>手順: Committing の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward で、site には new.txt だけがあり、.txold は無い</para>
+    /// <para>期待: RolledForward であり、site には new.txt だけがあり、.txold は無い</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_ディレクトリの入れ替えを完了すること()
@@ -175,7 +175,7 @@ public sealed class RecoverMoveTests
     /// <remarks>
     /// <para>前提: site/old.txt と build/new.txt があり、Move(build→site, overwrite: true) を Committing の直後に止めた</para>
     /// <para>手順: site を site.{txid}.txold へ手で移してから RecoverAsync する</para>
-    /// <para>期待: RolledForward で、site には new.txt だけがあり、build も .txold も無い</para>
+    /// <para>期待: RolledForward であり、site には new.txt だけがあり、build も .txold も無い</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_退避のあとで落ちた入れ替えを続けること()
@@ -210,7 +210,7 @@ public sealed class RecoverMoveTests
     /// <remarks>
     /// <para>前提: site/old.txt と、外の incoming/a.txt がある。incoming を site.new へ Import し、Move(site.new→site, overwrite: true) を予約した</para>
     /// <para>手順: 最初の適用（Add）の直後に止め、入れ替えを手で済ませてから RecoverAsync する</para>
-    /// <para>期待: RolledForward で飛ばした操作は無く、site には a.txt だけがある</para>
+    /// <para>期待: RolledForward であり、飛ばした操作は無く、site には a.txt だけがある</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_入れ替え済みなら移動元の配下のAddも済んだとみなすこと()

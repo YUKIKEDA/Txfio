@@ -248,15 +248,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 先にパスを押さえているとディレクトリ Move は積まない
+    /// 別のトランザクションが無関係なパスを押さえていても、ディレクトリ Move は積める
     /// </summary>
     /// <remarks>
-    /// <para>前提: 別トランザクションが a.txt を Add し、sub がある</para>
+    /// <para>前提: 別トランザクションが a.txt を Add しており、sub がある</para>
     /// <para>手順: sub を Move する</para>
-    /// <para>期待: LockContentionException になり、Path はワークフォルダ、pending は空である</para>
+    /// <para>期待: Move は成功し、pending は 1 件である</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_他のトランザクションがパスを押さえるとLockContentionExceptionになること()
+    public async Task MoveAsync_無関係なパスが押さえられていてもディレクトリMoveを積めること()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -265,11 +265,9 @@ public sealed class DirectoryMoveTests
         await holder.AddAsync("a.txt", content);
         await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path);
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => mover.MoveAsync("sub", "other"));
+        await mover.MoveAsync("sub", "other");
 
-        Assert.Equal(work.Path, contention.Path);
-        Assert.Empty(mover.GetPendingChanges());
+        Assert.Single(mover.GetPendingChanges());
     }
 
     /// <summary>
@@ -291,14 +289,14 @@ public sealed class DirectoryMoveTests
             FileAccess.ReadWrite,
             FileShare.ReadWrite);
         PathLockSet mover = new PathLockSet();
-        mover.AcquireExclusive(work.Path);
+        await mover.AcquireExclusiveAsync(work.Path);
 
-        LockContentionException contention = Assert.Throws<LockContentionException>(() => mover.RejectForeignLocks(work.Path));
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.RejectForeignLocksAsync(work.Path));
 
         Assert.Equal(work.Path, contention.Path);
         PathLockSet other = new PathLockSet();
-        other.AcquireShared(work.Path);
-        Assert.Throws<LockContentionException>(() => other.AcquireExclusive(work.Path));
+        await other.AcquireSharedAsync(work.Path);
+        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path));
         mover.Release();
         other.Release();
     }
@@ -318,13 +316,13 @@ public sealed class DirectoryMoveTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         FaultInjector faults = new FaultInjector();
         PathLockSet holder = new PathLockSet(faults);
-        holder.AcquireShared(work.Path);
-        holder.Acquire(work.Path, target);
+        await holder.AcquireSharedAsync(work.Path);
+        await holder.AcquireAsync(work.Path, target);
         faults.FailNextOpen(FileShare.None, SharingViolation());
         faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
         try
         {
-            Assert.Throws<LockContentionException>(() => holder.AcquireExclusive(work.Path));
+            await Assert.ThrowsAsync<LockContentionException>(() => holder.AcquireExclusiveAsync(work.Path));
         }
         finally
         {
@@ -334,9 +332,9 @@ public sealed class DirectoryMoveTests
         string marker = MetadataNames.ShareLostLockPath(work.Path);
         Assert.True(File.Exists(marker));
         PathLockSet mover = new PathLockSet();
-        mover.AcquireExclusive(work.Path);
-        LockContentionException contention = Assert.Throws<LockContentionException>(
-            () => mover.RejectForeignLocks(work.Path));
+        await mover.AcquireExclusiveAsync(work.Path);
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => mover.RejectForeignLocksAsync(work.Path));
         Assert.Equal(work.Path, contention.Path);
         holder.Release();
         using (FileStream free = new FileStream(marker, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
@@ -361,15 +359,15 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         PathLockSet holder = new PathLockSet();
         PathLockSet mover = new PathLockSet();
-        holder.AcquireShared(work.Path);
-        mover.AcquireShared(work.Path);
+        await holder.AcquireSharedAsync(work.Path);
+        await mover.AcquireSharedAsync(work.Path);
 
-        LockContentionException contention = Assert.Throws<LockContentionException>(() => mover.AcquireExclusive(work.Path));
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path));
 
         Assert.Equal(work.Path, contention.Path);
         holder.Release();
         PathLockSet third = new PathLockSet();
-        Assert.Throws<LockContentionException>(() => third.AcquireExclusive(work.Path));
+        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path));
         mover.Release();
         third.Release();
     }
@@ -388,12 +386,12 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
         PathLockSet mover = new PathLockSet(faults);
-        mover.AcquireShared(work.Path);
+        await mover.AcquireSharedAsync(work.Path);
         faults.FailNextOpen(FileShare.None, SharingViolation());
         faults.FailNextOpen(FileShare.ReadWrite, new IOException("disk"));
         try
         {
-            IOException failure = Assert.Throws<IOException>(() => mover.AcquireExclusive(work.Path));
+            IOException failure = await Assert.ThrowsAsync<IOException>(() => mover.AcquireExclusiveAsync(work.Path));
             Assert.Equal("disk", failure.Message);
         }
         finally
@@ -401,9 +399,9 @@ public sealed class DirectoryMoveTests
             faults.ClearOpenFailures();
         }
 
-        mover.AcquireShared(work.Path);
+        await mover.AcquireSharedAsync(work.Path);
         PathLockSet other = new PathLockSet();
-        Assert.Throws<LockContentionException>(() => other.AcquireExclusive(work.Path));
+        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path));
         mover.Release();
         other.Release();
     }
@@ -422,12 +420,12 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
         PathLockSet mover = new PathLockSet(faults);
-        mover.AcquireShared(work.Path);
+        await mover.AcquireSharedAsync(work.Path);
         faults.FailNextOpen(FileShare.None, SharingViolation());
         faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
         try
         {
-            Assert.Throws<LockContentionException>(() => mover.AcquireExclusive(work.Path));
+            await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path));
         }
         finally
         {
@@ -435,11 +433,11 @@ public sealed class DirectoryMoveTests
         }
 
         PathLockSet holder = new PathLockSet();
-        holder.AcquireShared(work.Path);
-        Assert.Throws<LockContentionException>(() => mover.AcquireExclusive(work.Path));
+        await holder.AcquireSharedAsync(work.Path);
+        await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path));
         holder.Release();
         PathLockSet third = new PathLockSet();
-        Assert.Throws<LockContentionException>(() => third.AcquireExclusive(work.Path));
+        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path));
         mover.Release();
         third.Release();
     }
@@ -450,7 +448,7 @@ public sealed class DirectoryMoveTests
     /// <remarks>
     /// <para>前提: site/old.txt と build/new.txt がある</para>
     /// <para>手順: Move(build→site, overwrite: true) を予約し、コミット後の姿とディスクを見る</para>
-    /// <para>期待: コミット前は site/old.txt が残り、姿では site/new.txt があり site/old.txt は無い。コミット後は site に new.txt だけがあり、build も .txold も無い</para>
+    /// <para>期待: コミット前は site/old.txt が残り、姿では site/new.txt があり site/old.txt は無く、コミット後は site に new.txt だけがあり、build も .txold も無い</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_overwriteでディレクトリを入れ替えること()
@@ -512,7 +510,7 @@ public sealed class DirectoryMoveTests
     /// <remarks>
     /// <para>前提: site/old.txt と build/new.txt がある</para>
     /// <para>手順: DeleteTree(site) のあと Move(build→site, overwrite: true) し、site/x.txt へ書く</para>
-    /// <para>期待: 操作は Move 1 件で、書き込みは InvalidOperationException</para>
+    /// <para>期待: 操作は Move 1 件であり、書き込みは InvalidOperationException</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_移動先のDeleteTreeを入れ替えに畳むこと()
@@ -536,7 +534,7 @@ public sealed class DirectoryMoveTests
     /// <remarks>
     /// <para>前提: site と build があり、build/a.txt を Add した</para>
     /// <para>手順: Move(build→site, overwrite: true) する</para>
-    /// <para>期待: InvalidOperationException で、操作は Add 1 件のまま</para>
+    /// <para>期待: InvalidOperationException であり、操作は Add 1 件のまま</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_作成ディレクトリでない移動元の配下に操作があれば入れ替えないこと()

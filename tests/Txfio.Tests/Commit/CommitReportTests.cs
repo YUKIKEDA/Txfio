@@ -272,15 +272,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// 読み取り専用の対象への適用は IoFailure になる
+    /// 読み取り専用のファイルへの Update は、検証で ReadOnly として拒み、属性を外せばやり直せる
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update したあと、対象ファイルを読み取り専用にしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: PartialConflict で理由は IoFailure、対象は元の内容</para>
+    /// <para>前提: Update したあと、a.txt を読み取り専用にしている</para>
+    /// <para>手順: CommitAsync し、属性を外してからもう一度 CommitAsync する</para>
+    /// <para>期待: 1 回目は Failed で理由は ReadOnly、扱いは Rejected、a.txt は元の内容であり、2 回目は Succeeded で新しい内容</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_読み取り専用への適用はIoFailureになること()
+    public async Task CommitAsync_読み取り専用へのUpdateはReadOnlyで拒みやり直せること()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -293,13 +293,87 @@ public sealed class CommitReportTests
             CommitReport report = await tx.CommitAsync();
 
             OperationReport operation = Assert.Single(report.Operations);
-            Assert.Equal(CommitResult.PartialConflict, report.Result);
-            Assert.Equal(OperationFailureReason.IoFailure, operation.Reason);
+            Assert.Equal(CommitResult.Failed, report.Result);
+            Assert.Equal(OperationFailureReason.ReadOnly, operation.Reason);
+            Assert.Equal(OperationDisposition.Rejected, operation.Disposition);
             Assert.Equal("old", await File.ReadAllTextAsync(target));
         }
         finally
         {
             File.SetAttributes(target, FileAttributes.Normal);
+        }
+
+        CommitReport retried = await tx.CommitAsync();
+        Assert.Equal(CommitResult.Succeeded, retried.Result);
+        Assert.Equal("new", await File.ReadAllTextAsync(target));
+    }
+
+    /// <summary>
+    /// 読み取り専用のファイルの Delete は、検証で ReadOnly として拒む
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt を Delete したあと、a.txt を読み取り専用にしている</para>
+    /// <para>手順: CommitAsync する</para>
+    /// <para>期待: Failed で理由は ReadOnly、a.txt は残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_読み取り専用のDeleteはReadOnlyで拒むこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "old");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.DeleteAsync("a.txt");
+        File.SetAttributes(target, FileAttributes.ReadOnly);
+        try
+        {
+            CommitReport report = await tx.CommitAsync();
+
+            Assert.Equal(CommitResult.Failed, report.Result);
+            Assert.Equal(OperationFailureReason.ReadOnly, Assert.Single(report.Operations).Reason);
+            Assert.True(File.Exists(target));
+        }
+        finally
+        {
+            File.SetAttributes(target, FileAttributes.Normal);
+        }
+    }
+
+    /// <summary>
+    /// 読み取り専用のファイルでも Move は拒まない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 読み取り専用の a.txt がある</para>
+    /// <para>手順: Move(a.txt→b.txt) して CommitAsync する</para>
+    /// <para>期待: Succeeded で b.txt がある</para>
+    /// </remarks>
+    [Fact]
+    public async Task CommitAsync_読み取り専用でもMoveは拒まないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string source = System.IO.Path.Combine(work.Path, "a.txt");
+        string dest = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(source, "old");
+        File.SetAttributes(source, FileAttributes.ReadOnly);
+        try
+        {
+            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await tx.MoveAsync("a.txt", "b.txt");
+
+            Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+            Assert.True(File.Exists(dest));
+        }
+        finally
+        {
+            if (File.Exists(source))
+            {
+                File.SetAttributes(source, FileAttributes.Normal);
+            }
+
+            if (File.Exists(dest))
+            {
+                File.SetAttributes(dest, FileAttributes.Normal);
+            }
         }
     }
 }

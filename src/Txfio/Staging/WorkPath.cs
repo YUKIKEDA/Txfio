@@ -97,6 +97,16 @@ internal static class WorkPath
     }
 
     /// <summary>
+    /// 再ステージのあいだ、元の `.txnew` を退避するパスを返す
+    /// </summary>
+    /// <param name="stagingPath">操作の `.txnew`</param>
+    /// <returns>`.txnew` に `.prev` を付けたパス</returns>
+    internal static string StagingBackupPath(string stagingPath)
+    {
+        return stagingPath + ".prev";
+    }
+
+    /// <summary>
     /// このトランザクションの `.txnew` かどうかを判定する
     /// </summary>
     /// <param name="path">調べるパス</param>

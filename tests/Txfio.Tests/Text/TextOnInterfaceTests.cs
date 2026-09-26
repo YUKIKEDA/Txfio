@@ -182,20 +182,22 @@ public sealed class TextOnInterfaceTests
             string archivePath,
             string destinationDir,
             Encoding? entryNameEncoding = null,
+            long? maxExtractedBytes = null,
             IProgress<TransferProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Pending(archivePath, destinationDir, entryNameEncoding, progress, cancellationToken);
+            return Pending(archivePath, destinationDir, entryNameEncoding, maxExtractedBytes, progress, cancellationToken);
         }
 
         public Task ImportArchiveAsync(
             string externalArchivePath,
             string destinationDir,
             Encoding? entryNameEncoding = null,
+            long? maxExtractedBytes = null,
             IProgress<TransferProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Pending(externalArchivePath, destinationDir, entryNameEncoding, progress, cancellationToken);
+            return Pending(externalArchivePath, destinationDir, entryNameEncoding, maxExtractedBytes, progress, cancellationToken);
         }
 
         public Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default)
