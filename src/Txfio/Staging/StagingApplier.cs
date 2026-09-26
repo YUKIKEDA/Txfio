@@ -135,8 +135,7 @@ internal static class StagingApplier
 
         try
         {
-            bool overwrite = operation.Kind == PendingChangeKind.Update;
-            File.Move(operation.StagingPath, operation.Path, overwrite);
+            StagingFile.MoveToTarget(operation.StagingPath, operation.Path, replace: operation.Kind == PendingChangeKind.Update);
             return true;
         }
         catch (IOException exception)

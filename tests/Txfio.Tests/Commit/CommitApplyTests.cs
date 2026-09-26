@@ -213,4 +213,32 @@ public sealed class CommitApplyTests
         await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
         Assert.Empty(next.GetPendingChanges());
     }
+
+    /// <summary>
+    /// Update の適用は、対象ファイルの属性と作成日時を保つ
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 隠し属性で、作成日時を 2001-01-01 にした a.txt がある</para>
+    /// <para>手順: a.txt へ書いて CommitAsync する</para>
+    /// <para>期待: Succeeded で中身は新しく、隠し属性と作成日時は元のまま、.txnew は無い</para>
+    /// </remarks>
+    [WindowsFact("ReplaceFileW が属性と作成日時を移すこと")]
+    public async Task CommitAsync_Updateは対象の属性と作成日時を保つこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(target, "old");
+        DateTime created = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetCreationTimeUtc(target, created);
+        File.SetAttributes(target, FileAttributes.Hidden);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await tx.WriteAllTextAsync("a.txt", "new");
+
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+
+        Assert.Equal("new", await File.ReadAllTextAsync(target));
+        Assert.True((File.GetAttributes(target) & FileAttributes.Hidden) != 0);
+        Assert.Equal(created, File.GetCreationTimeUtc(target));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+    }
 }

@@ -76,6 +76,27 @@ internal static class StagingFile
     }
 
     /// <summary>
+    /// コミットの適用で、`.txnew` を対象パスへ移す
+    /// </summary>
+    /// <remarks>
+    /// 置き換え（Update）は <see cref="File.Replace(string, string, string?, bool)"/> で、対象ファイルの ACL、属性、作成日時、代替データストリームを新しいファイルへ移す
+    /// メタデータを移せないときも、中身の置き換えを優先して失敗にしない
+    /// </remarks>
+    /// <param name="stagingPath">`.txnew`</param>
+    /// <param name="targetPath">対象パス</param>
+    /// <param name="replace"><see langword="true"/> なら既存のファイルを置き換える（Update）、<see langword="false"/> なら新規に作る（Add）</param>
+    internal static void MoveToTarget(string stagingPath, string targetPath, bool replace)
+    {
+        if (replace)
+        {
+            File.Replace(stagingPath, targetPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            return;
+        }
+
+        File.Move(stagingPath, targetPath, overwrite: false);
+    }
+
+    /// <summary>
     /// ステージングファイルがあれば削除する
     /// </summary>
     /// <param name="stagingPath">削除対象</param>
