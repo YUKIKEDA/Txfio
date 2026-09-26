@@ -192,4 +192,75 @@ public sealed class RecoverUnreadableJournalTests
         Assert.False(File.Exists(backup));
         Assert.Equal("outside", await File.ReadAllTextAsync(outsideStaging));
     }
+
+    /// <summary>
+    /// BeginAsync はジャーナルの一時ファイルを残さない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 空のワークフォルダ</para>
+    /// <para>手順: BeginAsync する</para>
+    /// <para>期待: ジャーナルが 1 つあり、.journal.tmp は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task BeginAsync_ジャーナルの一時ファイルを残さないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        string metadata = System.IO.Path.Combine(work.Path, ".txfio");
+        Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
+        Assert.Empty(Directory.GetFiles(metadata, "*.tmp"));
+    }
+
+    /// <summary>
+    /// 初回のジャーナルを移す前に落ちた一時ファイルは、Recover が消してワークフォルダを塞がない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ジャーナルが無く、途中までの JSON の tx-{guid}.journal.tmp だけがある</para>
+    /// <para>手順: RecoverAsync してから BeginAsync する</para>
+    /// <para>期待: NoPendingTransactions で一時ファイルは消え、BeginAsync は成功する</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_ジャーナルの無い一時ファイルは消してNoPendingTransactionsになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string metadata = System.IO.Path.Combine(work.Path, ".txfio");
+        Directory.CreateDirectory(metadata);
+        string temp = System.IO.Path.Combine(
+            metadata,
+            "tx-" + Guid.NewGuid().ToString("D") + ".journal.tmp");
+        await File.WriteAllTextAsync(temp, "{\"version\":1,\"transac");
+
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.NoPendingTransactions, result.Result);
+        Assert.Empty(result.Journals);
+        Assert.False(File.Exists(temp));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+    }
+
+    /// <summary>
+    /// 持ち主が生きている一時ファイルは、ジャーナルがまだ無くても Recover が消さない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: ジャーナルが無く tx-{guid}.journal.tmp があり、その guid の生存ロックを開いたままにしている</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: NoPendingTransactions で、一時ファイルは残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_持ち主が生きている一時ファイルは消さないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string metadata = System.IO.Path.Combine(work.Path, ".txfio");
+        Directory.CreateDirectory(metadata);
+        string journal = System.IO.Path.Combine(metadata, "tx-" + Guid.NewGuid().ToString("D") + ".journal");
+        string temp = journal + ".tmp";
+        await File.WriteAllTextAsync(temp, "{}");
+        using FileStream liveness = LivenessLock.Create(MetadataNames.LivenessLockPath(journal));
+
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.NoPendingTransactions, result.Result);
+        Assert.True(File.Exists(temp));
+    }
 }

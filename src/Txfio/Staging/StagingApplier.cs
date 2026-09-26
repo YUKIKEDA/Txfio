@@ -18,9 +18,16 @@ internal static class StagingApplier
         out OperationReport[] skipped)
     {
         List<OperationReport> failures = new List<OperationReport>();
-        foreach (JournalOperation operation in InApplyOrder(operations))
+        JournalOperation[] ordered = InApplyOrder(operations);
+        Dictionary<string, int> lastTouch = LastTouchByPath(ordered);
+        for (int i = 0; i < ordered.Length; i++)
         {
-            if (!TryApply(operation, faults, out OperationFailureReason reason))
+            JournalOperation operation = ordered[i];
+            int index = i;
+
+            // あとの操作が変えるパスは、この操作が済んだかどうかの手がかりにならない
+            bool ChangedLater(string path) => lastTouch.TryGetValue(path, out int last) && last > index;
+            if (!TryApply(operation, faults, ChangedLater, out OperationFailureReason reason))
             {
                 failures.Add(OperationReport.Create(operation, OperationDisposition.Skipped, reason));
                 continue;
@@ -101,9 +108,14 @@ internal static class StagingApplier
     /// </summary>
     /// <param name="operation">適用する操作</param>
     /// <param name="faults">この適用の失敗と途中停止</param>
+    /// <param name="changedLater">適用順であとの操作も変えるパスなら <see langword="true"/></param>
     /// <param name="reason">飛ばした理由（成功時は使わない）</param>
     /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
-    internal static bool TryApply(JournalOperation operation, IFaultInjector faults, out OperationFailureReason reason)
+    internal static bool TryApply(
+        JournalOperation operation,
+        IFaultInjector faults,
+        Func<string, bool> changedLater,
+        out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
         faults.ThrowIfApplyArmed();
@@ -124,7 +136,7 @@ internal static class StagingApplier
 
         if (OperationKind.TryGet(operation.Kind, out OperationKind behavior))
         {
-            return behavior.TryApply(operation, out reason);
+            return behavior.TryApply(operation, changedLater, out reason);
         }
 
         if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
@@ -408,6 +420,21 @@ internal static class StagingApplier
         }
 
         return true;
+    }
+
+    private static Dictionary<string, int> LastTouchByPath(JournalOperation[] ordered)
+    {
+        Dictionary<string, int> lastTouch = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < ordered.Length; i++)
+        {
+            lastTouch[ordered[i].Path] = i;
+            if (ordered[i].Kind == PendingChangeKind.Move && !string.IsNullOrEmpty(ordered[i].NewPath))
+            {
+                lastTouch[ordered[i].NewPath!] = i;
+            }
+        }
+
+        return lastTouch;
     }
 
     private static int PathDepth(string path)

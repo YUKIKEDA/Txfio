@@ -22,20 +22,31 @@ internal static class JournalStore
     };
 
     /// <summary>
-    /// 未コミットの新規ジャーナルを作成する
+    /// 未コミットの新規ジャーナルを作成する（一時ファイルに書いてから rename し、ジャーナルのパスに途中の状態を残さない）
     /// </summary>
     /// <param name="journalPath">書き込み先</param>
     /// <param name="transactionId">トランザクション ID</param>
     /// <param name="cancellationToken">取り消し用のトークン</param>
     /// <returns>書き込みの完了</returns>
-    internal static Task WriteNewAsync(string journalPath, Guid transactionId, CancellationToken cancellationToken)
+    /// <exception cref="IOException">ジャーナルのパスに既にファイルがある、または書き込みに失敗した</exception>
+    internal static async Task WriteNewAsync(string journalPath, Guid transactionId, CancellationToken cancellationToken)
     {
         JournalDocument document = new JournalDocument(
             CurrentVersion,
             transactionId,
             committing: false,
             Array.Empty<JournalOperation>());
-        return WriteAsync(journalPath, document, FileMode.CreateNew, cancellationToken);
+        string tempPath = MetadataNames.JournalTempPath(journalPath);
+        try
+        {
+            await WriteAsync(tempPath, document, FileMode.Create, cancellationToken).ConfigureAwait(false);
+            File.Move(tempPath, journalPath, overwrite: false);
+        }
+        catch
+        {
+            TryDeleteTemp(tempPath);
+            throw;
+        }
     }
 
     /// <summary>

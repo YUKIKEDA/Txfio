@@ -40,11 +40,36 @@ internal static class RecoverService
 
             // パスの大文字小文字を無視した辞書順（報告と、読み取り失敗より前に確定する範囲を毎回同じにする）
             Array.Sort(journals, static (left, right) => string.Compare(left, right, StringComparison.OrdinalIgnoreCase));
-            return await RecoverJournalsAsync(workFolder, journals, cancellationToken).ConfigureAwait(false);
+            RecoverReport report = await RecoverJournalsAsync(workFolder, journals, cancellationToken).ConfigureAwait(false);
+            DeleteOrphanJournalTemps(metadataFolder);
+            return report;
         }
         finally
         {
             sentinel.Release();
+        }
+    }
+
+    // 初回のジャーナルを rename する前に落ちると、一時ファイルだけが残る（持ち主が生きていれば触らない）
+    private static void DeleteOrphanJournalTemps(string metadataFolder)
+    {
+        string[] temps = Directory.GetFiles(
+            metadataFolder,
+            MetadataNames.JournalTempSearchPattern,
+            SearchOption.TopDirectoryOnly);
+        foreach (string tempPath in temps)
+        {
+            if (!MetadataNames.TryGetJournalPathFromTemp(tempPath, out string journalPath)
+                || File.Exists(journalPath))
+            {
+                continue;
+            }
+
+            using FileStream? liveness = LivenessLock.TryOpenStale(MetadataNames.LivenessLockPath(journalPath));
+            if (liveness is not null && !File.Exists(journalPath) && File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
         }
     }
 
@@ -84,7 +109,7 @@ internal static class RecoverService
 
                 if (document is null)
                 {
-                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew だけ消す
+                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew と再ステージの退避だけ消す
                     if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
                     {
                         StagingApplier.DeleteStagingFiles(workFolder, transactionId);
