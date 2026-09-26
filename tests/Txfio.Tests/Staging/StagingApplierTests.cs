@@ -268,9 +268,11 @@ public sealed class StagingApplierTests
         System.Reflection.MethodInfo method = typeof(OperationKind).GetMethod(
             methodName,
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-        object?[] args = { source, dest, null };
+        object?[] args = method.GetParameters().Length == 4
+            ? new object?[] { source, dest, false, null }
+            : new object?[] { source, dest, null };
         bool applied = (bool)method.Invoke(null, args)!;
-        reason = (OperationFailureReason)args[2]!;
+        reason = (OperationFailureReason)args[args.Length - 1]!;
         return applied;
     }
 

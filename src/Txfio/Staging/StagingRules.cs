@@ -35,6 +35,25 @@ internal static class StagingRules
     }
 
     /// <summary>
+    /// 置き換えの Move の移動元か移動先なら、続けて操作させない
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="path">操作するパス</param>
+    internal static void ThrowIfOverwriteMovePath(IReadOnlyList<JournalOperation> operations, string path)
+    {
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Move
+                && operation.Overwrite
+                && (string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException("置き換えの Move の移動元と移動先へは、続けて操作できません: " + path);
+            }
+        }
+    }
+
+    /// <summary>
     /// 移動元が既存ファイルであることを検証する
     /// </summary>
     /// <param name="sourcePath">移動元パス</param>

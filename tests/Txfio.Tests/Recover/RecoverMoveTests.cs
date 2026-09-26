@@ -82,4 +82,60 @@ public sealed class RecoverMoveTests
         Assert.False(File.Exists(leftover.SourcePath));
         Assert.Equal("done", await File.ReadAllTextAsync(leftover.DestPath));
     }
+
+    /// <summary>
+    /// 置き換えの Move を Committing の直後に止めても、Recover が置き換えを終える
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
+    /// <para>手順: Committing の直後に止めて Dispose し、RecoverAsync する</para>
+    /// <para>期待: RolledForward で、b.txt は旧 a.txt の中身、a.txt は無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_置き換えのMoveを完了すること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "old");
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        {
+            await tx.MoveAsync("a.txt", "b.txt", overwrite: true);
+            await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
+        }
+
+        Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal("new", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
+        Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
+
+    /// <summary>
+    /// 置き換えの Move を適用し終えてから落ちても、Recover は RolledForward になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
+    /// <para>手順: 適用の直後に止めて Dispose し、RecoverAsync する</para>
+    /// <para>期待: RolledForward で飛ばした操作は無く、b.txt は旧 a.txt の中身</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_適用済みの置き換えのMoveはRolledForwardになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
+        await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "old");
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterApply);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        {
+            await tx.MoveAsync("a.txt", "b.txt", overwrite: true);
+            await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
+        }
+
+        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        Assert.Equal(RecoverResult.RolledForward, report.Result);
+        Assert.Empty(Assert.Single(report.Journals).Operations);
+        Assert.Equal("new", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt")));
+    }
 }

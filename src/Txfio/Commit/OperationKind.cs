@@ -213,15 +213,17 @@ internal abstract class OperationKind
             return false;
         }
 
-        if (destBefore.Exists)
+        // 置き換えの Move は、移動先がファイルか無いときだけ進める
+        if (destBefore.Exists && !(operation.Overwrite && destBefore.IsFile))
         {
-            reason = OperationFailureReason.AlreadyExists;
+            reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
             return false;
         }
 
+        // 置き換えの Move の移動先の Before は、置き換えられる既存ファイル（無ければ不在）
         projected[operation.Path] = PathState.Absent;
         projected[operation.NewPath] = before;
-        stamped = operation.WithOutcome(before, PathState.Absent, PathState.Absent, before);
+        stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
         return true;
     }
 
@@ -494,7 +496,7 @@ internal abstract class OperationKind
         }
     }
 
-    private static bool TryMove(string sourcePath, string destPath, out OperationFailureReason reason)
+    private static bool TryMove(string sourcePath, string destPath, bool overwrite, out OperationFailureReason reason)
     {
         reason = OperationFailureReason.BeforeAfterMismatch;
         if (!File.Exists(sourcePath))
@@ -520,7 +522,8 @@ internal abstract class OperationKind
             return false;
         }
 
-        if (File.Exists(destPath) || Directory.Exists(destPath))
+        // 置き換えの Move は、移動先のファイルが Before と一致したことを呼び出し側が確かめている
+        if (Directory.Exists(destPath) || (!overwrite && File.Exists(destPath)))
         {
             reason = OperationFailureReason.AlreadyExists;
             return false;
@@ -528,7 +531,7 @@ internal abstract class OperationKind
 
         try
         {
-            SameVolumeMove.MoveFile(sourcePath, destPath);
+            SameVolumeMove.MoveFile(sourcePath, destPath, overwrite);
             return true;
         }
         catch (IOException exception)
@@ -756,7 +759,7 @@ internal abstract class OperationKind
                 static (JournalOperation current, out OperationFailureReason failure) =>
                     current.IsDirectory
                         ? TryMoveDirectory(current.Path, current.NewPath!, out failure)
-                        : TryMove(current.Path, current.NewPath!, out failure));
+                        : TryMove(current.Path, current.NewPath!, current.Overwrite, out failure));
         }
     }
 

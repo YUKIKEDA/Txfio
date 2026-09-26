@@ -88,6 +88,26 @@ public interface ITransaction : IAsyncDisposable
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 同一ボリューム内のファイルまたはディレクトリの移動を予約し、<paramref name="overwrite"/> が <see langword="true"/> ならファイルの移動先の既存ファイルを置き換える
+    /// </summary>
+    /// <remarks>
+    /// 置き換えはコミットで 1 回の rename（`MOVEFILE_REPLACE_EXISTING`）であり、バイトはコピーしない
+    /// 移動先にこのトランザクションのファイルの Delete があれば、その Delete をこの Move に畳む
+    /// 置き換えの Move の移動元と移動先へは、このあと続けて操作できない
+    /// </remarks>
+    /// <param name="oldPath">移動元パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
+    /// <param name="overwrite"><see langword="true"/> なら移動先の既存ファイルを置き換える（<see langword="false"/> は <see cref="MoveAsync(string, string, CancellationToken)"/> と同じ）</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>予約の完了</returns>
+    /// <exception cref="ExternalConflictException">移動元が無い、移動先がディレクトリ、置き換えないのに移動先が塞がっている、または親ディレクトリが無い</exception>
+    /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
+    /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動、またはディレクトリを置き換える移動である</exception>
+    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動、別操作でステージング済み、置き換えの Move の移動元か移動先への操作、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、リパースポイント、またはメタデータ配下である</exception>
+    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 空ディレクトリを呼び出した時点で作る（配下では通常の操作ができ、中身は素のファイル API でも書ける）
     /// </summary>
     /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>

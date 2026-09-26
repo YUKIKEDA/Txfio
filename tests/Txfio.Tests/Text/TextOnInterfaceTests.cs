@@ -99,6 +99,11 @@ public sealed class TextOnInterfaceTests
             return Pending(oldPath, newPath, cancellationToken);
         }
 
+        public Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default)
+        {
+            return Pending(oldPath, newPath, overwrite, cancellationToken);
+        }
+
         public Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
         {
             return Pending(path, cancellationToken);
