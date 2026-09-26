@@ -43,14 +43,14 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, targetPath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, targetPath);
         StagingRules.ThrowIfOverwriteMovePath(_paths.Rows, targetPath);
-        _locks.AcquireShared(_workFolder);
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
         if (Directory.Exists(targetPath))
         {
-            _locks.AcquireReserving(_workFolder, new[] { targetPath }, targetPath);
+            await _locks.AcquireReservingAsync(_workFolder, new[] { targetPath }, targetPath).ConfigureAwait(false);
         }
         else
         {
-            _locks.Acquire(_workFolder, targetPath);
+            await _locks.AcquireAsync(_workFolder, targetPath).ConfigureAwait(false);
         }
 
         StagingRules.EnsureParentDirectoryExists(targetPath);
@@ -345,8 +345,8 @@ internal sealed partial class Transaction
             }
         }
 
-        _locks.AcquireShared(_workFolder);
-        _locks.Acquire(_workFolder, sourcePath, destPath);
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, sourcePath, destPath).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
         bool replaces = false;
         if (!destIsMoveSource)
@@ -510,9 +510,8 @@ internal sealed partial class Transaction
         }
 
         StagingRules.ThrowIfDirectoryMoveConflicts(_paths.Rows, root, destPath);
-        _locks.AcquireShared(_workFolder);
-        _locks.AcquireReserving(_workFolder, new[] { root, destPath }, root, destPath);
-        using PathLockSet.WorkFolderExclusive exclusive = _locks.EnterExclusive(_workFolder);
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { root, destPath }, root, destPath).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!destIsMoveSource)
         {
@@ -598,9 +597,8 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken,
         int replaceIndex = -1)
     {
-        _locks.AcquireShared(_workFolder);
-        _locks.AcquireReserving(_workFolder, new[] { directoryPath }, directoryPath);
-        using PathLockSet.WorkFolderExclusive exclusive = _locks.EnterExclusive(_workFolder);
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { directoryPath }, directoryPath).ConfigureAwait(false);
         if (!Directory.Exists(directoryPath))
         {
             throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + directoryPath, directoryPath);
@@ -677,15 +675,28 @@ internal sealed partial class Transaction
     {
         JournalOperation existing = _paths.Rows[sourceIndex];
         JournalOperation[] previous = _paths.Rows.ToArray();
+        string sourcePath = existing.Path;
 
         // .txnew は移動先の名前に付け替える（元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする）
         string? stagingPath = existing.StagingPath is null
             ? null
             : WorkPath.StagingFilePath(destPath, _transactionId);
+        JournalOperation retargeted = new JournalOperation(PendingChangeKind.Add, destPath, stagingPath);
         bool journalUpdated = false;
+        bool moved = false;
         try
         {
-            string sourcePath = existing.Path;
+            if (existing.StagingPath is not null)
+            {
+                // 付け替えの前後どちらで落ちても、両方の .txnew がジャーナルに載っているようにする
+                _paths.Rows.Add(retargeted);
+                await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+                journalUpdated = true;
+                File.Move(existing.StagingPath, stagingPath!);
+                moved = true;
+                _paths.Rows.Remove(retargeted);
+            }
+
             _paths.Rows.RemoveAt(sourceIndex);
             _paths.Rows.Add(new JournalOperation(retargetedKind, destPath, stagingPath));
             if (deleteSource)
@@ -694,16 +705,24 @@ internal sealed partial class Transaction
             }
 
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
-            journalUpdated = true;
-            if (existing.StagingPath is not null)
-            {
-                File.Move(existing.StagingPath, stagingPath!);
-            }
         }
         catch
         {
             _paths.Rows.Clear();
             _paths.Rows.AddRange(previous);
+            if (moved)
+            {
+                try
+                {
+                    File.Move(stagingPath!, existing.StagingPath!);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // 戻せなくても、両方の .txnew が載ったジャーナルが残れば次の Recover が消す
+                    journalUpdated = false;
+                }
+            }
+
             if (journalUpdated)
             {
                 await TryPersistUndoAsync().ConfigureAwait(false);
@@ -735,20 +754,28 @@ internal sealed partial class Transaction
             folded,
             moveIndex,
             new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
-        await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
 
+        // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
         JournalOperation[] previous = _paths.Rows.ToArray();
+        bool journalUpdated = false;
         try
         {
             _paths.Rows.Clear();
             _paths.Rows.AddRange(folded);
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
+            journalUpdated = true;
+            await StagingFile.WriteAsync(stagingPath, content, progress, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             _paths.Rows.Clear();
             _paths.Rows.AddRange(previous);
             StagingFile.TryDelete(stagingPath);
+            if (journalUpdated)
+            {
+                await TryPersistUndoAsync().ConfigureAwait(false);
+            }
+
             throw;
         }
     }
@@ -805,8 +832,8 @@ internal sealed partial class Transaction
             out bool addOntoFileMove,
             out PendingChangeKind recordedKind);
 
-        _locks.AcquireShared(_workFolder);
-        _locks.Acquire(_workFolder, targetPath);
+        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireAsync(_workFolder, targetPath).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (kind == PendingChangeKind.Update)
         {
@@ -855,7 +882,7 @@ internal sealed partial class Transaction
                 && string.Equals(previous.StagingPath, stagingPath, StringComparison.OrdinalIgnoreCase)
                 && File.Exists(stagingPath))
             {
-                backupPath = stagingPath + ".prev";
+                backupPath = WorkPath.StagingBackupPath(stagingPath);
                 StagingFile.MoveReplacing(stagingPath, backupPath);
             }
 

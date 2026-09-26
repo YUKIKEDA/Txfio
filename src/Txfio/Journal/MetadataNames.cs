@@ -16,6 +16,16 @@ internal static class MetadataNames
     internal const string JournalSearchPattern = "tx-*.journal";
 
     /// <summary>
+    /// ジャーナルの一時ファイルを列挙するときの検索パターン
+    /// </summary>
+    internal const string JournalTempSearchPattern = "tx-*.journal.tmp";
+
+    /// <summary>
+    /// ジャーナルの一時ファイル名の末尾
+    /// </summary>
+    internal const string JournalTempSuffix = ".tmp";
+
+    /// <summary>
     /// ロックファイルを置くフォルダ名
     /// </summary>
     internal const string LockFolderName = "locks";
@@ -64,6 +74,17 @@ internal static class MetadataNames
     }
 
     /// <summary>
+    /// ジャーナルのパスから、そのジャーナルがあるワークフォルダを返す
+    /// </summary>
+    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
+    /// <returns>`.txfio` の親のワークフォルダ</returns>
+    internal static string WorkFolderFromJournal(string journalPath)
+    {
+        string metadataFolder = System.IO.Path.GetDirectoryName(journalPath)!;
+        return System.IO.Path.GetDirectoryName(metadataFolder)!;
+    }
+
+    /// <summary>
     /// ジャーナルと組になる生存ロックのパスを返す
     /// </summary>
     /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
@@ -80,7 +101,25 @@ internal static class MetadataNames
     /// <returns>`.txfio/tx-{guid}.journal.tmp` のパス</returns>
     internal static string JournalTempPath(string journalPath)
     {
-        return journalPath + ".tmp";
+        return journalPath + JournalTempSuffix;
+    }
+
+    /// <summary>
+    /// 一時ファイルのパスから、組になるジャーナルのパスを取る
+    /// </summary>
+    /// <param name="tempPath">`.txfio/tx-{guid}.journal.tmp` のパス</param>
+    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
+    /// <returns>ジャーナルの一時ファイルの名前なら <see langword="true"/></returns>
+    internal static bool TryGetJournalPathFromTemp(string tempPath, out string journalPath)
+    {
+        journalPath = string.Empty;
+        if (!tempPath.EndsWith(".journal" + JournalTempSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        journalPath = tempPath.Substring(0, tempPath.Length - JournalTempSuffix.Length);
+        return TryGetTransactionId(journalPath, out _);
     }
 
     /// <summary>
