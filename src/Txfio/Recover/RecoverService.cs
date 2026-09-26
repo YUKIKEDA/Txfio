@@ -109,7 +109,7 @@ internal static class RecoverService
 
                 if (document is null)
                 {
-                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew だけ消す
+                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew と再ステージの退避だけ消す
                     if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
                     {
                         StagingApplier.DeleteStagingFiles(workFolder, transactionId);
@@ -148,7 +148,7 @@ internal static class RecoverService
 
                 StagingApplier.DeleteCreateDirectoryTrees(document.Operations);
                 StagingApplier.DeleteStagingFiles(document.Operations);
-                StagingApplier.DeleteStagingBackups(workFolder, document.TransactionId);
+                StagingApplier.DeleteStagingBackups(document.Operations);
                 StagingApplier.DeleteCreatedDirectories(document.CreatedDirectories);
                 await JournalStore.DeleteAsync(journalPath).ConfigureAwait(false);
                 reports.Add(new JournalReport(

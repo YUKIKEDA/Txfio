@@ -160,6 +160,40 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
+    /// 読めないジャーナルの掃除は退避も消し、シンボリックリンクの先は辿らない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 壊れたジャーナルがあり、その ID の .txnew と .txnew.prev がワークフォルダにある。ワークフォルダの外を指すディレクトリのシンボリックリンクがあり、外にも同じ ID の .txnew がある</para>
+    /// <para>手順: RecoverAsync する</para>
+    /// <para>期待: JournalUnreadable で、ワークフォルダの .txnew と .prev は消え、外の .txnew は残る</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_読めないジャーナルの掃除は退避も消しリンクの先は辿らないこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using TempDirectory outside = TempDirectory.Create();
+        LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
+            work.Path,
+            committing: false,
+            "a.txt",
+            "staged");
+        await File.WriteAllTextAsync(leftover.JournalPath, "{\"version\":1,\"transac");
+        string backup = leftover.StagingPath + ".prev";
+        await File.WriteAllTextAsync(backup, "old");
+        string stagingName = System.IO.Path.GetFileName(leftover.StagingPath);
+        string outsideStaging = System.IO.Path.Combine(outside.Path, stagingName);
+        await File.WriteAllTextAsync(outsideStaging, "outside");
+        Directory.CreateSymbolicLink(System.IO.Path.Combine(work.Path, "link"), outside.Path);
+
+        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
+        Assert.False(File.Exists(leftover.StagingPath));
+        Assert.False(File.Exists(backup));
+        Assert.Equal("outside", await File.ReadAllTextAsync(outsideStaging));
+    }
+
+    /// <summary>
     /// BeginAsync はジャーナルの一時ファイルを残さない
     /// </summary>
     /// <remarks>
