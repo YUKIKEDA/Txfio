@@ -25,8 +25,7 @@ internal sealed partial class Transaction
         JsonSerializerOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         await using MemoryStream buffer = new MemoryStream();
         await JsonSerializer.SerializeAsync(buffer, value, options, cancellationToken).ConfigureAwait(false);
         buffer.Position = 0;

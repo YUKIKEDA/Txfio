@@ -383,4 +383,92 @@ public sealed class TextExtensionTests
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Empty(tx.GetPendingChanges());
     }
+
+    /// <summary>
+    /// 既存ファイルへの追記は、中身に足した Update になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt に "one" がある</para>
+    /// <para>手順: "two" を 2 回追記してコミットする</para>
+    /// <para>期待: 操作は Update 1 件であり、コミット後の a.txt は "onetwotwo"</para>
+    /// </remarks>
+    [Fact]
+    public async Task AppendAllTextAsync_既存ファイルに足してUpdateになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string file = System.IO.Path.Combine(work.Path, "a.txt");
+        await File.WriteAllTextAsync(file, "one");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await tx.AppendAllTextAsync("a.txt", "two");
+        await tx.AppendAllTextAsync("a.txt", "two");
+
+        Assert.Equal(PendingChangeKind.Update, Assert.Single(tx.GetPendingChanges()).Kind);
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+        Assert.Equal("onetwotwo", await File.ReadAllTextAsync(file));
+    }
+
+    /// <summary>
+    /// 無いファイルへの追記は Add になる
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt は無い</para>
+    /// <para>手順: 行を追記してコミットする</para>
+    /// <para>期待: 操作は Add 1 件であり、コミット後の a.txt の行は x と y</para>
+    /// </remarks>
+    [Fact]
+    public async Task AppendAllLinesAsync_無いファイルはAddになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await tx.AppendAllLinesAsync("a.txt", new[] { "x", "y" });
+
+        Assert.Equal(PendingChangeKind.Add, Assert.Single(tx.GetPendingChanges()).Kind);
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+        Assert.Equal(new[] { "x", "y" }, await File.ReadAllLinesAsync(System.IO.Path.Combine(work.Path, "a.txt")));
+    }
+
+    /// <summary>
+    /// BOM のあるエンコーディングで追記しても、BOM は先頭にしか付かない
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: a.txt は無い</para>
+    /// <para>手順: UTF-8（BOM あり）で 2 回追記してコミットする</para>
+    /// <para>期待: ファイルの BOM は先頭の 1 つだけであり、中身は 2 回分</para>
+    /// </remarks>
+    [Fact]
+    public async Task AppendAllTextAsync_BOMは新しく書くときだけ付けること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await tx.AppendAllTextAsync("a.txt", "ab", Encoding.UTF8);
+        await tx.AppendAllTextAsync("a.txt", "cd", Encoding.UTF8);
+        Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
+
+        byte[] bytes = await File.ReadAllBytesAsync(System.IO.Path.Combine(work.Path, "a.txt"));
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF, (byte)'a', (byte)'b', (byte)'c', (byte)'d' }, bytes);
+    }
+
+    /// <summary>
+    /// 既存ディレクトリへの追記はその場で失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 対象パスに空ディレクトリがある</para>
+    /// <para>手順: AppendAllTextAsync する</para>
+    /// <para>期待: ExternalConflictException になり、.txnew も操作も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task AppendAllTextAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AppendAllTextAsync("d", "text"));
+
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
+        Assert.Empty(tx.GetPendingChanges());
+    }
 }
