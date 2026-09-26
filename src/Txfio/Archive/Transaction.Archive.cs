@@ -336,7 +336,7 @@ internal sealed partial class Transaction
         }
 
         string stagingPath = WorkPath.StagingFilePath(archive, _transactionId);
-        int operationCount = _paths.Rows.Count;
+        int operationCount = _paths.Count;
         try
         {
             await using (FileStream output = new FileStream(
@@ -357,7 +357,7 @@ internal sealed partial class Transaction
                     .ConfigureAwait(false);
             }
 
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
+            _paths.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch

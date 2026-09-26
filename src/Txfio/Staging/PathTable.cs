@@ -10,9 +10,9 @@ internal sealed class PathTable
     private readonly Dictionary<string, int> _moveDestination = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 表の行（ジャーナルに書く順）
+    /// 表の行（ジャーナルに書く順）。変えるときは表のメソッドを通す（索引を合わせるため）
     /// </summary>
-    internal List<JournalOperation> Rows => _rows;
+    internal IReadOnlyList<JournalOperation> Rows => _rows;
 
     /// <summary>
     /// 行の数
@@ -260,6 +260,16 @@ internal sealed class PathTable
     }
 
     /// <summary>
+    /// 同じインスタンスの行の位置を返す
+    /// </summary>
+    /// <param name="operation">探す操作</param>
+    /// <returns>無ければ -1</returns>
+    internal int IndexOf(JournalOperation operation)
+    {
+        return _rows.IndexOf(operation);
+    }
+
+    /// <summary>
     /// 行をすべて外す
     /// </summary>
     internal void Clear()
@@ -287,7 +297,6 @@ internal sealed class PathTable
     /// <returns>無ければ -1</returns>
     internal int FindOperationIndex(string path)
     {
-        Reindex();
         return _firstByPath.TryGetValue(path, out int index) ? index : -1;
     }
 
@@ -317,7 +326,6 @@ internal sealed class PathTable
     /// <returns>無ければ -1</returns>
     internal int FindMoveToIndex(string destPath)
     {
-        Reindex();
         return _moveDestination.TryGetValue(destPath, out int index) ? index : -1;
     }
 

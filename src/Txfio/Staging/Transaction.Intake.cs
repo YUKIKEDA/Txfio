@@ -137,7 +137,7 @@ internal sealed partial class Transaction
         long? totalBytes,
         CancellationToken cancellationToken)
     {
-        int operationCount = _paths.Rows.Count;
+        int operationCount = _paths.Count;
         int directoryCount = _createdDirectories.Count;
         foreach (string directory in directories)
         {
@@ -147,7 +147,7 @@ internal sealed partial class Transaction
         foreach (string filePath in filePaths)
         {
             string stagingPath = WorkPath.StagingFilePath(filePath, _transactionId);
-            _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, filePath, stagingPath));
+            _paths.Add(new JournalOperation(PendingChangeKind.Add, filePath, stagingPath));
         }
 
         try

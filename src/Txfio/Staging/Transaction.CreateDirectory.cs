@@ -37,14 +37,14 @@ internal sealed partial class Transaction
             PendingChangeKind.CreateDirectory,
             targetPath,
             isDirectory: true);
-        _paths.Rows.Add(operation);
+        _paths.Add(operation);
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            _paths.Rows.Remove(operation);
+            _paths.Remove(operation);
             throw;
         }
 
@@ -77,18 +77,18 @@ internal sealed partial class Transaction
             // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
         }
 
-        _paths.Rows.Remove(operation);
+        _paths.Remove(operation);
         try
         {
             await PersistAsync(committing: false, CancellationToken.None).ConfigureAwait(false);
         }
         catch (IOException)
         {
-            _paths.Rows.Add(operation);
+            _paths.Add(operation);
         }
         catch (UnauthorizedAccessException)
         {
-            _paths.Rows.Add(operation);
+            _paths.Add(operation);
         }
     }
 }

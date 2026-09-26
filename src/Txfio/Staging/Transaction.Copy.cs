@@ -116,9 +116,9 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(destinationPath);
-        int operationCount = _paths.Rows.Count;
+        int operationCount = _paths.Count;
         string stagingPath = WorkPath.StagingFilePath(destinationPath, _transactionId);
-        _paths.Rows.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
+        _paths.Add(new JournalOperation(PendingChangeKind.Add, destinationPath, stagingPath));
         try
         {
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
@@ -178,10 +178,10 @@ internal sealed partial class Transaction
 
     private void RollbackAddedOperations(int operationCount)
     {
-        while (_paths.Rows.Count > operationCount)
+        while (_paths.Count > operationCount)
         {
-            JournalOperation operation = _paths.Rows[_paths.Rows.Count - 1];
-            _paths.Rows.RemoveAt(_paths.Rows.Count - 1);
+            JournalOperation operation = _paths.Rows[_paths.Count - 1];
+            _paths.RemoveAt(_paths.Count - 1);
             StagingFile.TryDelete(operation.StagingPath);
         }
     }
