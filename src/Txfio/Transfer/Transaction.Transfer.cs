@@ -12,8 +12,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);
@@ -155,8 +154,8 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, target);
         ThrowIfCopyPathIsStaged(target);
         EnsureCopyDestinationFree(target);
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { target }, target).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { target }, new[] { target }, _lockAttempt).ConfigureAwait(false);
         if (!Directory.Exists(external))
         {
             throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + external, external);

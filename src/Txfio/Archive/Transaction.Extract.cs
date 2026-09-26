@@ -22,8 +22,7 @@ internal sealed partial class Transaction
             throw new ArgumentOutOfRangeException(nameof(maxExtractedBytes));
         }
 
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string archive = WorkPath.ResolveInWorkFolder(_workFolder, archivePath);
@@ -49,8 +48,7 @@ internal sealed partial class Transaction
             throw new ArgumentOutOfRangeException(nameof(maxExtractedBytes));
         }
 
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalArchivePath);
@@ -84,8 +82,8 @@ internal sealed partial class Transaction
 
     private async Task AcquireExtractLocksAsync(string destination)
     {
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { destination }, destination).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        await _locks.AcquireReservingAsync(_workFolder, new[] { destination }, new[] { destination }, _lockAttempt).ConfigureAwait(false);
     }
 
     private async Task ExtractAsync(

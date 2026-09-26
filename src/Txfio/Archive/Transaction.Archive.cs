@@ -19,8 +19,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, source);
@@ -42,8 +41,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using CallScope scope = EnterCall();
-        BeginLockAttempt(cancellationToken);
+        using CallScope scope = EnterCall(cancellationToken);
         ThrowIfCannotMutate();
         cancellationToken.ThrowIfCancellationRequested();
         IReadOnlyList<ArchiveRoot> roots = ToArchiveRoots(entries);
@@ -314,12 +312,13 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(archive);
-        await _locks.AcquireSharedAsync(_workFolder).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
         using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
                 _workFolder,
                 roots.Select(static root => root.SourcePath).Append(archive).ToArray(),
                 Array.Empty<string>(),
-                roots.Where(static root => root.IsDirectory).Select(static root => root.SourcePath).ToArray())
+                roots.Where(static root => root.IsDirectory).Select(static root => root.SourcePath).ToArray(),
+                _lockAttempt)
             .ConfigureAwait(false);
         foreach (ArchiveRoot root in roots)
         {
