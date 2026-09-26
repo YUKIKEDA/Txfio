@@ -19,6 +19,7 @@ internal sealed class JournalOperation
     /// <param name="destBefore">Move の移動先の適用直前状態（それ以外は null）</param>
     /// <param name="destAfter">Move の移動先の適用直後状態（それ以外は null）</param>
     /// <param name="isDirectory">ディレクトリの Delete、DeleteTree、Move、または CreateDirectory なら <see langword="true"/></param>
+    /// <param name="directoryCreated">CreateDirectory がディレクトリを作り終えたあとなら <see langword="true"/></param>
     [JsonConstructor]
     public JournalOperation(
         PendingChangeKind kind,
@@ -29,7 +30,8 @@ internal sealed class JournalOperation
         PathState? after = null,
         PathState? destBefore = null,
         PathState? destAfter = null,
-        bool isDirectory = false)
+        bool isDirectory = false,
+        bool directoryCreated = false)
     {
         Kind = kind;
         Path = path;
@@ -40,6 +42,7 @@ internal sealed class JournalOperation
         DestBefore = destBefore;
         DestAfter = destAfter;
         IsDirectory = isDirectory;
+        DirectoryCreated = directoryCreated;
     }
 
     /// <summary>
@@ -93,6 +96,12 @@ internal sealed class JournalOperation
     public bool IsDirectory { get; }
 
     /// <summary>
+    /// CreateDirectory がディレクトリを作り終えたあとなら <see langword="true"/>（未作成のまま落ちたときは、同じ名前を他が作ったかもしれない）
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool DirectoryCreated { get; }
+
+    /// <summary>
     /// Before / After を付けたコピーを返す
     /// </summary>
     /// <param name="before">対象パスの適用直前状態</param>
@@ -115,6 +124,26 @@ internal sealed class JournalOperation
             after,
             destBefore,
             destAfter,
-            IsDirectory);
+            IsDirectory,
+            DirectoryCreated);
+    }
+
+    /// <summary>
+    /// CreateDirectory がディレクトリを作り終えたことを付けたコピーを返す
+    /// </summary>
+    /// <returns>作成済みの操作</returns>
+    internal JournalOperation WithDirectoryCreated()
+    {
+        return new JournalOperation(
+            Kind,
+            Path,
+            StagingPath,
+            NewPath,
+            Before,
+            After,
+            DestBefore,
+            DestAfter,
+            IsDirectory,
+            directoryCreated: true);
     }
 }
