@@ -150,12 +150,12 @@ public sealed class CommitViewTests
     }
 
     /// <summary>
-    /// ステージングファイルを読む姿は、その中身を書いた操作の対象パスを持つ
+    /// ステージングファイルの姿は、その中身を書いた操作の対象パスを持つ
     /// </summary>
     /// <remarks>
-    /// <para>前提: dir/a.txt への Update と、名前の規則に合わない名前のステージングファイル</para>
+    /// <para>前提: dir/a.txt を Update しており、規則に合わない名前のステージングファイルがある</para>
     /// <para>手順: 実ファイル b.txt と、dir/a.txt を Resolve する</para>
-    /// <para>期待: b.txt は StagedFor が null、dir/a.txt は StagedFor が dir/a.txt で ContentPath がそのステージングファイル</para>
+    /// <para>期待: b.txt は StagedFor が null、dir/a.txt は StagedFor が dir/a.txt であり、ContentPath がそのステージングファイル</para>
     /// </remarks>
     [Fact]
     public async Task Resolve_ステージングファイルの姿は操作の対象パスを持つこと()

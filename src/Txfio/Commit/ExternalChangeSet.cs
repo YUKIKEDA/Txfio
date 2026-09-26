@@ -8,6 +8,7 @@ internal sealed class ExternalChangeSet
     private readonly Dictionary<string, Snapshot> _snapshots = new Dictionary<string, Snapshot>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _updateToReal = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _foldedOperationToReal = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _removals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// コミット後の姿の元になっている実ファイルを探す
@@ -99,6 +100,31 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
+    /// ファイルの Delete か、ファイルの Move の移動元をステージしたとき、消えるか動く実ファイルを記録する（読み取りの記録があればそれを使う）
+    /// </summary>
+    /// <param name="operations">ステージする前の操作一覧</param>
+    /// <param name="logicalPath">Delete するパス、または Move の移動元</param>
+    internal void NoteRemoval(IReadOnlyList<JournalOperation> operations, string logicalPath)
+    {
+        if (!TryRealFile(operations, logicalPath, out string realPath))
+        {
+            return;
+        }
+
+        if (!_snapshots.ContainsKey(realPath))
+        {
+            if (!TryCapture(realPath, out long length, out DateTime lastWriteTimeUtc))
+            {
+                return;
+            }
+
+            _snapshots[realPath] = new Snapshot(length, lastWriteTimeUtc, fromRead: false);
+        }
+
+        _removals.Add(realPath);
+    }
+
+    /// <summary>
     /// Move 先への Update を畳んだあと、残る Add と Delete を同じ実ファイルの記録に紐づける
     /// </summary>
     /// <param name="updatePath">畳む前の Update 対象（残る Add のパス）</param>
@@ -116,7 +142,7 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// この操作が、記録と違う実ファイルの Update（または畳んだ残り）なら <see langword="true"/>
+    /// この操作が、記録と違うファイルの Update、ファイルの Delete、ファイルの Move、または畳んだ残りなら <see langword="true"/>
     /// </summary>
     /// <param name="operation">検証中の操作</param>
     /// <returns>サイズか最終更新日時が違い、実ファイルがまだファイルなら <see langword="true"/></returns>
@@ -132,6 +158,14 @@ internal sealed class ExternalChangeSet
             && _foldedOperationToReal.TryGetValue(operation.Path, out string? foldedReal))
         {
             return Differs(foldedReal);
+        }
+
+        // ファイルの Delete とファイルの Move の移動元では、操作のパスが消えるか動く実ファイルである
+        if (operation.Kind is PendingChangeKind.Delete or PendingChangeKind.Move
+            && !operation.IsDirectory
+            && _removals.Contains(operation.Path))
+        {
+            return Differs(operation.Path);
         }
 
         return false;

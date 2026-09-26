@@ -39,7 +39,7 @@ internal static class PathMath
     }
 
     /// <summary>
-    /// ディレクトリ <paramref name="from"/> そのもの、または配下のパスを、<paramref name="to"/> の下の同じ位置へ置き換える
+    /// ディレクトリ <paramref name="from"/> そのもの、またはその配下のパスを、<paramref name="to"/> の下の同じ位置へ置き換える
     /// </summary>
     /// <param name="from">置き換え前のディレクトリ</param>
     /// <param name="to">置き換え後のディレクトリ</param>
