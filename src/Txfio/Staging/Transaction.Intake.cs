@@ -18,9 +18,11 @@ internal sealed partial class Transaction
                 .Replace(System.IO.Path.DirectorySeparatorChar, '/');
     }
 
-    private bool SkipIntakeEntry(string entry)
+    // 列挙で得た属性を使い、エントリごとにディスクへ問い合わせない
+    private bool SkipIntakeEntry(FileSystemInfo entry)
     {
-        return WorkPath.IsReparsePoint(entry) || WorkPath.IsThisTransactionStagingFile(entry, _transactionId);
+        return (entry.Attributes & FileAttributes.ReparsePoint) != 0
+            || WorkPath.IsThisTransactionStagingFile(entry.FullName, _transactionId);
     }
 
     private void ForEachTreeChild(
@@ -29,7 +31,7 @@ internal sealed partial class Transaction
         Action<string> onDirectory,
         Action<string> onFile)
     {
-        foreach (string entry in Directory.EnumerateFileSystemEntries(current))
+        foreach (FileSystemInfo entry in new DirectoryInfo(current).EnumerateFileSystemInfos())
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (SkipIntakeEntry(entry))
@@ -37,16 +39,13 @@ internal sealed partial class Transaction
                 continue;
             }
 
-            if (Directory.Exists(entry))
+            if (entry is DirectoryInfo)
             {
-                onDirectory(entry);
+                onDirectory(entry.FullName);
                 continue;
             }
 
-            if (File.Exists(entry))
-            {
-                onFile(entry);
-            }
+            onFile(entry.FullName);
         }
     }
 

@@ -227,17 +227,18 @@ internal sealed partial class Transaction
         List<string> createdFiles,
         CancellationToken cancellationToken)
     {
-        foreach (string entry in Directory.EnumerateFileSystemEntries(current))
+        foreach (FileSystemInfo info in new DirectoryInfo(current).EnumerateFileSystemInfos())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (SkipIntakeEntry(entry))
+            if (SkipIntakeEntry(info))
             {
                 continue;
             }
 
+            string entry = info.FullName;
             string relative = System.IO.Path.GetRelativePath(sourceRoot, entry);
             string destination = System.IO.Path.GetFullPath(System.IO.Path.Combine(destinationRoot, relative));
-            if (Directory.Exists(entry))
+            if (info is DirectoryInfo)
             {
                 CreateExportDirectory(destination, createdDirectories);
                 await ExportDirectoryEntriesAsync(
@@ -252,16 +253,11 @@ internal sealed partial class Transaction
                 continue;
             }
 
-            if (!File.Exists(entry))
-            {
-                continue;
-            }
-
             await using FileStream source = OpenExportSource(entry);
-            await StagingFile.CopyToNewFileAsync(source, destination, progress, cancellationToken)
+            long written = await StagingFile.CopyToNewFileAsync(source, destination, progress, cancellationToken)
                 .ConfigureAwait(false);
             createdFiles.Add(destination);
-            progress.CompleteFile(new FileInfo(destination).Length);
+            progress.CompleteFile(written);
         }
     }
 
