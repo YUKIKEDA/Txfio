@@ -255,8 +255,8 @@ public sealed class ExtractArchiveTests
     /// </summary>
     /// <remarks>
     /// <para>前提: 5 バイトの a.txt と 4 バイトの b.txt を持つ ZIP がワークフォルダにある</para>
-    /// <para>手順: 上限 8 バイトで ExtractArchiveAsync し、そのあと上限 9 バイトでもう一度展開する</para>
-    /// <para>期待: 1 回目は InvalidDataException で、展開先も .txnew も操作も無い。2 回目は成功し Add が 2 件</para>
+    /// <para>手順: 上限 8 バイトで ExtractArchiveAsync したあと、上限 9 バイトでもう一度展開する</para>
+    /// <para>期待: 1 回目は InvalidDataException であり、展開先も .txnew も操作も無く、2 回目は成功して Add が 2 件</para>
     /// </remarks>
     [Fact]
     public async Task ExtractArchiveAsync_展開後の合計が上限を超えると何もステージしないこと()
@@ -285,7 +285,7 @@ public sealed class ExtractArchiveTests
     /// <remarks>
     /// <para>前提: ZIP がワークフォルダの外にある</para>
     /// <para>手順: 上限 -1 で ImportArchiveAsync する</para>
-    /// <para>期待: ArgumentOutOfRangeException で、操作は無い</para>
+    /// <para>期待: ArgumentOutOfRangeException であり、操作は無い</para>
     /// </remarks>
     [Fact]
     public async Task ImportArchiveAsync_上限が負ならArgumentOutOfRangeExceptionになること()
@@ -300,6 +300,64 @@ public sealed class ExtractArchiveTests
             () => tx.ImportArchiveAsync(archive, "out", maxExtractedBytes: -1));
 
         Assert.Empty(tx.GetPendingChanges());
+    }
+
+    /// <summary>
+    /// 無圧縮で Length を偽った ZIP は、読んだバイト数が上限を超えたら ExtractArchiveAsync が書きかけを消して失敗する
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: 100 バイトの無圧縮エントリがあり、セントラルディレクトリの Length は 10 である</para>
+    /// <para>手順: 上限 50 で ExtractArchiveAsync する</para>
+    /// <para>期待: InvalidDataException であり、展開先も .txnew も操作も無い</para>
+    /// </remarks>
+    [Fact]
+    public async Task ExtractArchiveAsync_無圧縮でLengthを偽ると読んだバイト数で止めて書きかけを消すこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string archive = System.IO.Path.Combine(work.Path, "in.zip");
+        await CreateStoredZipWithLiedLengthAsync(archive, actualLength: 100, declaredLength: 10);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => tx.ExtractArchiveAsync("in.zip", "out", maxExtractedBytes: 50));
+
+        Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "out")));
+        Assert.Empty(Directory.GetFiles(work.Path, "*.txnew", SearchOption.AllDirectories));
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
+    private static async Task CreateStoredZipWithLiedLengthAsync(string path, int actualLength, uint declaredLength)
+    {
+        byte[] payload = new byte[actualLength];
+        for (int i = 0; i < payload.Length; i++)
+        {
+            payload[i] = (byte)(i % 251);
+        }
+
+        await using (FileStream stream = File.Create(path))
+        {
+            using ZipArchive zip = new ZipArchive(stream, ZipArchiveMode.Create);
+            ZipArchiveEntry entry = zip.CreateEntry("a.bin", CompressionLevel.NoCompression);
+            await using Stream content = entry.Open();
+            await content.WriteAsync(payload);
+        }
+
+        byte[] bytes = await File.ReadAllBytesAsync(path);
+        int centralDirectory = -1;
+        for (int i = 0; i < bytes.Length - 4; i++)
+        {
+            if (bytes[i] == 0x50 && bytes[i + 1] == 0x4b && bytes[i + 2] == 0x01 && bytes[i + 3] == 0x02)
+            {
+                centralDirectory = i;
+                break;
+            }
+        }
+
+        bytes[centralDirectory + 24] = (byte)declaredLength;
+        bytes[centralDirectory + 25] = (byte)(declaredLength >> 8);
+        bytes[centralDirectory + 26] = (byte)(declaredLength >> 16);
+        bytes[centralDirectory + 27] = (byte)(declaredLength >> 24);
+        await File.WriteAllBytesAsync(path, bytes);
     }
 
     private static Task CreateZipAsync(string path, params (string Name, string? Content)[] entries)
