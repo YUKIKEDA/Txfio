@@ -30,9 +30,10 @@ internal static class RecoverService
         PathLockSet sentinel = new PathLockSet();
         try
         {
-            sentinel.BeginAttempt(lockWait, cancellationToken);
-            await sentinel.AcquireExclusiveAsync(workFolder).ConfigureAwait(false);
-            await sentinel.RejectForeignLocksAsync(workFolder).ConfigureAwait(false);
+            LockAttempt attempt = LockAttempt.Start(lockWait, cancellationToken);
+            await sentinel.AcquireExclusiveAsync(workFolder, attempt).ConfigureAwait(false);
+            await sentinel.RejectForeignLocksAsync(workFolder, attempt).ConfigureAwait(false);
+            DeleteLockFiles(workFolder);
             string[] journals = Directory.GetFiles(
                 metadataFolder,
                 MetadataNames.JournalSearchPattern,
@@ -47,6 +48,28 @@ internal static class RecoverService
         finally
         {
             sentinel.Release();
+        }
+    }
+
+    // ワークフォルダ全体を排他にしているあいだは、他のトランザクションはパスロックも意図ロックも持っていない（持つには共有のワークフォルダ全体のロックが要るか、しるしが要る）
+    private static void DeleteLockFiles(string workFolder)
+    {
+        string lockFolder = MetadataNames.LockFolderPath(workFolder);
+        if (!Directory.Exists(lockFolder))
+        {
+            return;
+        }
+
+        foreach (string path in Directory.EnumerateFiles(lockFolder, "*.lock", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // 消せないものは残す（次の Recover でまた試す）
+            }
         }
     }
 

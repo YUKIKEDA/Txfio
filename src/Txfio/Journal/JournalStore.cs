@@ -88,8 +88,8 @@ internal static class JournalStore
     {
         byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
 
-        // 版が 1 でない JSON は、操作を解釈する前に返す（未知の種別で逆シリアル化が落ちても .txnew を消さない）
-        if (IsUnsupportedVersion(payload))
+        // 1 行目の版が 1 でなければ、操作を解釈する前に版が違うと返す（未知の種別で逆シリアル化が落ちても .txnew を消さない）
+        if (IsUnsupportedVersion(FirstRecord(payload)))
         {
             return JournalReadResult.OtherVersion();
         }
@@ -97,7 +97,7 @@ internal static class JournalStore
         JournalDocument? document;
         try
         {
-            document = JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
+            document = ReadLines(payload);
         }
         catch (JsonException)
         {
@@ -140,6 +140,44 @@ internal static class JournalStore
     }
 
     /// <summary>
+    /// 表の末尾に足した操作と作成ディレクトリを、ジャーナルへ 1 行追記する（全体は書き直さない）
+    /// </summary>
+    /// <param name="journalPath">書き込み先</param>
+    /// <param name="operations">末尾に足した操作</param>
+    /// <param name="createdDirectories">末尾に足した作成ディレクトリ</param>
+    /// <param name="cancellationToken">取り消し用のトークン</param>
+    /// <returns>追記の完了</returns>
+    internal static async Task AppendAsync(
+        string journalPath,
+        IReadOnlyList<JournalOperation> operations,
+        IReadOnlyList<string> createdDirectories,
+        CancellationToken cancellationToken)
+    {
+        string workFolder = MetadataNames.WorkFolderFromJournal(journalPath);
+        JournalDocument stored = JournalPaths.ToStored(
+            new JournalDocument(CurrentVersion, Guid.Empty, committing: false, operations, createdDirectories),
+            workFolder);
+        JournalAppend record = new JournalAppend(stored.Operations, stored.CreatedDirectories);
+        byte[] payload = Line(JsonSerializer.SerializeToUtf8Bytes(record, _jsonOptions));
+        FileStream stream = new FileStream(
+            journalPath,
+            FileMode.Append,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 4096,
+            FileOptions.Asynchronous);
+        try
+        {
+            await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+            await StagingFile.FlushToDiskAsync(stream, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await stream.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// 上書き用の一時ファイルがあれば消す
     /// </summary>
     /// <param name="journalPath">対応するジャーナルのパス</param>
@@ -173,7 +211,7 @@ internal static class JournalStore
         FileMode mode,
         CancellationToken cancellationToken)
     {
-        byte[] payload = JsonSerializer.SerializeToUtf8Bytes(document, _jsonOptions);
+        byte[] payload = Line(JsonSerializer.SerializeToUtf8Bytes(document, _jsonOptions));
         FileStream stream = new FileStream(
             journalPath,
             mode,
@@ -192,6 +230,68 @@ internal static class JournalStore
         }
     }
 
+    // 1 行目は文書、2 行目以降は追記レコードであり、改行で終わっていない最後の行は、追記の途中で落ちたものとして捨てる
+    private static JournalDocument? ReadLines(byte[] payload)
+    {
+        List<ReadOnlyMemory<byte>> lines = new List<ReadOnlyMemory<byte>>();
+        int start = 0;
+        for (int i = 0; i < payload.Length; i++)
+        {
+            if (payload[i] == (byte)'\n')
+            {
+                lines.Add(new ReadOnlyMemory<byte>(payload, start, i - start));
+                start = i + 1;
+            }
+        }
+
+        bool tornTail = start < payload.Length;
+        if (tornTail)
+        {
+            lines.Add(new ReadOnlyMemory<byte>(payload, start, payload.Length - start));
+        }
+
+        if (lines.Count == 0)
+        {
+            return JsonSerializer.Deserialize<JournalDocument>(payload, _jsonOptions);
+        }
+
+        JournalDocument? document = JsonSerializer.Deserialize<JournalDocument>(lines[0].Span, _jsonOptions);
+        if (document is null || lines.Count == 1)
+        {
+            return document;
+        }
+
+        List<JournalOperation> operations = new List<JournalOperation>(document.Operations);
+        List<string> createdDirectories = new List<string>(document.CreatedDirectories);
+        int complete = tornTail ? lines.Count - 1 : lines.Count;
+        for (int i = 1; i < complete; i++)
+        {
+            JournalAppend? record = JsonSerializer.Deserialize<JournalAppend>(lines[i].Span, _jsonOptions);
+            if (record is null)
+            {
+                throw new JsonException("ジャーナルの追記レコードが null です");
+            }
+
+            operations.AddRange(record.Append);
+            createdDirectories.AddRange(record.CreatedDirectories);
+        }
+
+        return new JournalDocument(
+            document.Version,
+            document.TransactionId,
+            document.Committing,
+            operations,
+            createdDirectories);
+    }
+
+    private static byte[] Line(byte[] json)
+    {
+        byte[] line = new byte[json.Length + 1];
+        json.CopyTo(line, 0);
+        line[json.Length] = (byte)'\n';
+        return line;
+    }
+
     // 種別が名前に無い、または path が空、または Move の newPath が空の操作は、適用も巻き戻しもできない
     private static bool IsComplete(JournalOperation operation)
     {
@@ -201,6 +301,20 @@ internal static class JournalStore
         }
 
         return operation.Kind != PendingChangeKind.Move || !string.IsNullOrEmpty(operation.NewPath);
+    }
+
+    // 版の確認は 1 行目だけにする（追記レコードが続くと、ファイル全体は 1 個の JSON ではない）
+    private static byte[] FirstRecord(byte[] payload)
+    {
+        int newline = Array.IndexOf(payload, (byte)'\n');
+        if (newline < 0)
+        {
+            return payload;
+        }
+
+        byte[] line = new byte[newline];
+        Buffer.BlockCopy(payload, 0, line, 0, newline);
+        return line;
     }
 
     // 版の欄が数値の 1 でなければ、操作を解釈せず版が違うと返す
@@ -258,11 +372,7 @@ internal static class JournalStore
                 File.Delete(tempPath);
             }
         }
-        catch (IOException)
-        {
-            // 消せなくても、呼び出し側が元の例外を返す
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // 消せなくても、呼び出し側が元の例外を返す
         }

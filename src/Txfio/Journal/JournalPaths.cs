@@ -43,7 +43,7 @@ internal static class JournalPaths
         }
 
         string fullPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, path));
-        if (!PathTable.IsUnder(workFolder, fullPath) || WorkPath.IsInMetadataFolder(workFolder, fullPath))
+        if (!PathMath.IsUnder(workFolder, fullPath) || WorkPath.IsInMetadataFolder(workFolder, fullPath))
         {
             throw new JsonException("ジャーナルのパスがワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下を指しています: " + path);
         }
@@ -66,7 +66,9 @@ internal static class JournalPaths
                 operation.After,
                 operation.DestBefore,
                 operation.DestAfter,
-                operation.IsDirectory);
+                operation.IsDirectory,
+                operation.DirectoryCreated,
+                operation.Overwrite);
         }
 
         string[] createdDirectories = new string[document.CreatedDirectories.Count];

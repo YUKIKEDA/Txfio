@@ -71,13 +71,6 @@ internal static class OperationOutcomes
         out JournalOperation stamped,
         out OperationFailureReason reason)
     {
-        stamped = operation;
-        reason = OperationFailureReason.Missing;
-        if (!OperationKind.TryGet(operation.Kind, out OperationKind behavior))
-        {
-            return false;
-        }
-
-        return behavior.TryProject(operation, operations, transactionId, projected, out stamped, out reason);
+        return OperationKind.For(operation.Kind).TryProject(operation, operations, transactionId, projected, out stamped, out reason);
     }
 }

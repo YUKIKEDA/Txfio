@@ -44,6 +44,63 @@ internal static class StagingRules
     }
 
     /// <summary>
+    /// ディレクトリの入れ替えで、移動元と移動先の配下に重なる操作を拒否する（移動元が作成ディレクトリなら、配下の Add だけを許す）
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="createdDirectories">このトランザクションが作ったディレクトリ</param>
+    /// <param name="sourcePath">移動元</param>
+    /// <param name="destPath">移動先</param>
+    internal static void ThrowIfDirectoryReplaceConflicts(
+        IReadOnlyList<JournalOperation> operations,
+        IReadOnlyList<string> createdDirectories,
+        string sourcePath,
+        string destPath)
+    {
+        if (IsInsideDirectory(sourcePath, destPath) || IsInsideDirectory(destPath, sourcePath))
+        {
+            throw new InvalidOperationException("ディレクトリを自分自身の配下や親とは入れ替えられません: " + sourcePath);
+        }
+
+        bool createdSource = createdDirectories.Any(
+            directory => string.Equals(directory, sourcePath, StringComparison.OrdinalIgnoreCase));
+        foreach (JournalOperation operation in operations)
+        {
+            if (IsInsideDirectory(destPath, operation.Path)
+                || (operation.NewPath is not null && IsInsideDirectory(destPath, operation.NewPath)))
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+
+            bool underSource = IsInsideDirectory(sourcePath, operation.Path)
+                || (operation.NewPath is not null && IsInsideDirectory(sourcePath, operation.NewPath));
+            if (underSource && !(createdSource && operation.Kind == PendingChangeKind.Add))
+            {
+                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 置き換えまたは入れ替えの Move の移動元か移動先、または入れ替えの移動先の配下なら、続けて操作できない
+    /// </summary>
+    /// <param name="operations">現在の操作一覧</param>
+    /// <param name="path">操作するパス</param>
+    internal static void ThrowIfOverwriteMovePath(IReadOnlyList<JournalOperation> operations, string path)
+    {
+        foreach (JournalOperation operation in operations)
+        {
+            if (operation.Kind == PendingChangeKind.Move
+                && operation.Overwrite
+                && (string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)
+                    || (operation.NewPath is not null && IsInsideDirectory(operation.NewPath, path))))
+            {
+                throw new InvalidOperationException("置き換えまたは入れ替えの Move の移動元、移動先、または入れ替えの移動先の配下へは、続けて操作できません: " + path);
+            }
+        }
+    }
+
+    /// <summary>
     /// 移動元が既存ファイルであることを検証する
     /// </summary>
     /// <param name="sourcePath">移動元パス</param>
@@ -357,7 +414,7 @@ internal static class StagingRules
 
     private static bool IsInsideDirectory(string directoryPath, string path)
     {
-        return PathTable.IsUnder(directoryPath, path);
+        return PathMath.IsUnder(directoryPath, path);
     }
 
     private static bool IsPendingDirectoryDelete(IReadOnlyList<JournalOperation> operations, string? path)

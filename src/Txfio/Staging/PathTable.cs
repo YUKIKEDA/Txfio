@@ -10,9 +10,9 @@ internal sealed class PathTable
     private readonly Dictionary<string, int> _moveDestination = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 表の行（ジャーナルに書く順）
+    /// 表の行（ジャーナルに書く順、変えるときは表のメソッドを通す（位置を合わせるため））
     /// </summary>
-    internal List<JournalOperation> Rows => _rows;
+    internal IReadOnlyList<JournalOperation> Rows => _rows;
 
     /// <summary>
     /// 行の数
@@ -81,124 +81,6 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 操作一覧をコミット後の姿へ解く
-    /// </summary>
-    /// <param name="operations">操作一覧</param>
-    /// <param name="targetPath">正規化済みの絶対パス</param>
-    /// <returns>コミット後の姿</returns>
-    internal static CommitAppearance Resolve(IReadOnlyList<JournalOperation> operations, string targetPath)
-    {
-        JournalOperation[] ordered = StagingApplier.InApplyOrder(operations);
-        string current = targetPath;
-        for (int i = ordered.Length - 1; i >= 0; i--)
-        {
-            JournalOperation operation = ordered[i];
-            if (operation.Kind == PendingChangeKind.Delete)
-            {
-                if (SamePath(operation.Path, current))
-                {
-                    return CommitAppearance.Absent();
-                }
-
-                continue;
-            }
-
-            if (operation.Kind == PendingChangeKind.DeleteTree)
-            {
-                if (SamePath(operation.Path, current) || IsUnder(operation.Path, current))
-                {
-                    return CommitAppearance.Absent();
-                }
-
-                continue;
-            }
-
-            if (operation.Kind is PendingChangeKind.Add or PendingChangeKind.Update)
-            {
-                if (SamePath(operation.Path, current) && !string.IsNullOrEmpty(operation.StagingPath))
-                {
-                    return CommitAppearance.File(operation.StagingPath);
-                }
-
-                continue;
-            }
-
-            if (operation.Kind != PendingChangeKind.Move || string.IsNullOrEmpty(operation.NewPath))
-            {
-                continue;
-            }
-
-            if (operation.IsDirectory)
-            {
-                if (SamePath(operation.Path, current) || IsUnder(operation.Path, current))
-                {
-                    return CommitAppearance.Absent();
-                }
-
-                if (SamePath(operation.NewPath, current) || IsUnder(operation.NewPath, current))
-                {
-                    current = Rewrite(operation.NewPath, operation.Path, current);
-                }
-
-                continue;
-            }
-
-            if (SamePath(operation.Path, current))
-            {
-                return CommitAppearance.Absent();
-            }
-
-            if (SamePath(operation.NewPath, current))
-            {
-                current = operation.Path;
-            }
-        }
-
-        if (File.Exists(current))
-        {
-            return CommitAppearance.File(current);
-        }
-
-        if (Directory.Exists(current))
-        {
-            return CommitAppearance.Directory(current);
-        }
-
-        return CommitAppearance.Absent();
-    }
-
-    /// <summary>
-    /// パスがディレクトリの配下かどうかを判定する（ディレクトリ自身は含めない）
-    /// </summary>
-    /// <param name="directoryPath">ディレクトリ</param>
-    /// <param name="path">調べるパス</param>
-    /// <returns>配下なら <see langword="true"/></returns>
-    internal static bool IsUnder(string directoryPath, string path)
-    {
-        string prefix = directoryPath.TrimEnd(
-                System.IO.Path.DirectorySeparatorChar,
-                System.IO.Path.AltDirectorySeparatorChar)
-            + System.IO.Path.DirectorySeparatorChar;
-        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// パスがディレクトリそのもの、またはその配下かどうかを判定する
-    /// </summary>
-    /// <param name="parent">ディレクトリ</param>
-    /// <param name="fullPath">調べるパス</param>
-    /// <returns>そのもの、または配下なら <see langword="true"/></returns>
-    internal static bool IsEqualOrUnder(string parent, string fullPath)
-    {
-        if (string.Equals(parent, fullPath, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return IsUnder(parent, fullPath);
-    }
-
-    /// <summary>
     /// 行をジャーナル用の配列にする
     /// </summary>
     /// <returns>表の行を並べた配列</returns>
@@ -260,6 +142,16 @@ internal sealed class PathTable
     }
 
     /// <summary>
+    /// 同じインスタンスの行の位置を返す
+    /// </summary>
+    /// <param name="operation">探す操作</param>
+    /// <returns>無ければ -1</returns>
+    internal int IndexOf(JournalOperation operation)
+    {
+        return _rows.IndexOf(operation);
+    }
+
+    /// <summary>
     /// 行をすべて外す
     /// </summary>
     internal void Clear()
@@ -287,7 +179,6 @@ internal sealed class PathTable
     /// <returns>無ければ -1</returns>
     internal int FindOperationIndex(string path)
     {
-        Reindex();
         return _firstByPath.TryGetValue(path, out int index) ? index : -1;
     }
 
@@ -317,7 +208,6 @@ internal sealed class PathTable
     /// <returns>無ければ -1</returns>
     internal int FindMoveToIndex(string destPath)
     {
-        Reindex();
         return _moveDestination.TryGetValue(destPath, out int index) ? index : -1;
     }
 
@@ -471,29 +361,6 @@ internal sealed class PathTable
     private static InvalidOperationException AlreadyStaged()
     {
         return new InvalidOperationException("このパスは既に別の操作でステージングされています");
-    }
-
-    private static bool SamePath(string left, string right)
-    {
-        return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string Rewrite(string destination, string source, string current)
-    {
-        if (SamePath(destination, current))
-        {
-            return source;
-        }
-
-        string prefix = destination.TrimEnd(
-                System.IO.Path.DirectorySeparatorChar,
-                System.IO.Path.AltDirectorySeparatorChar)
-            + System.IO.Path.DirectorySeparatorChar;
-        string rest = current.Substring(prefix.Length);
-        string root = source.TrimEnd(
-            System.IO.Path.DirectorySeparatorChar,
-            System.IO.Path.AltDirectorySeparatorChar);
-        return root + System.IO.Path.DirectorySeparatorChar + rest;
     }
 
     private void Note(JournalOperation operation, int index)

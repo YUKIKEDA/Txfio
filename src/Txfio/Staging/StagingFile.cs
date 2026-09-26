@@ -217,12 +217,11 @@ internal static class StagingFile
     /// 書いた内容をディスクまで書き出す
     /// </summary>
     /// <remarks>
-    /// 書き込みのたびに完了を待つ WriteThrough ではなく、書き終えたあと 1 回だけディスクまでフラッシュする
-    /// ジャーナルの Committing より前に、中身がディスクにあることを保証する
+    /// 書き終えたなら 1 回だけ、バッファを出してからディスクまでフラッシュする
     /// </remarks>
     /// <param name="stream">書き終えたストリーム</param>
-    /// <param name="cancellationToken">バッファを書き出すあいだの取り消し</param>
-    /// <returns>書き出したこと</returns>
+    /// <param name="cancellationToken">バッファを OS へ出すあいだの取り消し（ディスクまでのフラッシュは取り消せない）</param>
+    /// <returns>ディスクまで書き出したこと</returns>
     internal static async Task FlushToDiskAsync(FileStream stream, CancellationToken cancellationToken)
     {
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);

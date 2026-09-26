@@ -25,6 +25,12 @@ internal static class StagingApplier
             JournalOperation operation = ordered[i];
             int index = i;
 
+            // あとのディレクトリ Move が済んでいれば、その移動元の配下の操作も済んでいる（元の場所には残っていない）
+            if (IsUnderAppliedLaterDirectoryMove(ordered, i))
+            {
+                continue;
+            }
+
             // あとの操作が変えるパスは、この操作が済んだかどうかの手がかりにならない
             bool ChangedLater(string path) => lastTouch.TryGetValue(path, out int last) && last > index;
             if (!TryApply(operation, faults, ChangedLater, out OperationFailureReason reason))
@@ -51,19 +57,17 @@ internal static class StagingApplier
         List<JournalOperation> nondestructive = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && behavior.ApplyPhase == OperationKind.Phase.Nondestructive)
+            if (OperationKind.For(operation.Kind).ApplyPhase == OperationKind.Phase.Nondestructive)
             {
                 nondestructive.Add(operation);
             }
         }
 
-        ordered.AddRange(OrderMoveChains(nondestructive));
+        ordered.AddRange(PlaceBeforeDirectoryMoves(OrderMoveChains(nondestructive)));
 
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && behavior.ApplyPhase == OperationKind.Phase.Update)
+            if (OperationKind.For(operation.Kind).ApplyPhase == OperationKind.Phase.Update)
             {
                 ordered.Add(operation);
             }
@@ -72,14 +76,13 @@ internal static class StagingApplier
         List<JournalOperation> deletes = new List<JournalOperation>();
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && behavior.ApplyPhase == OperationKind.Phase.Delete)
+            if (OperationKind.For(operation.Kind).ApplyPhase == OperationKind.Phase.Delete)
             {
                 deletes.Add(operation);
             }
         }
 
-        deletes.Sort(static (left, right) => PathDepth(right.Path).CompareTo(PathDepth(left.Path)));
+        deletes.Sort(static (left, right) => PathMath.Depth(right.Path).CompareTo(PathMath.Depth(left.Path)));
         ordered.AddRange(deletes);
         return ordered.ToArray();
     }
@@ -134,32 +137,7 @@ internal static class StagingApplier
             return false;
         }
 
-        if (OperationKind.TryGet(operation.Kind, out OperationKind behavior))
-        {
-            return behavior.TryApply(operation, changedLater, out reason);
-        }
-
-        if (string.IsNullOrEmpty(operation.StagingPath) || !File.Exists(operation.StagingPath))
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
-
-        try
-        {
-            StagingFile.MoveToTarget(operation.StagingPath, operation.Path, replace: operation.Kind == PendingChangeKind.Update);
-            return true;
-        }
-        catch (IOException exception)
-        {
-            reason = ClassifyIo(exception);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            reason = OperationFailureReason.IoFailure;
-            return false;
-        }
+        return OperationKind.For(operation.Kind).TryApply(operation, changedLater, out reason);
     }
 
     /// <summary>
@@ -223,7 +201,7 @@ internal static class StagingApplier
             }
 
             string backupPath = WorkPath.StagingBackupPath(operation.StagingPath);
-            if (!DeleteOne(ignoreIoFailures, () => StagingFile.TryDelete(backupPath)))
+            if (!IoErrors.TryDelete(ignoreIoFailures, () => StagingFile.TryDelete(backupPath)))
             {
                 succeeded = false;
             }
@@ -241,16 +219,7 @@ internal static class StagingApplier
     internal static bool DeleteCreatedDirectories(IReadOnlyList<string> directories, bool ignoreIoFailures = false)
     {
         List<string> pending = new List<string>(directories);
-        pending.Sort(static (left, right) =>
-        {
-            int byDepth = PathDepth(right).CompareTo(PathDepth(left));
-            if (byDepth != 0)
-            {
-                return byDepth;
-            }
-
-            return string.Compare(right, left, StringComparison.OrdinalIgnoreCase);
-        });
+        PathMath.SortDeepestFirst(pending);
 
         bool succeeded = true;
         foreach (string path in pending)
@@ -260,7 +229,7 @@ internal static class StagingApplier
                 continue;
             }
 
-            if (!DeleteOne(ignoreIoFailures, () => Directory.Delete(path)))
+            if (!IoErrors.TryDelete(ignoreIoFailures, () => Directory.Delete(path)))
             {
                 succeeded = false;
             }
@@ -280,27 +249,13 @@ internal static class StagingApplier
         bool succeeded = true;
         foreach (JournalOperation operation in operations)
         {
-            if (OperationKind.TryGet(operation.Kind, out OperationKind behavior)
-                && !behavior.TryDeleteCreatedTree(operation, ignoreIoFailures))
+            if (!OperationKind.For(operation.Kind).TryDeleteCreatedTree(operation, ignoreIoFailures))
             {
                 succeeded = false;
             }
         }
 
         return succeeded;
-    }
-
-    private static bool DeleteOne(bool ignoreIoFailures, Action delete)
-    {
-        try
-        {
-            delete();
-            return true;
-        }
-        catch (Exception exception) when (ignoreIoFailures && exception is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
     }
 
     private static List<JournalOperation> OrderMoveChains(List<JournalOperation> items)
@@ -421,6 +376,53 @@ internal static class StagingApplier
         return true;
     }
 
+    private static bool IsUnderAppliedLaterDirectoryMove(JournalOperation[] ordered, int index)
+    {
+        string path = ordered[index].Path;
+        for (int j = index + 1; j < ordered.Length; j++)
+        {
+            JournalOperation later = ordered[j];
+            if (later.Kind == PendingChangeKind.Move
+                && later.IsDirectory
+                && !string.IsNullOrEmpty(later.NewPath)
+                && PathMath.IsUnder(later.Path, path)
+                && !Directory.Exists(later.Path)
+                && Directory.Exists(later.NewPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // ディレクトリ Move の移動元の配下の操作（作成ディレクトリへの Add）は、その Move より先に適用する
+    private static List<JournalOperation> PlaceBeforeDirectoryMoves(List<JournalOperation> items)
+    {
+        List<JournalOperation> output = new List<JournalOperation>(items);
+        for (int m = 0; m < output.Count; m++)
+        {
+            JournalOperation move = output[m];
+            if (move.Kind != PendingChangeKind.Move || !move.IsDirectory)
+            {
+                continue;
+            }
+
+            for (int k = m + 1; k < output.Count; k++)
+            {
+                if (output[k].Kind != PendingChangeKind.Move && PathMath.IsUnder(move.Path, output[k].Path))
+                {
+                    JournalOperation child = output[k];
+                    output.RemoveAt(k);
+                    output.Insert(m, child);
+                    m++;
+                }
+            }
+        }
+
+        return output;
+    }
+
     private static Dictionary<string, int> LastTouchByPath(JournalOperation[] ordered)
     {
         Dictionary<string, int> lastTouch = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -434,26 +436,5 @@ internal static class StagingApplier
         }
 
         return lastTouch;
-    }
-
-    private static int PathDepth(string path)
-    {
-        int depth = 0;
-        foreach (char c in path)
-        {
-            if (c == System.IO.Path.DirectorySeparatorChar || c == System.IO.Path.AltDirectorySeparatorChar)
-            {
-                depth++;
-            }
-        }
-
-        return depth;
-    }
-
-    private static OperationFailureReason ClassifyIo(IOException exception)
-    {
-        return PathLockSet.IsSharingViolation(exception)
-            ? OperationFailureReason.SharingViolation
-            : OperationFailureReason.IoFailure;
     }
 }

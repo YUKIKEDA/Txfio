@@ -15,8 +15,6 @@ internal sealed class PathLockSet
     // Linux の EAGAIN（EWOULDBLOCK）では、.NET は Unix の errno をそのまま HResult に入れる
     private const int LinuxWouldBlock = 11;
 
-    private const int RetryIntervalMilliseconds = 100;
-
     private readonly IFaultInjector _faults;
 
     private readonly Dictionary<string, FileStream> _handles = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
@@ -25,21 +23,13 @@ internal sealed class PathLockSet
 
     private readonly HashSet<string> _exclusiveIntents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-    private bool _workFolderExclusive;
+    // ワークフォルダ全体のロック（_workFolderState が Shared か Exclusive のあいだだけ開いている）
+    private FileStream? _workFolderHandle;
 
-    // 共有へ戻せなかったとき、次の取得で開き直す
-    private bool _workFolderShareLost;
+    private WorkFolderState _workFolderState;
 
-    // パスか意図ロックを持ったまま、ワークフォルダ全体のロックを持っていないあいだ開く
+    // パスロックか意図ロックを持ったまま、ワークフォルダ全体のロックを持っていないあいだ開く
     private FileStream? _shareLost;
-
-    private bool _waitArmed;
-
-    private bool _waitForever;
-
-    private long _deadlineTick;
-
-    private CancellationToken _waitCancellation;
 
     /// <summary>
     /// 失敗も途中停止もしないロックの集合を作る
@@ -56,6 +46,32 @@ internal sealed class PathLockSet
     internal PathLockSet(IFaultInjector faults)
     {
         _faults = faults;
+    }
+
+    /// <summary>
+    /// ワークフォルダ全体のロックの状態
+    /// </summary>
+    private enum WorkFolderState
+    {
+        /// <summary>
+        /// 持っていない
+        /// </summary>
+        None,
+
+        /// <summary>
+        /// 共有で持っている
+        /// </summary>
+        Shared,
+
+        /// <summary>
+        /// 排他で持っている
+        /// </summary>
+        Exclusive,
+
+        /// <summary>
+        /// 共有へ戻せなかった（次の取得で開き直す）
+        /// </summary>
+        Lost,
     }
 
     /// <summary>
@@ -98,62 +114,31 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// この公開メソッドのロック待ちを始める（期限は呼び出しの開始から）
-    /// </summary>
-    /// <param name="lockWait">待つ上限（ゼロは待たない、<see cref="Timeout.InfiniteTimeSpan"/> は期限がない）</param>
-    /// <param name="cancellationToken">待ちを取り消すトークン</param>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
-    internal void BeginAttempt(TimeSpan lockWait, CancellationToken cancellationToken)
-    {
-        if (lockWait < TimeSpan.Zero && lockWait != Timeout.InfiniteTimeSpan)
-        {
-            throw new ArgumentOutOfRangeException(nameof(lockWait));
-        }
-
-        _waitCancellation = cancellationToken;
-        _waitArmed = true;
-        if (lockWait == Timeout.InfiniteTimeSpan)
-        {
-            _waitForever = true;
-            return;
-        }
-
-        _waitForever = false;
-        if (lockWait <= TimeSpan.Zero)
-        {
-            _deadlineTick = Environment.TickCount64;
-            return;
-        }
-
-        long milliseconds = (long)lockWait.TotalMilliseconds;
-        long now = Environment.TickCount64;
-        _deadlineTick = milliseconds > long.MaxValue - now ? long.MaxValue : now + milliseconds;
-    }
-
-    /// <summary>
     /// ワークフォルダ全体のロックを共有で開く（既に持っていれば開き直さず、失っていれば開き直す）
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="attempt">この呼び出しのロック待ち</param>
     /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックを取れない</exception>
     /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
     /// <returns>取れたこと（取れなければ例外）</returns>
-    internal async Task AcquireSharedAsync(string workFolder)
+    internal async Task AcquireSharedAsync(string workFolder, LockAttempt attempt)
     {
-        if (_workFolderShareLost)
+        if (_workFolderState == WorkFolderState.Lost)
         {
-            await RestoreSharedAsync(workFolder).ConfigureAwait(false);
-            _workFolderShareLost = false;
+            await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
             return;
         }
 
-        if (_handles.ContainsKey(workFolder))
+        if (_workFolderState != WorkFolderState.None)
         {
             return;
         }
 
         try
         {
-            await OpenWaitingAsync(workFolder, workFolder, FileShare.ReadWrite).ConfigureAwait(false);
+            _workFolderHandle = await OpenWaitingAsync(FilePath(workFolder, workFolder), FileShare.ReadWrite, attempt)
+                .ConfigureAwait(false);
+            _workFolderState = WorkFolderState.Shared;
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
@@ -165,34 +150,35 @@ internal sealed class PathLockSet
     /// ワークフォルダ全体のロックを排他で開く（共有を持っていれば閉じて取り直す）
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="attempt">この呼び出しのロック待ち</param>
     /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックを取れない</exception>
     /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
     /// <exception cref="IOException">共有へ戻すときの、共有違反以外の失敗</exception>
     /// <returns>取れたこと（取れなければ例外）</returns>
-    internal async Task AcquireExclusiveAsync(string workFolder)
+    internal async Task AcquireExclusiveAsync(string workFolder, LockAttempt attempt)
     {
-        if (_workFolderShareLost)
+        if (_workFolderState == WorkFolderState.Lost)
         {
-            await RestoreSharedAsync(workFolder).ConfigureAwait(false);
-            _workFolderShareLost = false;
+            await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
         }
 
-        if (_workFolderExclusive && _handles.ContainsKey(workFolder))
+        if (_workFolderState == WorkFolderState.Exclusive)
         {
             return;
         }
 
-        bool restoreSharedOnFailure = _handles.ContainsKey(workFolder);
+        bool restoreSharedOnFailure = _workFolderState == WorkFolderState.Shared;
         if (restoreSharedOnFailure)
         {
             HoldShareLostBeforeDrop(workFolder);
-            ReleaseHandle(workFolder);
+            ReleaseWorkFolder();
         }
 
         try
         {
-            await OpenWaitingAsync(workFolder, workFolder, FileShare.None).ConfigureAwait(false);
-            _workFolderExclusive = true;
+            _workFolderHandle = await OpenWaitingAsync(FilePath(workFolder, workFolder), FileShare.None, attempt)
+                .ConfigureAwait(false);
+            _workFolderState = WorkFolderState.Exclusive;
             CloseShareLost();
         }
         catch (OperationCanceledException)
@@ -208,25 +194,16 @@ internal sealed class PathLockSet
         {
             if (restoreSharedOnFailure)
             {
-                await RestoreOrMarkLostAsync(workFolder).ConfigureAwait(false);
+                await RestoreOrMarkLostAsync(workFolder, attempt).ConfigureAwait(false);
             }
 
             throw Contention(workFolder);
         }
-        catch (IOException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             if (restoreSharedOnFailure)
             {
-                await RestoreOrMarkLostAsync(workFolder).ConfigureAwait(false);
-            }
-
-            throw;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            if (restoreSharedOnFailure)
-            {
-                await RestoreOrMarkLostAsync(workFolder).ConfigureAwait(false);
+                await RestoreOrMarkLostAsync(workFolder, attempt).ConfigureAwait(false);
             }
 
             throw;
@@ -234,23 +211,24 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// しるし（`.txfio/share-lost.lock`）が使用中なら、排他をやめて共有に戻す
+    /// しるし（`.txfio/share-lost.lock`）が使用中なら空くまで待つ（空かなければ排他をやめて共有に戻す）
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
+    /// <param name="attempt">この呼び出しのロック待ち</param>
     /// <exception cref="LockContentionException">期限までにしるしが空かない</exception>
     /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
-    /// <returns>取れたこと（取れなければ例外）</returns>
-    internal async Task RejectForeignLocksAsync(string workFolder)
+    /// <returns>しるしが空いていること（空かなければ例外）</returns>
+    internal async Task RejectForeignLocksAsync(string workFolder, LockAttempt attempt)
     {
         try
         {
             while (ShareLostBusy(workFolder))
             {
-                if (!await WaitForRetryAsync().ConfigureAwait(false))
+                if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
                 {
                     HoldShareLostBeforeDrop(workFolder);
-                    ReleaseHandle(workFolder);
-                    await RestoreOrMarkLostAsync(workFolder).ConfigureAwait(false);
+                    ReleaseWorkFolder();
+                    await RestoreOrMarkLostAsync(workFolder, attempt).ConfigureAwait(false);
                     throw Contention(workFolder);
                 }
             }
@@ -258,37 +236,53 @@ internal sealed class PathLockSet
         catch (OperationCanceledException)
         {
             HoldShareLostBeforeDrop(workFolder);
-            ReleaseHandle(workFolder);
+            ReleaseWorkFolder();
             RestoreAfterCancel(workFolder);
             throw;
         }
     }
 
     /// <summary>
-    /// ワークフォルダ全体を排他にし、しるし（`.txfio/share-lost.lock`）が空いていることを確かめる
+    /// パスをロックし、読んでいるあいだ守るディレクトリの意図ロックを排他で取る（破棄すると、この呼び出しで取った排他の意図ロックを閉じる）
     /// </summary>
+    /// <remarks>
+    /// ディレクトリのコピー元と ZIP の入力を読むあいだ、他のトランザクションが配下をステージしたりコミットしたりしないようにする
+    /// 既に排他で持っていた意図ロックは閉じない
+    /// </remarks>
     /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>呼び出しの終わりに排他を共有へ戻す</returns>
-    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックが取れない、またはしるしが空かない</exception>
-    /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
-    internal async Task<WorkFolderExclusive> EnterExclusiveAsync(string workFolder)
+    /// <param name="fullPaths">ロックする正規化した絶対パス</param>
+    /// <param name="reservedPaths">トランザクションの終わりまで意図ロックを排他で持つディレクトリ</param>
+    /// <param name="readDirectories">呼び出しのあいだだけ意図ロックを排他で持つディレクトリ</param>
+    /// <param name="attempt">この呼び出しのロック待ち</param>
+    /// <returns>読み終えたら破棄する範囲</returns>
+    internal async Task<ReadingScope> AcquireForReadingAsync(
+        string workFolder,
+        string[] fullPaths,
+        string[] reservedPaths,
+        string[] readDirectories,
+        LockAttempt attempt)
     {
-        await AcquireExclusiveAsync(workFolder).ConfigureAwait(false);
+        List<string> scoped = new List<string>();
+        foreach (string directory in readDirectories)
+        {
+            if (!_exclusiveIntents.Contains(directory))
+            {
+                scoped.Add(directory);
+            }
+        }
+
         try
         {
-            await RejectForeignLocksAsync(workFolder).ConfigureAwait(false);
+            await AcquireCoreAsync(workFolder, fullPaths, reservedPaths.Concat(readDirectories).ToArray(), attempt)
+                .ConfigureAwait(false);
         }
         catch
         {
-            if (_workFolderExclusive)
-            {
-                await ReleaseWorkFolderExclusiveAsync(workFolder).ConfigureAwait(false);
-            }
-
+            ReleaseIntents(scoped);
             throw;
         }
 
-        return new WorkFolderExclusive(this, workFolder);
+        return new ReadingScope(this, scoped);
     }
 
     /// <summary>
@@ -296,10 +290,11 @@ internal sealed class PathLockSet
     /// </summary>
     /// <param name="workFolder">ワークフォルダ</param>
     /// <param name="fullPaths">正規化した絶対パス</param>
+    /// <param name="attempt">この呼び出しのロック待ち</param>
     /// <returns>取れたこと（取れなければ例外）</returns>
-    internal Task AcquireAsync(string workFolder, params string[] fullPaths)
+    internal Task AcquireAsync(string workFolder, string[] fullPaths, LockAttempt attempt)
     {
-        return AcquireCoreAsync(workFolder, fullPaths, exclusiveIntentPaths: null);
+        return AcquireCoreAsync(workFolder, fullPaths, exclusiveIntentPaths: null, attempt);
     }
 
     /// <summary>
@@ -308,10 +303,15 @@ internal sealed class PathLockSet
     /// <param name="workFolder">ワークフォルダ</param>
     /// <param name="fullPaths">正規化した絶対パス</param>
     /// <param name="exclusiveIntentPaths">排他の意図ロックを取るディレクトリ</param>
+    /// <param name="attempt">この呼び出しのロック待ち</param>
     /// <returns>取れたこと（取れなければ例外）</returns>
-    internal Task AcquireReservingAsync(string workFolder, string[] fullPaths, params string[] exclusiveIntentPaths)
+    internal Task AcquireReservingAsync(
+        string workFolder,
+        string[] fullPaths,
+        string[] exclusiveIntentPaths,
+        LockAttempt attempt)
     {
-        return AcquireCoreAsync(workFolder, fullPaths, exclusiveIntentPaths);
+        return AcquireCoreAsync(workFolder, fullPaths, exclusiveIntentPaths, attempt);
     }
 
     /// <summary>
@@ -332,8 +332,7 @@ internal sealed class PathLockSet
 
         _intents.Clear();
         _exclusiveIntents.Clear();
-        _workFolderExclusive = false;
-        _workFolderShareLost = false;
+        ReleaseWorkFolder();
         CloseShareLost();
     }
 
@@ -412,11 +411,6 @@ internal sealed class PathLockSet
         return new LockContentionException("他のトランザクションがこのパスを使用中です: " + workFolder, workFolder);
     }
 
-    private FileStream Open(string workFolder, string fullPath, FileShare share)
-    {
-        return OpenLockFile(FilePath(workFolder, fullPath), share);
-    }
-
     private FileStream OpenLockFile(string lockPath, FileShare share)
     {
         _faults.ThrowIfOpenArmed(share);
@@ -433,7 +427,7 @@ internal sealed class PathLockSet
             share);
     }
 
-    private async Task AcquireOneAsync(string workFolder, string fullPath)
+    private async Task AcquireOneAsync(string workFolder, string fullPath, LockAttempt attempt)
     {
         if (_handles.ContainsKey(fullPath))
         {
@@ -442,7 +436,9 @@ internal sealed class PathLockSet
 
         try
         {
-            await OpenWaitingAsync(workFolder, fullPath, FileShare.None).ConfigureAwait(false);
+            FileStream handle = await OpenWaitingAsync(FilePath(workFolder, fullPath), FileShare.None, attempt)
+                .ConfigureAwait(false);
+            _handles.Add(fullPath, handle);
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
@@ -450,17 +446,14 @@ internal sealed class PathLockSet
         }
     }
 
-    private void ReleaseHandle(string fullPath)
+    private void ReleaseWorkFolder()
     {
-        if (_handles.Remove(fullPath, out FileStream? handle))
-        {
-            handle.Dispose();
-        }
-
-        _workFolderExclusive = false;
+        _workFolderHandle?.Dispose();
+        _workFolderHandle = null;
+        _workFolderState = WorkFolderState.None;
     }
 
-    private async Task RestoreSharedAsync(string workFolder)
+    private async Task RestoreSharedAsync(string workFolder, LockAttempt attempt)
     {
         while (true)
         {
@@ -471,7 +464,7 @@ internal sealed class PathLockSet
             }
             catch (IOException exception) when (IsSharingViolation(exception))
             {
-                if (!await WaitForRetryAsync().ConfigureAwait(false))
+                if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
                 {
                     throw Contention(workFolder);
                 }
@@ -481,29 +474,26 @@ internal sealed class PathLockSet
 
     private void RestoreSharedOnce(string workFolder)
     {
-        if (_handles.ContainsKey(workFolder))
+        if (_workFolderHandle is null)
         {
-            CloseShareLost();
-            return;
+            _workFolderHandle = OpenLockFile(FilePath(workFolder, workFolder), FileShare.ReadWrite);
+            _workFolderState = WorkFolderState.Shared;
         }
 
-        _workFolderExclusive = false;
-        _handles.Add(workFolder, Open(workFolder, workFolder, FileShare.ReadWrite));
         CloseShareLost();
     }
 
-    private async Task OpenWaitingAsync(string workFolder, string fullPath, FileShare share)
+    private async Task<FileStream> OpenWaitingAsync(string lockPath, FileShare share, LockAttempt attempt)
     {
         while (true)
         {
             try
             {
-                _handles.Add(fullPath, Open(workFolder, fullPath, share));
-                return;
+                return OpenLockFile(lockPath, share);
             }
             catch (IOException exception) when (IsSharingViolation(exception))
             {
-                if (!await WaitForRetryAsync().ConfigureAwait(false))
+                if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
                 {
                     throw;
                 }
@@ -541,7 +531,7 @@ internal sealed class PathLockSet
 
     private void HoldShareLostBeforeDrop(string workFolder)
     {
-        if (_shareLost is not null || !HoldsPathOrIntent(workFolder))
+        if (_shareLost is not null || !HoldsPathOrIntent())
         {
             return;
         }
@@ -555,22 +545,9 @@ internal sealed class PathLockSet
             bufferSize: 1);
     }
 
-    private bool HoldsPathOrIntent(string workFolder)
+    private bool HoldsPathOrIntent()
     {
-        if (_intents.Count > 0)
-        {
-            return true;
-        }
-
-        foreach (string path in _handles.Keys)
-        {
-            if (!string.Equals(path, workFolder, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return _intents.Count > 0 || _handles.Count > 0;
     }
 
     private void CloseShareLost()
@@ -584,40 +561,6 @@ internal sealed class PathLockSet
         _shareLost = null;
     }
 
-    private async Task<bool> WaitForRetryAsync()
-    {
-        if (!_waitArmed || (!_waitForever && Environment.TickCount64 >= _deadlineTick))
-        {
-            return false;
-        }
-
-        _waitCancellation.ThrowIfCancellationRequested();
-        int delay = RetryIntervalMilliseconds;
-        if (!_waitForever)
-        {
-            long remaining = _deadlineTick - Environment.TickCount64;
-            if (remaining <= 0)
-            {
-                return false;
-            }
-
-            delay = (int)Math.Min(RetryIntervalMilliseconds, remaining);
-        }
-
-        // 呼び出し元のスレッド（UI など）を止めずに待つ
-        try
-        {
-            await Task.Delay(delay, _waitCancellation).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            _waitCancellation.ThrowIfCancellationRequested();
-            throw;
-        }
-
-        return true;
-    }
-
     private void RestoreAfterCancel(string workFolder)
     {
         try
@@ -626,44 +569,38 @@ internal sealed class PathLockSet
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
-            _workFolderShareLost = true;
+            _workFolderState = WorkFolderState.Lost;
         }
-        catch (IOException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            _workFolderShareLost = true;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            _workFolderShareLost = true;
+            _workFolderState = WorkFolderState.Lost;
             throw;
         }
     }
 
-    private async Task RestoreOrMarkLostAsync(string workFolder)
+    private async Task RestoreOrMarkLostAsync(string workFolder, LockAttempt attempt)
     {
         try
         {
-            await RestoreSharedAsync(workFolder).ConfigureAwait(false);
+            await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
         }
         catch (LockContentionException)
         {
-            _workFolderShareLost = true;
+            _workFolderState = WorkFolderState.Lost;
             throw;
         }
-        catch (IOException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            _workFolderShareLost = true;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            _workFolderShareLost = true;
+            _workFolderState = WorkFolderState.Lost;
             throw;
         }
     }
 
-    private async Task AcquireCoreAsync(string workFolder, string[] fullPaths, IReadOnlyCollection<string>? exclusiveIntentPaths)
+    private async Task AcquireCoreAsync(
+        string workFolder,
+        string[] fullPaths,
+        IReadOnlyCollection<string>? exclusiveIntentPaths,
+        LockAttempt attempt)
     {
         HashSet<string> exclusive = exclusiveIntentPaths is null
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -672,19 +609,19 @@ internal sealed class PathLockSet
         {
             foreach (string ancestor in Ancestors(workFolder, fullPath))
             {
-                await AcquireIntentAsync(workFolder, ancestor, exclusive.Contains(ancestor)).ConfigureAwait(false);
+                await AcquireIntentAsync(workFolder, ancestor, exclusive.Contains(ancestor), attempt).ConfigureAwait(false);
             }
 
             if (exclusive.Contains(fullPath))
             {
-                await AcquireIntentAsync(workFolder, fullPath, exclusive: true).ConfigureAwait(false);
+                await AcquireIntentAsync(workFolder, fullPath, exclusive: true, attempt).ConfigureAwait(false);
             }
 
-            await AcquireOneAsync(workFolder, fullPath).ConfigureAwait(false);
+            await AcquireOneAsync(workFolder, fullPath, attempt).ConfigureAwait(false);
         }
     }
 
-    private async Task AcquireIntentAsync(string workFolder, string directory, bool exclusive)
+    private async Task AcquireIntentAsync(string workFolder, string directory, bool exclusive, LockAttempt attempt)
     {
         if (_intents.ContainsKey(directory) && (!exclusive || _exclusiveIntents.Contains(directory)))
         {
@@ -693,13 +630,15 @@ internal sealed class PathLockSet
 
         if (exclusive)
         {
-            await AcquireExclusiveIntentAsync(workFolder, directory).ConfigureAwait(false);
+            await AcquireExclusiveIntentAsync(workFolder, directory, attempt).ConfigureAwait(false);
             return;
         }
 
         try
         {
-            await OpenIntentAsync(workFolder, directory, FileShare.ReadWrite, exclusive: false).ConfigureAwait(false);
+            FileStream intent = await OpenWaitingAsync(IntentFilePath(workFolder, directory), FileShare.ReadWrite, attempt)
+                .ConfigureAwait(false);
+            _intents.Add(directory, intent);
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
@@ -709,7 +648,7 @@ internal sealed class PathLockSet
 
     // 排他の意図ロックを待っているあいだはワークフォルダ全体のロックを持たない
     // 持ったままだと、待っている側が排他に上げるのを塞ぐ
-    private async Task AcquireExclusiveIntentAsync(string workFolder, string directory)
+    private async Task AcquireExclusiveIntentAsync(string workFolder, string directory, LockAttempt attempt)
     {
         bool closedOwnShared = false;
         if (_intents.Remove(directory, out FileStream? held))
@@ -732,14 +671,14 @@ internal sealed class PathLockSet
                 }
                 catch (IOException exception) when (IsSharingViolation(exception))
                 {
-                    if (!releasedShared && !_workFolderExclusive && _handles.ContainsKey(workFolder))
+                    if (!releasedShared && _workFolderState == WorkFolderState.Shared)
                     {
                         HoldShareLostBeforeDrop(workFolder);
-                        ReleaseHandle(workFolder);
+                        ReleaseWorkFolder();
                         releasedShared = true;
                     }
 
-                    if (!await WaitForRetryAsync().ConfigureAwait(false))
+                    if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
                     {
                         throw new LockContentionException(
                             "他のトランザクションがこのパスを使用中です: " + directory,
@@ -772,49 +711,19 @@ internal sealed class PathLockSet
             {
                 try
                 {
-                    await RestoreSharedAsync(workFolder).ConfigureAwait(false);
+                    await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
                 }
                 catch (LockContentionException)
                 {
-                    _workFolderShareLost = true;
+                    _workFolderState = WorkFolderState.Lost;
                 }
                 catch (OperationCanceledException)
                 {
-                    _workFolderShareLost = true;
+                    _workFolderState = WorkFolderState.Lost;
                 }
-                catch (IOException)
+                catch (Exception exception) when (IoErrors.IsIo(exception))
                 {
-                    _workFolderShareLost = true;
-                    throw;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    _workFolderShareLost = true;
-                    throw;
-                }
-            }
-        }
-    }
-
-    private async Task OpenIntentAsync(string workFolder, string directory, FileShare share, bool exclusive)
-    {
-        string lockPath = IntentFilePath(workFolder, directory);
-        while (true)
-        {
-            try
-            {
-                _intents.Add(directory, OpenLockFile(lockPath, share));
-                if (exclusive)
-                {
-                    _exclusiveIntents.Add(directory);
-                }
-
-                return;
-            }
-            catch (IOException exception) when (IsSharingViolation(exception))
-            {
-                if (!await WaitForRetryAsync().ConfigureAwait(false))
-                {
+                    _workFolderState = WorkFolderState.Lost;
                     throw;
                 }
             }
@@ -832,79 +741,51 @@ internal sealed class PathLockSet
         {
             _intents.Add(directory, OpenLockFile(IntentFilePath(workFolder, directory), FileShare.ReadWrite));
         }
-        catch (IOException)
-        {
-            // 共有へ戻せなくても、呼び出し側が元の例外を返す
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // 共有へ戻せなくても、呼び出し側が元の例外を返す
         }
     }
 
-    private async Task ReleaseWorkFolderExclusiveAsync(string workFolder)
+    private void ReleaseIntents(IReadOnlyList<string> directories)
     {
-        if (!_workFolderExclusive)
+        foreach (string directory in directories)
         {
-            return;
-        }
+            if (_intents.Remove(directory, out FileStream? handle))
+            {
+                handle.Dispose();
+            }
 
-        HoldShareLostBeforeDrop(workFolder);
-        ReleaseHandle(workFolder);
-        try
-        {
-            await RestoreSharedAsync(workFolder).ConfigureAwait(false);
-        }
-        catch (LockContentionException)
-        {
-            _workFolderShareLost = true;
-        }
-        catch (OperationCanceledException)
-        {
-            _workFolderShareLost = true;
-        }
-        catch (IOException)
-        {
-            _workFolderShareLost = true;
-            throw;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            _workFolderShareLost = true;
-            throw;
+            _exclusiveIntents.Remove(directory);
         }
     }
 
     /// <summary>
-    /// ワークフォルダ全体の排他を、破棄するときに共有へ戻す
+    /// 読んでいるあいだだけ排他で持つ意図ロックを、破棄するときに閉じる
     /// </summary>
-    internal readonly struct WorkFolderExclusive : IAsyncDisposable
+    internal readonly struct ReadingScope : IDisposable
     {
-        private readonly PathLockSet? _locks;
+        private readonly PathLockSet _locks;
 
-        private readonly string? _workFolder;
+        private readonly IReadOnlyList<string> _directories;
 
         /// <summary>
-        /// 戻す対象を覚える
+        /// 閉じる対象を覚える
         /// </summary>
         /// <param name="locks">ロックの集合</param>
-        /// <param name="workFolder">ワークフォルダ</param>
-        internal WorkFolderExclusive(PathLockSet locks, string workFolder)
+        /// <param name="directories">この呼び出しで排他にした意図ロックのディレクトリ</param>
+        internal ReadingScope(PathLockSet locks, IReadOnlyList<string> directories)
         {
             _locks = locks;
-            _workFolder = workFolder;
+            _directories = directories;
         }
 
         /// <summary>
-        /// ワークフォルダ全体の排他を共有へ戻す
+        /// この呼び出しで排他にした意図ロックを閉じる
         /// </summary>
-        /// <returns>共有へ戻し終えたこと</returns>
-        public async ValueTask DisposeAsync()
+        public void Dispose()
         {
-            if (_locks is not null && _workFolder is not null)
-            {
-                await _locks.ReleaseWorkFolderExclusiveAsync(_workFolder).ConfigureAwait(false);
-            }
+            _locks?.ReleaseIntents(_directories);
         }
     }
 }

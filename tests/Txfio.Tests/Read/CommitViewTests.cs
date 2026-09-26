@@ -149,6 +149,33 @@ public sealed class CommitViewTests
         await Assert.ThrowsAsync<ArgumentException>(() => tx.ExistsAsync(outside.Path));
     }
 
+    /// <summary>
+    /// ステージングファイルの姿は、その中身を書いた操作の対象パスを持つ
+    /// </summary>
+    /// <remarks>
+    /// <para>前提: dir/a.txt を Update しており、規則に合わない名前のステージングファイルがある</para>
+    /// <para>手順: 実ファイル b.txt と、dir/a.txt を Resolve する</para>
+    /// <para>期待: b.txt は StagedFor が null、dir/a.txt は StagedFor が dir/a.txt であり、ContentPath がそのステージングファイル</para>
+    /// </remarks>
+    [Fact]
+    public async Task Resolve_ステージングファイルの姿は操作の対象パスを持つこと()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string target = System.IO.Path.Combine(work.Path, "dir", "a.txt");
+        string staging = System.IO.Path.Combine(work.Path, "staged-elsewhere.bin");
+        string real = System.IO.Path.Combine(work.Path, "b.txt");
+        await File.WriteAllTextAsync(real, "b");
+        JournalOperation[] operations = new[] { new JournalOperation(PendingChangeKind.Update, target, staging) };
+
+        CommitAppearance staged = CommitView.Resolve(operations, target);
+        CommitAppearance plain = CommitView.Resolve(operations, real);
+
+        Assert.Equal(target, staged.StagedFor);
+        Assert.Equal(staging, staged.ContentPath);
+        Assert.Null(plain.StagedFor);
+        Assert.Equal(real, plain.ContentPath);
+    }
+
     private static async Task<string> ReadTextAsync(ITransaction tx, string path)
     {
         await using Stream stream = await tx.ReadAsync(path);
