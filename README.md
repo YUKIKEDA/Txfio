@@ -4,7 +4,7 @@ English | [日本語](README.ja.md)
 
 A file IO library for Windows shared folders (NTFS / SMB) that leaves the real files unchanged until you commit, and can recover after a crash.
 
-It is not on nuget.org yet. Reference this repository and build it. The TFM is `net8.0`. When the SMB server's own cache reaches the disk is not guaranteed.
+Install it with `dotnet add package Txfio`. The TFM is `net8.0`. When the SMB server's own cache reaches the disk is not guaranteed.
 
 The source of truth for the contract is [`docs/design.md`](docs/design.md). How to use it is in this README.
 

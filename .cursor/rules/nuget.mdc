@@ -1,0 +1,23 @@
+---
+description: NuGet package metadata required before pack or publish
+alwaysApply: true
+---
+
+# NuGet package
+
+Before changing package metadata, packing, or publishing, read [`.cursor/skills/nuget-package/SKILL.md`](../skills/nuget-package/SKILL.md). The guide is [package authoring best practices](https://learn.microsoft.com/nuget/create-packages/package-authoring-best-practices).
+
+## Required
+
+- Pack `src/Txfio/Txfio.csproj` with `dotnet pack`. Tests and stress stay `IsPackable` false
+- `PackageId` `Txfio`. SemVer in `VersionPrefix` (`CONTRIBUTING.md`). Do not add a prerelease label unless the issue says the release is a preview
+- `Description`, `Authors` (`YUKIKEDA`, the name on `LICENSE`), `Copyright` (the same line as `LICENSE`), `PackageLicenseExpression` `MIT`
+- `PackageProjectUrl`, `RepositoryUrl`, `RepositoryType` `git`, Source Link, and a symbol package (`snupkg`)
+- `PackageTags` use semicolons. `PackageReadmeFile` is `README.md`. Update `PackageReleaseNotes` in the same change as `VersionPrefix`
+- Do not set `LicenseUrl` or `IconUrl`. Do not add `PackageIcon` unless a 128×128 transparent PNG is already in the repo
+
+## Publish
+
+- One package, `Txfio`. The packed readme is English `README.md` only
+- The publish-ready install line is `dotnet add package Txfio`. Do not say the package is already listed on nuget.org until that push has succeeded
+- Do not push to nuget.org unless the user gives an API key and asks
