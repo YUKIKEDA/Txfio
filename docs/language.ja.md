@@ -4,7 +4,7 @@
 
 英語版 [`language.md`](language.md) が正本である。食い違うときは英語版に合わせてこのファイルを直す。
 
-Txfio は nuget.org で公開し、日本語を読まない人も読む。このページは、リポジトリの各部分をどの言語で書くか、日本語訳を英語の正本とどうそろえるかを決める。
+nuget.org から Txfio を入れる人には、日本語を読まない人もいる。このページは、リポジトリの各部分をどの言語で書くか、日本語訳を英語の正本とどうそろえるかを決める。
 
 常に適用するエージェント向けのルールは [`.cursor/rules/language.mdc`](../.cursor/rules/language.mdc) である。このリポジトリでの英語の書き方（用語、文の形）は [`.cursor/skills/english-writing/SKILL.md`](../.cursor/skills/english-writing/SKILL.md) にある。
 

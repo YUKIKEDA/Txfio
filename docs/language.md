@@ -2,7 +2,7 @@
 
 English | [日本語](language.ja.md)
 
-Txfio is published on nuget.org and read by people who do not read Japanese. This page decides which language each part of the repository uses, and how the Japanese translations stay in sync with the English source.
+People who install Txfio from nuget.org include readers who do not read Japanese. This page decides which language each part of the repository uses, and how the Japanese translations stay in sync with the English source.
 
 The always-applied agent rule is [`.cursor/rules/language.mdc`](../.cursor/rules/language.mdc). How to write English in this repository (terminology, sentence shape) is in [`.cursor/skills/english-writing/SKILL.md`](../.cursor/skills/english-writing/SKILL.md).
 

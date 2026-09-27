@@ -34,6 +34,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - [`.cursor/rules/engineering.mdc`](.cursor/rules/engineering.mdc)
 - [`.cursor/rules/design-docs.mdc`](.cursor/rules/design-docs.mdc)
 - [`.cursor/rules/language.mdc`](.cursor/rules/language.mdc)
+- [`.cursor/rules/nuget.mdc`](.cursor/rules/nuget.mdc)
 - [`.cursor/rules/similar-findings.mdc`](.cursor/rules/similar-findings.mdc)
 
 ## Working agreements (summary)

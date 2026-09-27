@@ -33,6 +33,6 @@ In this order. Do not leave empty sections.
 ## Do not
 
 - Put badges, sponsors, or the code of conduct at the top
-- Tell readers to `dotnet add package` for a package that is not published
+- Put `dotnet add package` in the README before that version's package metadata is ready to publish. The publish-ready install line is `dotnet add package Txfio` ([nuget-package](../nuget-package/SKILL.md))
 - Add behavior that is not in the source of truth (the design)
 - Make process progress (Issue numbers, phases) the center of the text. Mention it briefly only when the publishing state changes how users get the library
