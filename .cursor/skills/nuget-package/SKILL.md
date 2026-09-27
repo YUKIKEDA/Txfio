@@ -1,9 +1,9 @@
 ---
 name: nuget-package
 description: >-
-  Check and update the Txfio NuGet package against the NuGet authoring best practices.
+  Check and update the Txfio NuGet package against the NuGet authoring best practices, and pack it for publish.
   Use when editing package metadata, Txfio.csproj pack properties, README install steps,
-  packing a nupkg, publishing to nuget.org, or when the user mentions NuGet, nuget.org, or package authoring.
+  packing a nupkg, publishing to nuget.org, or when the user mentions NuGet, nuget.org, package authoring, or ContinuousIntegrationBuild.
 ---
 
 # NuGet package
@@ -36,17 +36,38 @@ One packable project: `src/Txfio/Txfio.csproj`. `tests/Txfio.Tests`, `tests/Txfi
 
 - Reserving the `Txfio` id prefix on nuget.org is a maintainer action on the site. Do not block packing on it, and do not try to reserve it from the repo
 - Add `PackageIcon` only when a 128×128 transparent PNG is already in the repo. Do not generate an icon. Never set `IconUrl`
-- Source Link is on: `Microsoft.SourceLink.GitHub` with `PrivateAssets` `All`, `PublishRepositoryUrl`, `EmbedUntrackedSources`, `IncludeSymbols`, and `SymbolPackageFormat` `snupkg`. `ContinuousIntegrationBuild` is set when `GITHUB_ACTIONS` is true
+- Source Link is on: `Microsoft.SourceLink.GitHub` with `PrivateAssets` `All`, `PublishRepositoryUrl`, `EmbedUntrackedSources`, `IncludeSymbols`, and `SymbolPackageFormat` `snupkg`. The project sets `ContinuousIntegrationBuild` when `GITHUB_ACTIONS` is true. A local pack for nuget.org still passes the property, as in [Pack for nuget.org](#pack-for-nugetorg)
 
 ## Avoid and don't
 
 - Avoid a package reference that demands an exact version (`Version="[1.2.3]"`)
 - Do not set `LicenseUrl` or `IconUrl`
 
+## Pack for nuget.org
+
+Pack from a clean tree whose `HEAD` is the commit the version tag points at. Pass `ContinuousIntegrationBuild` even on a local machine:
+
+```text
+dotnet pack src/Txfio/Txfio.csproj -c Release -p:ContinuousIntegrationBuild=true
+```
+
+That property turns on deterministic source paths. The PDB Source Link map is `/_/*` to `https://raw.githubusercontent.com/YUKIKEDA/Txfio/<commit>/*`. Without it, the DLL and the PDB contain the local source path, such as `D:\home\...`. A published version cannot be replaced, so pack the upload this way before the push.
+
+The outputs are `src/Txfio/bin/Release/Txfio.<version>.nupkg` and `Txfio.<version>.snupkg` in the same directory.
+
+Push only when the user supplies an API key and asks. Do not write the key into the repo, a commit, or a chat log. `dotnet nuget push` of the nupkg also pushes the snupkg beside it:
+
+```text
+dotnet nuget push src/Txfio/bin/Release/Txfio.<version>.nupkg --api-key <key> --source https://api.nuget.org/v3/index.json
+```
+
+nuget.org does not overwrite or delete a version. Unlisting hides that version from search. An exact version restore still works. See [Deleting packages](https://learn.microsoft.com/nuget/nuget-org/policies/deleting-packages).
+
 ## Check the packed package
 
-After `dotnet pack src/Txfio/Txfio.csproj -c Release`, read the `.nuspec` inside `src/Txfio/bin/Release/Txfio.<version>.nupkg` and confirm all of these:
+After the pack command above, read the `.nuspec` inside `src/Txfio/bin/Release/Txfio.<version>.nupkg` and confirm all of these:
 
-- `description`, `authors`, `copyright`, `license type="expression"` `MIT`, `projectUrl`, `repository` with `type="git"`, a `commit`, `tags`, `readme`, `releaseNotes`
+- `description`, `authors`, `copyright`, `license type="expression"` `MIT`, `projectUrl`, `repository` with `type="git"`, a `commit` equal to `HEAD`, `tags`, `readme`, `releaseNotes`
 - no `iconUrl`. `licenseUrl` may still point at `licenses.nuget.org` because pack writes that from the SPDX expression. That is not the deprecated `PackageLicenseUrl` property
 - `README.md` is in the package
+- The DLL and the PDB contain no drive letter path and no `C:\Users`. The PDB document map is `/_/*` to the raw GitHub URL of that commit
