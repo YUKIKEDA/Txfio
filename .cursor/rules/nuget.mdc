@@ -20,4 +20,15 @@ Before changing package metadata, packing, or publishing, read [`.cursor/skills/
 
 - One package, `Txfio`. The packed readme is English `README.md` only
 - The publish-ready install line is `dotnet add package Txfio`. Do not say the package is already listed on nuget.org until that push has succeeded
-- Do not push to nuget.org unless the user gives an API key and asks
+- Pack the upload from a clean tree at the tagged commit. Pass `ContinuousIntegrationBuild`:
+
+```text
+dotnet pack src/Txfio/Txfio.csproj -c Release -p:ContinuousIntegrationBuild=true
+```
+
+- A pack without that property leaves the local source path in the DLL and the PDB. Outputs are `src/Txfio/bin/Release/Txfio.<version>.nupkg` and `.snupkg`
+- Do not push to nuget.org unless the user gives an API key and asks. Do not store the key. The snupkg beside the nupkg is uploaded with it. A published version cannot be replaced:
+
+```text
+dotnet nuget push src/Txfio/bin/Release/Txfio.<version>.nupkg --api-key <key> --source https://api.nuget.org/v3/index.json
+```
