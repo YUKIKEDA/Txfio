@@ -6,15 +6,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverDeleteTreeTests
 {
     /// <summary>
-    /// 未コミットの全削除は Recover で対象を残す
+    /// Recover of an uncommitted DeleteTree keeps the target.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、DeleteTree の journal と中身があるディレクトリが残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で journal は消え、ディレクトリと子は残る</para>
+    /// <para>Given: no live transaction, and a DeleteTree journal and a directory with contents remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, the journal is deleted, and the directory and its children remain.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_未コミットのDeleteTreeは対象を残してRolledBackになること()
+    public async Task RecoverAsync_UncommittedDeleteTreeKeepsTargetAndRollsBack()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteDeleteTreeAsync(work.Path, committing: false);
@@ -27,15 +27,15 @@ public sealed class RecoverDeleteTreeTests
     }
 
     /// <summary>
-    /// Committing でディレクトリが残っていれば配下ごと消して進める
+    /// With Committing, if the directory remains, it is deleted with everything under it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の DeleteTree journal と、子ファイルがあるディレクトリがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward でディレクトリも journal も無い</para>
+    /// <para>Given: a Committing DeleteTree journal and a directory with a child file.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, and neither the directory nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_CommittingのDeleteTreeを完了してRolledForwardになること()
+    public async Task RecoverAsync_FinishesCommittingDeleteTreeAndRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteDeleteTreeAsync(work.Path, committing: true);
@@ -47,15 +47,15 @@ public sealed class RecoverDeleteTreeTests
     }
 
     /// <summary>
-    /// Committing で対象がファイルにすり替わっていると競合する
+    /// With Committing, a target swapped for a file is a conflict.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の DeleteTree journal があり、同じパスがファイルである</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: ConflictDetected でファイルは残り、journal は消える</para>
+    /// <para>Given: a Committing DeleteTree journal exists, and the same path is a file.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: ConflictDetected, the file remains, and the journal is deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ファイルにすり替わるとConflictDetectedになること()
+    public async Task RecoverAsync_SwappedForFileIsConflictDetected()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteDeleteTreeAsync(work.Path, committing: true);

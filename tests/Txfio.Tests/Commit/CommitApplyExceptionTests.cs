@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitApplyExceptionTests
 {
     /// <summary>
-    /// Committing を書いたあとの例外では、Dispose がロールバックせず Recover が Add を確定する
+    /// On an exception after Committing is written, Dispose does not roll back, and Recover finishes the Add.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory と、その配下への Add をステージングしている</para>
-    /// <para>手順: 適用の最初で FileNotFoundException を出して CommitAsync し、Dispose してから RecoverAsync する</para>
-    /// <para>期待: 例外はそのまま届く。ディレクトリと .txnew とジャーナルは残る。Recover のあと RolledForward で、対象は Add の内容になる</para>
+    /// <para>Given: a CreateDirectory and an Add under it are staged.</para>
+    /// <para>When: CommitAsync throws FileNotFoundException at the start of apply, then the transaction is disposed and RecoverAsync runs.</para>
+    /// <para>Then: the exception reaches the caller as is; the directory, the .txnew, and the journal remain; after Recover the result is RolledForward and the target has the Add content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_適用中の例外ではDisposeがロールバックせずRecoverがAddを確定すること()
+    public async Task CommitAsync_ExceptionDuringApplyKeepsStateAndRecoverFinishesAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "d");

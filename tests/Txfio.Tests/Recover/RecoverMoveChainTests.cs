@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverMoveChainTests
 {
     /// <summary>
-    /// 連鎖の先頭だけ適用して落ちても、Recover が残りの Move を同じ順で終える
+    /// Even if a crash happens after only the head of a chain is applied, Recover finishes the remaining Moves in the same order.
     /// </summary>
     /// <remarks>
-    /// <para>前提: log.txt と log.1 があり、log.2 は無い</para>
-    /// <para>手順: Move(log.1→log.2) と Move(log→log.1) を予約し、最初の適用の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: 止めた時点では log.2 だけが旧 log.1 で、Recover は RolledForward、log.1 は旧 log になり、log.txt は無い</para>
+    /// <para>Given: log.txt and log.1 exist, and log.2 does not.</para>
+    /// <para>When: Move(log.1→log.2) and Move(log→log.1) are scheduled, the commit is stopped right after the first apply and disposed, and RecoverAsync runs.</para>
+    /// <para>Then: at the stop only log.2 is the old log.1; Recover is RolledForward, log.1 becomes the old log, and log.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_連鎖の途中から同じ順で完了すること()
+    public async Task RecoverAsync_FinishesChainFromMiddleInSameOrder()
     {
         await using TempDirectory work = TempDirectory.Create();
         string current = System.IO.Path.Combine(work.Path, "log.txt");
@@ -41,15 +41,15 @@ public sealed class RecoverMoveChainTests
     }
 
     /// <summary>
-    /// 連鎖をすべて適用してからジャーナルを消す前に落ちても、Recover は RolledForward になる
+    /// Even if a crash happens after the whole chain is applied but before the journal is deleted, Recover is RolledForward.
     /// </summary>
     /// <remarks>
-    /// <para>前提: log.txt と log.1 があり、log.2 は無い</para>
-    /// <para>手順: Move(log.1→log.2) と Move(log→log.1) を予約し、最初の適用の直後に止め、2 件目を手で適用してから RecoverAsync する</para>
-    /// <para>期待: RolledForward で飛ばした操作は無く、log.2 は旧 log.1、log.1 は旧 log であり、ジャーナルは消える</para>
+    /// <para>Given: log.txt and log.1 exist, and log.2 does not.</para>
+    /// <para>When: Move(log.1→log.2) and Move(log→log.1) are scheduled, the commit is stopped right after the first apply, the second is applied by hand, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward with no skipped operations, log.2 is the old log.1, log.1 is the old log, and the journal is deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_連鎖をすべて適用したあとならRolledForwardになること()
+    public async Task RecoverAsync_RollsForwardAfterWholeChainIsApplied()
     {
         await using TempDirectory work = TempDirectory.Create();
         string current = System.IO.Path.Combine(work.Path, "log.txt");
@@ -78,15 +78,15 @@ public sealed class RecoverMoveChainTests
     }
 
     /// <summary>
-    /// ディレクトリの連鎖をすべて適用してからジャーナルを消す前に落ちても、Recover は RolledForward になる
+    /// Even if a crash happens after a whole chain of directories is applied but before the journal is deleted, Recover is RolledForward.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリ v1 と cur があり、v0 は無い</para>
-    /// <para>手順: Move(v1→v0) と Move(cur→v1) を予約し、最初の適用の直後に止め、2 件目を手で適用してから RecoverAsync する</para>
-    /// <para>期待: RolledForward で、v0 は旧 v1、v1 は旧 cur であり、cur は無い</para>
+    /// <para>Given: directories v1 and cur exist, and v0 does not.</para>
+    /// <para>When: Move(v1→v0) and Move(cur→v1) are scheduled, the commit is stopped right after the first apply, the second is applied by hand, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, v0 is the old v1, v1 is the old cur, and cur does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ディレクトリの連鎖をすべて適用したあとならRolledForwardになること()
+    public async Task RecoverAsync_RollsForwardAfterWholeDirectoryChainIsApplied()
     {
         await using TempDirectory work = TempDirectory.Create();
         string v1 = System.IO.Path.Combine(work.Path, "v1");
@@ -115,15 +115,15 @@ public sealed class RecoverMoveChainTests
     }
 
     /// <summary>
-    /// ファイル Move の移動元へ書き直した Add まで適用してから落ちても、Recover は RolledForward になる
+    /// Even if a crash happens after the Add rewritten to the source of a file Move is applied, Recover is RolledForward.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt があり、b.txt は無い</para>
-    /// <para>手順: Move(a.txt→b.txt) のあと a.txt へ書き、Move の適用の直後に止め、Add の .txnew を手で a.txt へ移してから RecoverAsync する</para>
-    /// <para>期待: RolledForward で、b.txt は旧 a.txt、a.txt は書いた内容であり、.txnew は残らない</para>
+    /// <para>Given: a.txt exists, and b.txt does not.</para>
+    /// <para>When: after Move(a.txt→b.txt), a.txt is written, the commit is stopped right after the Move is applied, the Add's .txnew is moved to a.txt by hand, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, b.txt is the old a.txt, a.txt has the written content, and no .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_移動元へのAddまで適用したあとならRolledForwardになること()
+    public async Task RecoverAsync_RollsForwardAfterAddToSourceIsApplied()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");

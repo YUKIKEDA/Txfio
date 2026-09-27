@@ -6,15 +6,15 @@ namespace Txfio.Tests.Text;
 public sealed class JsonExtensionTests
 {
     /// <summary>
-    /// 無いファイルへの JSON 書きは Add になり、既定のプロパティ名で往復する
+    /// Writing JSON to a missing file is an Add, and round-trips with default property names.
     /// </summary>
     /// <remarks>
-    /// <para>前提: note.json が無い</para>
-    /// <para>手順: オプションを省略して WriteAsJsonAsync し、ReadFromJsonAsync する</para>
-    /// <para>期待: Title は hello で、JSON には Title という名前があり、pending は Add</para>
+    /// <para>Given: note.json does not exist.</para>
+    /// <para>When: WriteAsJsonAsync without options, then ReadFromJsonAsync.</para>
+    /// <para>Then: Title is hello, the JSON has the name Title, and the pending change is an Add.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAsJsonAsync_無いファイルはAddで往復できること()
+    public async Task WriteAsJsonAsync_MissingFileRoundTripsAsAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -28,15 +28,15 @@ public sealed class JsonExtensionTests
     }
 
     /// <summary>
-    /// 既存ファイルへの JSON 書きは Update になり、ディスクは古いまま
+    /// Writing JSON to an existing file is an Update, and the disk stays old.
     /// </summary>
     /// <remarks>
-    /// <para>前提: note.json の内容は old である</para>
-    /// <para>手順: WriteAsJsonAsync する</para>
-    /// <para>期待: pending は Update で、ディスク上の内容は old のまま</para>
+    /// <para>Given: note.json contains old.</para>
+    /// <para>When: WriteAsJsonAsync is called.</para>
+    /// <para>Then: the pending change is an Update, and the content on disk stays old.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAsJsonAsync_既存ファイルはUpdateになること()
+    public async Task WriteAsJsonAsync_ExistingFileBecomesUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "note.json");
@@ -51,15 +51,15 @@ public sealed class JsonExtensionTests
     }
 
     /// <summary>
-    /// 壊れた JSON は System.Text.Json の例外のまま
+    /// Broken JSON stays a System.Text.Json exception.
     /// </summary>
     /// <remarks>
-    /// <para>前提: note.json は JSON ではない</para>
-    /// <para>手順: ReadFromJsonAsync する</para>
-    /// <para>期待: JsonException になる</para>
+    /// <para>Given: note.json is not JSON.</para>
+    /// <para>When: ReadFromJsonAsync is called.</para>
+    /// <para>Then: JsonException.</para>
     /// </remarks>
     [Fact]
-    public async Task ReadFromJsonAsync_壊れたJSONはJsonExceptionになること()
+    public async Task ReadFromJsonAsync_BrokenJsonThrowsJsonException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "note.json"), "not-json");
@@ -69,15 +69,15 @@ public sealed class JsonExtensionTests
     }
 
     /// <summary>
-    /// 渡した JsonSerializerOptions が書きと読みに使われる
+    /// The JsonSerializerOptions passed are used for writing and reading.
     /// </summary>
     /// <remarks>
-    /// <para>前提: note.json が無い</para>
-    /// <para>手順: camelCase のオプションで書き、同じオプションで読む</para>
-    /// <para>期待: JSON には title があり、読み取った Title は hello</para>
+    /// <para>Given: note.json does not exist.</para>
+    /// <para>When: it is written with camelCase options, and read with the same options.</para>
+    /// <para>Then: the JSON has title, and the Title read is hello.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAsJsonAsync_オプションを省略しないときはその設定で往復すること()
+    public async Task WriteAsJsonAsync_RoundTripsWithGivenOptions()
     {
         await using TempDirectory work = TempDirectory.Create();
         JsonSerializerOptions options = new JsonSerializerOptions
@@ -93,15 +93,15 @@ public sealed class JsonExtensionTests
     }
 
     /// <summary>
-    /// Move 先への JSON 書き込みは移動先の Add と元の Delete になる
+    /// Writing JSON to a Move destination becomes an Add at the destination and a Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.json を b.json へ Move している</para>
-    /// <para>手順: b.json へ WriteAsJsonAsync する</para>
-    /// <para>期待: pending は Add と Delete で、Title が読める</para>
+    /// <para>Given: a.json is moved to b.json.</para>
+    /// <para>When: WriteAsJsonAsync is called on b.json.</para>
+    /// <para>Then: the pending changes are an Add and a Delete, and Title can be read.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAsJsonAsync_Move先はAddとDeleteになること()
+    public async Task WriteAsJsonAsync_MoveDestinationBecomesAddAndDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.json"), "{}");

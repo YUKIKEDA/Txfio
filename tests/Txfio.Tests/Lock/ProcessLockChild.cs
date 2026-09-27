@@ -3,25 +3,25 @@ using Txfio.Tests.Support;
 namespace Txfio.Tests;
 
 /// <summary>
-/// テストが起動する別プロセスで、指定パスのロックを持ち続ける
+/// Holds the lock on a given path in another process started by a test.
 /// </summary>
 public static class ProcessLockChild
 {
     /// <summary>
-    /// 停止ファイルができるまでロックを持つ起動コマンド
+    /// The command that holds the lock until a stop file appears.
     /// </summary>
     public const string HoldUntilStop = "hold-until-stop";
 
     /// <summary>
-    /// プロセスが終了するまでロックを持つ起動コマンド
+    /// The command that holds the lock until the process exits.
     /// </summary>
     public const string HoldUntilKilled = "hold-until-killed";
 
     /// <summary>
-    /// Add したあと、停止ファイルができるまでロックを持ったまま待つ
+    /// After an Add, waits while holding the lock until a stop file appears.
     /// </summary>
-    /// <param name="args">コマンド、ワークフォルダ、相対パス、準備ファイル、停止ファイル</param>
-    /// <returns>引数が揃っていれば 0、足りなければ 2</returns>
+    /// <param name="args">The command, work folder, relative path, ready file, and stop file.</param>
+    /// <returns>0 if all arguments are given, 2 if some are missing.</returns>
     public static async Task<int> RunHoldUntilStopAsync(string[] args)
     {
         if (args.Length != 5)
@@ -43,10 +43,10 @@ public static class ProcessLockChild
     }
 
     /// <summary>
-    /// Add したあと、プロセスが終了するまでロックを持ったまま待つ
+    /// After an Add, waits while holding the lock until the process exits.
     /// </summary>
-    /// <param name="args">コマンド、ワークフォルダ、相対パス、準備ファイル</param>
-    /// <returns>引数が揃っていれば 0、足りなければ 2</returns>
+    /// <param name="args">The command, work folder, relative path, and ready file.</param>
+    /// <returns>0 if all arguments are given, 2 if some are missing.</returns>
     public static async Task<int> RunHoldUntilKilledAsync(string[] args)
     {
         if (args.Length != 4)

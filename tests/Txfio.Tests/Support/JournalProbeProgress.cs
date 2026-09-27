@@ -1,7 +1,7 @@
 namespace Txfio.Tests.Support;
 
 /// <summary>
-/// 進捗が届いた時点のジャーナルに、指定した名前が書いてあるかを記録する（同期で呼ばれる）
+/// Records whether the journal contains a given name at the moment progress arrives (called synchronously).
 /// </summary>
 internal sealed class JournalProbeProgress : IProgress<TransferProgress>
 {
@@ -9,10 +9,10 @@ internal sealed class JournalProbeProgress : IProgress<TransferProgress>
     private readonly string _expected;
 
     /// <summary>
-    /// 調べるワークフォルダと、ジャーナルにあるはずの名前を指定する
+    /// Initializes a new instance of the <see cref="JournalProbeProgress"/> class with the work folder to check and the name the journal should contain.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="expected">ジャーナルにあるはずのファイル名</param>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="expected">The file name the journal should contain.</param>
     internal JournalProbeProgress(string workFolder, string expected)
     {
         _workFolder = workFolder;
@@ -20,12 +20,12 @@ internal sealed class JournalProbeProgress : IProgress<TransferProgress>
     }
 
     /// <summary>
-    /// 進捗が 1 回でも届いた
+    /// Gets a value indicating whether progress arrived at least once.
     /// </summary>
     internal bool Reported { get; private set; }
 
     /// <summary>
-    /// 届いたすべての時点で、ジャーナルに名前が書いてあった
+    /// Gets a value indicating whether the journal contained the name every time progress arrived.
     /// </summary>
     internal bool AlwaysJournaled { get; private set; } = true;
 

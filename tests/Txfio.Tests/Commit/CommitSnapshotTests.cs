@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitSnapshotTests
 {
     /// <summary>
-    /// Move のあとに Update を投影すると、Update の Before は移動元のファイル状態になる
+    /// When an Update is projected after a Move, the Update's Before is the state of the source file.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動元ファイルと、移動先への Update 用 .txnew がある</para>
-    /// <para>手順: Update を先に並べた操作を TryStamp する</para>
-    /// <para>期待: Update の Before は移動元と一致し、After は .txnew と一致する</para>
+    /// <para>Given: a source file, and a .txnew for an Update at the destination.</para>
+    /// <para>When: TryStamp runs on operations with the Update listed first.</para>
+    /// <para>Then: the Update's Before matches the source, and its After matches the .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task TryStamp_MoveのあとUpdateのBeforeは移動元の状態であること()
+    public async Task TryStamp_UpdateBeforeAfterMoveIsSourceState()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");

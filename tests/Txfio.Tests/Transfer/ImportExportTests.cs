@@ -5,15 +5,15 @@ namespace Txfio.Tests.Transfer;
 public sealed class ImportExportTests
 {
     /// <summary>
-    /// 外のファイルを Add として取り込み、コピー元は残る
+    /// An external file is imported as an Add, and the source remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダの外に、内容が hello のファイルがある</para>
-    /// <para>手順: ImportAsync してコミットする</para>
-    /// <para>期待: 未確定操作は Add が 1 件、進み具合の通知は 5 バイト、コミット後もコピー元とコピー先の内容がどちらも hello である</para>
+    /// <para>Given: outside the work folder there is a file with the content hello.</para>
+    /// <para>When: ImportAsync, then commit.</para>
+    /// <para>Then: one pending Add, progress reports 5 bytes, and after commit both the source and the destination contain hello.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_外のファイルをAddしコピー元は残ること()
+    public async Task ImportAsync_AddsExternalFileAndKeepsSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -33,15 +33,15 @@ public sealed class ImportExportTests
     }
 
     /// <summary>
-    /// ワークフォルダの中は取り込めない
+    /// A path inside the work folder cannot be imported.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダの中にファイルがある</para>
-    /// <para>手順: そのファイルを ImportAsync する</para>
-    /// <para>期待: ArgumentException になる</para>
+    /// <para>Given: a file inside the work folder.</para>
+    /// <para>When: ImportAsync is called on that file.</para>
+    /// <para>Then: ArgumentException.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_ワークフォルダの中はArgumentExceptionになること()
+    public async Task ImportAsync_InsideWorkFolderThrowsArgumentException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string inside = System.IO.Path.Combine(work.Path, "in.txt");
@@ -52,15 +52,15 @@ public sealed class ImportExportTests
     }
 
     /// <summary>
-    /// コピー先が既にあると ExternalConflictException になる
+    /// An existing destination throws ExternalConflictException.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外にコピー元があり、ワークフォルダに a.txt がある</para>
-    /// <para>手順: a.txt へ ImportAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は a.txt の絶対パス、コピー元は残る</para>
+    /// <para>Given: a source outside, and a.txt in the work folder.</para>
+    /// <para>When: ImportAsync targets a.txt.</para>
+    /// <para>Then: ExternalConflictException, Path is the absolute path of a.txt, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_コピー先があるとExternalConflictExceptionになること()
+    public async Task ImportAsync_ExistingDestinationThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -79,15 +79,15 @@ public sealed class ImportExportTests
     }
 
     /// <summary>
-    /// 別トランザクションがコピー先を押さえていると競合する
+    /// It conflicts when another transaction holds the destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方のトランザクションが a.txt を Import している</para>
-    /// <para>手順: もう一方が同じコピー先を Import する</para>
-    /// <para>期待: LockContentionException になり、Path は a.txt の絶対パスである</para>
+    /// <para>Given: one transaction has imported a.txt.</para>
+    /// <para>When: the other imports to the same destination.</para>
+    /// <para>Then: LockContentionException, and Path is the absolute path of a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_別トランザクションがコピー先を押さえるとLockContentionExceptionになること()
+    public async Task ImportAsync_DestinationHeldByAnotherTransactionThrowsLockContentionException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -107,15 +107,15 @@ public sealed class ImportExportTests
     }
 
     /// <summary>
-    /// ステージしていない本物と、Add した内容を外へコピーする
+    /// Copies out an unstaged real file and added content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt はディスク上にあり、b.txt は Add しただけで本物は無い</para>
-    /// <para>手順: 両方を ExportAsync する</para>
-    /// <para>期待: 前者は本物、後者は Add の内容になり、未確定操作は Add の 1 件のまま、ロックは Add 由来の 1 つのままである</para>
+    /// <para>Given: a.txt is on disk, and b.txt is only added with no real file.</para>
+    /// <para>When: both are exported with ExportAsync.</para>
+    /// <para>Then: the first is the real file and the second the Add content; the pending changes stay one Add, and the locks stay one from the Add.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_本物とステージング済みの内容をコピーすること()
+    public async Task ExportAsync_CopiesRealAndStagedContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -141,15 +141,15 @@ public sealed class ImportExportTests
     }
 
     /// <summary>
-    /// コピー先が塞がっている、親が無い、ワークフォルダの中なら失敗する
+    /// It fails when the destination is occupied, has no parent, or is inside the work folder.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダに a.txt がある</para>
-    /// <para>手順: 既存ファイル、ディレクトリ、親の無いパス、ワークフォルダの中へ ExportAsync する</para>
-    /// <para>期待: 先の 3 つは ExternalConflictException、最後は ArgumentException になる</para>
+    /// <para>Given: a.txt in the work folder.</para>
+    /// <para>When: ExportAsync targets an existing file, a directory, a path without a parent, and a path inside the work folder.</para>
+    /// <para>Then: the first three throw ExternalConflictException, and the last throws ArgumentException.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_コピー先が不正なら拒否すること()
+    public async Task ExportAsync_RejectsInvalidDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -176,15 +176,15 @@ public sealed class ImportExportTests
     }
 
     /// <summary>
-    /// 成功したコピーは Dispose 後も残り、取り消しでは消える
+    /// A copy that succeeded stays after Dispose, and a canceled one is deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダに a.txt がある</para>
-    /// <para>手順: ExportAsync して Dispose し、別のトランザクションでは最初の通知で取り消す</para>
-    /// <para>期待: 成功したファイルは残り、取り消したコピー先は残らない</para>
+    /// <para>Given: a.txt in the work folder.</para>
+    /// <para>When: ExportAsync runs and the transaction is disposed; in another transaction the export is canceled at the first report.</para>
+    /// <para>Then: the file that succeeded remains, and the canceled destination does not.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_成功したファイルは残り取り消しでは消えること()
+    public async Task ExportAsync_KeepsSucceededFileAndDeletesCanceledOne()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();

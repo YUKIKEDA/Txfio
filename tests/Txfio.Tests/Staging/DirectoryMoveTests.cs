@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class DirectoryMoveTests
 {
     /// <summary>
-    /// 中身のあるディレクトリはコミットで移り、コミット前は動かない
+    /// A directory with contents moves at commit, and does not move before commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub の中に a.txt と nested/b.txt がある</para>
-    /// <para>手順: other へ Move し、コミットする</para>
-    /// <para>期待: コミット前は sub のまま、コミット後は other に同じ内容があり sub は無い</para>
+    /// <para>Given: sub contains a.txt and nested/b.txt.</para>
+    /// <para>When: it is moved to other and committed.</para>
+    /// <para>Then: before commit it is still sub; after commit other has the same content and sub does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_コミットでディレクトリとその中身が移ること()
+    public async Task MoveAsync_CommitMovesDirectoryAndContents()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
@@ -38,15 +38,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 未コミットの Dispose ではディレクトリは動かない
+    /// Dispose without commit does not move the directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空の sub がある</para>
-    /// <para>手順: Move して Dispose する</para>
-    /// <para>期待: sub が残り、other は無い</para>
+    /// <para>Given: an empty sub exists.</para>
+    /// <para>When: it is moved and the transaction is disposed.</para>
+    /// <para>Then: sub remains, and other does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_未コミットDisposeではディレクトリが残ること()
+    public async Task MoveAsync_DisposeWithoutCommitKeepsDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
@@ -61,15 +61,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 移動先が塞がっていると ExternalConflictException になる
+    /// An occupied destination throws ExternalConflictException.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub があり、other はファイル、taken はディレクトリである</para>
-    /// <para>手順: それぞれへ Move する</para>
-    /// <para>期待: どちらも ExternalConflictException で、Path は移動先、sub は残る</para>
+    /// <para>Given: sub exists, other is a file, and taken is a directory.</para>
+    /// <para>When: sub is moved to each.</para>
+    /// <para>Then: both throw ExternalConflictException with Path set to the destination, and sub remains.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先が塞がっているとExternalConflictExceptionになること()
+    public async Task MoveAsync_OccupiedDestinationThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -91,15 +91,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 大文字小文字だけが違うディレクトリ Move は失敗する
+    /// A directory Move that differs only in case fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空の sub がある</para>
-    /// <para>手順: Sub へ Move し、続けて sub から sub へ Move する</para>
-    /// <para>期待: どちらも InvalidOperationException で、pending は空、ロックは無く、sub が残る</para>
+    /// <para>Given: an empty sub exists.</para>
+    /// <para>When: it is moved to Sub, then from sub to sub.</para>
+    /// <para>Then: both throw InvalidOperationException, there are no pending changes and no locks, and sub remains.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ディレクトリの大文字小文字だけが違うとInvalidOperationExceptionになること()
+    public async Task MoveAsync_DirectoryDifferingOnlyInCaseThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
@@ -119,15 +119,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 自分自身の配下へは移せず、配下に操作があると失敗する
+    /// A directory cannot be moved under itself, and the move fails when there is an operation under it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub の中に a.txt がある</para>
-    /// <para>手順: sub を sub/inner へ Move し、a.txt を Add したあと sub を Move する</para>
-    /// <para>期待: どちらも InvalidOperationException で、先の Move はロックを取らず、あとの pending は Add のままである</para>
+    /// <para>Given: sub contains a.txt.</para>
+    /// <para>When: sub is moved to sub/inner, and after a.txt is added, sub is moved.</para>
+    /// <para>Then: both throw InvalidOperationException, the first Move takes no lock, and afterwards the pending change stays the Add.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_配下はInvalidOperationExceptionになること()
+    public async Task MoveAsync_UnderItselfOrWithOperationsUnderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
@@ -145,15 +145,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 続けて Move すると始点から終点へ畳む
+    /// Consecutive Moves fold from the start to the end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空の sub がある</para>
-    /// <para>手順: sub を mid へ、mid を final へ Move してコミットする</para>
-    /// <para>期待: pending は sub から final の 1 件で、コミット後は final だけがある</para>
+    /// <para>Given: an empty sub exists.</para>
+    /// <para>When: sub is moved to mid, mid to final, and committed.</para>
+    /// <para>Then: one pending change from sub to final, and after commit only final exists.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_続けてMoveすると始点から終点へ畳むこと()
+    public async Task MoveAsync_ConsecutiveMovesFoldFromStartToEnd()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
@@ -174,15 +174,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 空のディレクトリ Move のあとの Delete は元の削除になる
+    /// A Delete after a Move of an empty directory becomes a Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空の sub を other へ Move している</para>
-    /// <para>手順: other を Delete してコミットする</para>
-    /// <para>期待: pending は sub の Delete で、コミット後に sub も other も無い</para>
+    /// <para>Given: an empty sub is moved to other.</para>
+    /// <para>When: other is deleted and committed.</para>
+    /// <para>Then: the pending change is a Delete of sub, and after commit neither sub nor other exists.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_空のディレクトリMoveのあとは元のDeleteになること()
+    public async Task DeleteAsync_AfterEmptyDirectoryMoveBecomesSourceDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
@@ -200,15 +200,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 中身があるディレクトリ Move のあとの Delete は失敗する
+    /// A Delete after a Move of a directory with contents fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある sub を other へ Move している</para>
-    /// <para>手順: other を Delete する</para>
-    /// <para>期待: ExternalConflictException になり、pending は Move のままである</para>
+    /// <para>Given: sub with a.txt is moved to other.</para>
+    /// <para>When: other is deleted.</para>
+    /// <para>Then: ExternalConflictException, and the pending change stays the Move.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_中身があるディレクトリMoveのあとはExternalConflictExceptionになること()
+    public async Task DeleteAsync_AfterDirectoryMoveWithContentsThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
@@ -224,15 +224,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 木の外の Add はディレクトリ Move のあとでも積める
+    /// Adds outside the tree can be scheduled after a directory Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空の sub を Move している</para>
-    /// <para>手順: c.txt を Add してコミットする</para>
-    /// <para>期待: 未確定操作は 2 件で、コミット後に other と c.txt がある</para>
+    /// <para>Given: an empty sub is moved.</para>
+    /// <para>When: c.txt is added and committed.</para>
+    /// <para>Then: two pending operations, and after commit other and c.txt exist.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_ディレクトリMoveのあと木の外は積めること()
+    public async Task AddAsync_OutsideTreeAfterDirectoryMove()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -248,15 +248,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 別のトランザクションが無関係なパスを押さえていても、ディレクトリ Move は積める
+    /// A directory Move can be scheduled even when another transaction holds an unrelated path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 別トランザクションが a.txt を Add しており、sub がある</para>
-    /// <para>手順: sub を Move する</para>
-    /// <para>期待: Move は成功し、pending は 1 件である</para>
+    /// <para>Given: another transaction has added a.txt, and sub exists.</para>
+    /// <para>When: sub is moved.</para>
+    /// <para>Then: the Move succeeds, and there is one pending change.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_無関係なパスが押さえられていてもディレクトリMoveを積めること()
+    public async Task MoveAsync_SchedulesDirectoryMoveWhenUnrelatedPathIsHeld()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -271,15 +271,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// しるしが使用中だと排他をやめて共有に戻す
+    /// When the share-lost marker is in use, the exclusive lock is given up and shared is restored.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダ全体のロックを排他で持ち、しるしを共有で開いている</para>
-    /// <para>手順: しるしが使用中かどうかを確認する</para>
-    /// <para>期待: LockContentionException で Path はワークフォルダ、確認が失敗したあと別の集合は共有を取れ、排他は取れない</para>
+    /// <para>Given: the work-folder lock is held exclusively, and the marker is open as shared.</para>
+    /// <para>When: whether the marker is in use is checked.</para>
+    /// <para>Then: LockContentionException with Path set to the work folder; after the check fails, another set can take shared, but not exclusive.</para>
     /// </remarks>
     [Fact]
-    public async Task RejectForeignLocks_しるしが使用中なら共有に戻ること()
+    public async Task RejectForeignLocks_ReturnsToSharedWhenMarkerIsInUse()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
@@ -302,15 +302,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// パスを持ったまま共有へ戻せないと、しるしが残って排他を止める
+    /// When shared cannot be restored while holding a path, the marker remains and blocks exclusive.
     /// </summary>
     /// <remarks>
-    /// <para>前提: パスロックを持っており、排他への開き直しと共有への戻しが共有違反で失敗する</para>
-    /// <para>手順: 排他を取り、別の集合が排他を取ったあと、しるしを確認し、先の集合を破棄する</para>
-    /// <para>期待: 確認は LockContentionException で Path はワークフォルダ、破棄したあとはしるしを共有なしで開ける</para>
+    /// <para>Given: a path lock is held, and reopening as exclusive and returning to shared both fail with sharing violations.</para>
+    /// <para>When: exclusive is taken, another set takes exclusive, the marker is checked, and the first set is disposed.</para>
+    /// <para>Then: the check throws LockContentionException with Path set to the work folder, and after disposal the marker can be opened without sharing.</para>
     /// </remarks>
     [Fact]
-    public async Task AcquireExclusive_パスを持ったまま共有を失うとしるしが残ること()
+    public async Task AcquireExclusive_MarkerRemainsWhenSharedIsLostWhileHoldingPath()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -346,15 +346,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 排他への昇格に失敗しても、共有は持ち続ける
+    /// Even when raising to exclusive fails, shared is kept.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 2つの集合が哨兵を共有で持っている</para>
-    /// <para>手順: 片方を排他にする。失敗したあと、もう片方を解放し、第三者が排他を取る</para>
-    /// <para>期待: 昇格は LockContentionException で、第三者も排他を取れない</para>
+    /// <para>Given: two sets hold the work-folder lock as shared.</para>
+    /// <para>When: one tries to go exclusive. After that fails, the other is released, and a third takes exclusive.</para>
+    /// <para>Then: the raise throws LockContentionException, and the third cannot take exclusive either.</para>
     /// </remarks>
     [Fact]
-    public async Task AcquireExclusive_昇格に失敗しても共有を持ち続けること()
+    public async Task AcquireExclusive_KeepsSharedWhenRaiseFails()
     {
         await using TempDirectory work = TempDirectory.Create();
         PathLockSet holder = new PathLockSet();
@@ -373,15 +373,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 共有へ戻せない IO 失敗は握りつぶさず、次の取得で開き直す
+    /// An IO failure that prevents returning to shared is not swallowed, and shared is reopened at the next acquisition.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 哨兵を共有で持っている。昇格は共有違反、戻しは別の IOException</para>
-    /// <para>手順: 排他を取る。失敗指定を消してから共有を取り直す</para>
-    /// <para>期待: 戻しの IOException がそのまま出る。取り直したあとは別の集合が排他を取れない</para>
+    /// <para>Given: the work-folder lock is held as shared. The raise fails with a sharing violation, and the return with another IOException.</para>
+    /// <para>When: exclusive is taken. After the failure is cleared, shared is taken again.</para>
+    /// <para>Then: the IOException from the return propagates as is. After shared is taken again, another set cannot take exclusive.</para>
     /// </remarks>
     [Fact]
-    public async Task AcquireExclusive_共有へ戻せない失敗は次の取得で開くこと()
+    public async Task AcquireExclusive_ReopensSharedAtNextAcquisitionAfterReturnFailure()
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
@@ -407,15 +407,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 共有へ戻せなかったあとの排他は、先に共有を開き直す
+    /// Exclusive after failing to return to shared reopens shared first.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 昇格も共有への戻しも共有違反で失敗している</para>
-    /// <para>手順: 失敗指定を消し、別の集合が共有を持っているあいだに排他を取り直す。その集合を解放してから第三者が排他を取る</para>
-    /// <para>期待: 取り直しは LockContentionException で、第三者も排他を取れない</para>
+    /// <para>Given: both the raise and the return to shared have failed with sharing violations.</para>
+    /// <para>When: the failure is cleared, and exclusive is retried while another set holds shared. That set is released, and a third takes exclusive.</para>
+    /// <para>Then: the retry throws LockContentionException, and the third cannot take exclusive either.</para>
     /// </remarks>
     [Fact]
-    public async Task AcquireExclusive_哨兵を失ったあとは共有を戻してから排他を試すこと()
+    public async Task AcquireExclusive_RestoresSharedBeforeTryingExclusiveAfterLosingLock()
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
@@ -443,15 +443,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// ディレクトリの入れ替えは、移動先の既存ディレクトリを中身ごと入れ替える
+    /// A directory swap replaces the existing directory at the destination, with its contents.
     /// </summary>
     /// <remarks>
-    /// <para>前提: site/old.txt と build/new.txt がある</para>
-    /// <para>手順: Move(build→site, overwrite: true) を予約し、コミット後の姿とディスクを見る</para>
-    /// <para>期待: コミット前は site/old.txt が残り、姿では site/new.txt があり site/old.txt は無く、コミット後は site に new.txt だけがあり、build も .txold も無い</para>
+    /// <para>Given: site/old.txt and build/new.txt exist.</para>
+    /// <para>When: Move(build→site, overwrite: true) is scheduled, and the post-commit view and the disk are checked.</para>
+    /// <para>Then: before commit site/old.txt remains; in the view site/new.txt exists and site/old.txt does not; after commit site has only new.txt, and neither build nor .txold exists.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_overwriteでディレクトリを入れ替えること()
+    public async Task MoveAsync_OverwriteSwapsDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string site = System.IO.Path.Combine(work.Path, "site");
@@ -474,15 +474,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// Import で作ったディレクトリで、既存のディレクトリを同じトランザクションのなかで入れ替えられる
+    /// A directory created by Import can swap out an existing directory in the same transaction.
     /// </summary>
     /// <remarks>
-    /// <para>前提: site/old.txt と、ワークフォルダの外の incoming/a.txt がある</para>
-    /// <para>手順: incoming を site.new へ ImportAsync し、Move(site.new→site, overwrite: true) してコミットする</para>
-    /// <para>期待: コミット後の site には a.txt だけがあり、site.new は無い</para>
+    /// <para>Given: site/old.txt, and incoming/a.txt outside the work folder.</para>
+    /// <para>When: incoming is imported to site.new with ImportAsync, then Move(site.new→site, overwrite: true), then commit.</para>
+    /// <para>Then: after commit site has only a.txt, and site.new does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_Importで作ったディレクトリで入れ替えられること()
+    public async Task MoveAsync_SwapsWithDirectoryCreatedByImport()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -505,15 +505,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 移動先の DeleteTree はディレクトリの入れ替えに畳み、入れ替えの配下へは続けて操作できない
+    /// A DeleteTree at the destination folds into the directory swap, and no further operation is allowed under the swap.
     /// </summary>
     /// <remarks>
-    /// <para>前提: site/old.txt と build/new.txt がある</para>
-    /// <para>手順: DeleteTree(site) のあと Move(build→site, overwrite: true) し、site/x.txt へ書く</para>
-    /// <para>期待: 操作は Move 1 件であり、書き込みは InvalidOperationException</para>
+    /// <para>Given: site/old.txt and build/new.txt exist.</para>
+    /// <para>When: DeleteTree(site), then Move(build→site, overwrite: true), then a write to site/x.txt.</para>
+    /// <para>Then: the operations are one Move, and the write throws InvalidOperationException.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先のDeleteTreeを入れ替えに畳むこと()
+    public async Task MoveAsync_FoldsDestinationDeleteTreeIntoSwap()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "site"));
@@ -529,15 +529,15 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// 作成ディレクトリでない移動元の配下に操作があると、入れ替えられない
+    /// With an operation under a source that is not a created directory, the swap is refused.
     /// </summary>
     /// <remarks>
-    /// <para>前提: site と build があり、build/a.txt を Add した</para>
-    /// <para>手順: Move(build→site, overwrite: true) する</para>
-    /// <para>期待: InvalidOperationException であり、操作は Add 1 件のまま</para>
+    /// <para>Given: site and build exist, and build/a.txt is added.</para>
+    /// <para>When: Move(build→site, overwrite: true) is called.</para>
+    /// <para>Then: InvalidOperationException, and the operations stay one Add.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_作成ディレクトリでない移動元の配下に操作があれば入れ替えないこと()
+    public async Task MoveAsync_RefusesSwapWithOperationsUnderNonCreatedSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "site"));

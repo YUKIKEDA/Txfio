@@ -5,15 +5,15 @@ namespace Txfio.Tests.Lock;
 public sealed class IntentLockTests
 {
     /// <summary>
-    /// 先に配下をロックしてから予約すると、失敗したパスは予約するディレクトリである
+    /// When what is under a directory is locked before the directory is reserved, the failed path is the directory being reserved.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリがあり、別トランザクションがその直下を Add している</para>
-    /// <para>手順: そのディレクトリを DeleteTree する</para>
-    /// <para>期待: LockContentionException になり、Path はそのディレクトリである</para>
+    /// <para>Given: a directory exists, and another transaction has added a file directly under it.</para>
+    /// <para>When: DeleteTree is called on that directory.</para>
+    /// <para>Then: LockContentionException, and Path is that directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_配下を先にロックしているとディレクトリで失敗すること()
+    public async Task DeleteTreeAsync_FailsWithDirectoryWhenChildLockedFirst()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
@@ -31,15 +31,15 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// 予約したあとに配下を触ると、失敗したパスは予約したディレクトリである
+    /// When what is under a reserved directory is touched, the failed path is the reserved directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリを DeleteTree している</para>
-    /// <para>手順: 別トランザクションがその直下を Add する</para>
-    /// <para>期待: LockContentionException になり、Path はそのディレクトリである</para>
+    /// <para>Given: a directory is scheduled with DeleteTree.</para>
+    /// <para>When: another transaction adds a file directly under it.</para>
+    /// <para>Then: LockContentionException, and Path is that directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_予約のあと配下を触るとディレクトリで失敗すること()
+    public async Task DeleteTreeAsync_TouchingChildAfterReservationFailsWithDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
@@ -57,15 +57,15 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// 別のトランザクションが無関係なパスを押さえていても、DeleteTree は予約できる
+    /// DeleteTree can reserve even when another transaction holds an unrelated path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 別トランザクションが a.txt を Add しており、tree がある</para>
-    /// <para>手順: tree を DeleteTree したあと、第三者が tree の配下を Add する</para>
-    /// <para>期待: DeleteTree は成功し、配下の Add は LockContentionException で Path は tree である</para>
+    /// <para>Given: another transaction has added a.txt, and tree exists.</para>
+    /// <para>When: tree is scheduled with DeleteTree, then a third transaction adds a file under tree.</para>
+    /// <para>Then: DeleteTree succeeds, and the Add under it throws LockContentionException with Path tree.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_無関係なパスが押さえられていても予約できること()
+    public async Task DeleteTreeAsync_ReservesWhenUnrelatedPathIsHeld()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
@@ -86,15 +86,15 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// ディレクトリ Move の移動先も、戻ったあと予約されたままである
+    /// The destination of a directory Move stays reserved after the call returns.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub がある</para>
-    /// <para>手順: sub を other へ Move してから、別トランザクションが other の配下を Add する</para>
-    /// <para>期待: LockContentionException になり、Path は other である</para>
+    /// <para>Given: sub exists.</para>
+    /// <para>When: sub is moved to other, then another transaction adds a file under other.</para>
+    /// <para>Then: LockContentionException, and Path is other.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先も戻ったあと予約されること()
+    public async Task MoveAsync_DestinationStaysReservedAfterReturn()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dest = System.IO.Path.Combine(work.Path, "other");
@@ -111,15 +111,15 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// 意図ロックのファイルは、同じパスのパスロックとは別である
+    /// The intent lock file is separate from the path lock of the same path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダと、その直下のパスがある</para>
-    /// <para>手順: パスロックと意図ロックのパスを求める</para>
-    /// <para>期待: 2 つのパスは異なり、どちらも .lock で終わる</para>
+    /// <para>Given: a work folder and a path directly under it.</para>
+    /// <para>When: the paths of the path lock and the intent lock are computed.</para>
+    /// <para>Then: the two paths differ, and both end with .lock.</para>
     /// </remarks>
     [Fact]
-    public void IntentFilePath_パスロックとは別ファイルであること()
+    public void IntentFilePath_IsSeparateFromPathLock()
     {
         string work = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-intent");
         string target = System.IO.Path.Combine(work, "sub");
@@ -133,15 +133,15 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// 別のトランザクションがステージしていても、ディレクトリを作れる
+    /// A directory can be created even while another transaction has staged something.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 別トランザクションが a.txt を Add している</para>
-    /// <para>手順: d を CreateDirectory する</para>
-    /// <para>期待: d ができ、pending は 1 件である</para>
+    /// <para>Given: another transaction has added a.txt.</para>
+    /// <para>When: d is created with CreateDirectory.</para>
+    /// <para>Then: d exists, and there is one pending change.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_別のトランザクションがステージしていても作れること()
+    public async Task CreateDirectoryAsync_CreatesWhileAnotherTransactionStaged()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -156,15 +156,15 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// コピー元の配下を別のトランザクションがステージしていると、ディレクトリのコピーは失敗する
+    /// A directory copy fails when another transaction has staged under the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: src/a.txt があり、別トランザクションが src/b.txt を Add している</para>
-    /// <para>手順: src を dest へ CopyAsync する</para>
-    /// <para>期待: LockContentionException で Path は src、dest はできず、pending は空である</para>
+    /// <para>Given: src/a.txt exists, and another transaction has added src/b.txt.</para>
+    /// <para>When: src is copied to dest with CopyAsync.</para>
+    /// <para>Then: LockContentionException with Path src, dest is not created, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_コピー元の配下がステージされていると失敗すること()
+    public async Task CopyAsync_FailsWhenSourceChildIsStaged()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -184,15 +184,15 @@ public sealed class IntentLockTests
     }
 
     /// <summary>
-    /// ディレクトリのコピーが終わったあとは、別のトランザクションがコピー元の配下をステージできる
+    /// After a directory copy finishes, another transaction can stage under the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: src/a.txt がある</para>
-    /// <para>手順: src を dest へ CopyAsync したあと、別トランザクションが src/b.txt を Add し、dest/c.txt を Add する</para>
-    /// <para>期待: src/b.txt の Add は成功し、dest/c.txt の Add は LockContentionException で Path は dest である</para>
+    /// <para>Given: src/a.txt exists.</para>
+    /// <para>When: after src is copied to dest with CopyAsync, another transaction adds src/b.txt and dest/c.txt.</para>
+    /// <para>Then: the Add of src/b.txt succeeds, and the Add of dest/c.txt throws LockContentionException with Path dest.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_終わったあとはコピー元の配下を他がステージできること()
+    public async Task CopyAsync_OthersCanStageUnderSourceAfterCopy()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");

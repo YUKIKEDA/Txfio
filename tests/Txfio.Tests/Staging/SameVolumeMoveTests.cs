@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class SameVolumeMoveTests
 {
     /// <summary>
-    /// 同じボリュームのファイル移動は元を残さない
+    /// A file move within the same volume does not leave the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルがある</para>
-    /// <para>手順: 同じディレクトリへ MoveFile する</para>
-    /// <para>期待: 移動元は無く、移動先に内容がある</para>
+    /// <para>Given: a file exists.</para>
+    /// <para>When: MoveFile moves it within the same directory.</para>
+    /// <para>Then: the source does not exist, and the destination has the content.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveFile_同じボリュームでは元を残さないこと()
+    public async Task MoveFile_DoesNotLeaveSourceOnSameVolume()
     {
         await using TempDirectory directory = TempDirectory.Create();
         string source = System.IO.Path.Combine(directory.Path, "a.txt");
@@ -27,15 +27,15 @@ public sealed class SameVolumeMoveTests
     }
 
     /// <summary>
-    /// 同じボリュームのディレクトリ移動は元を残さない
+    /// A directory move within the same volume does not leave the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルを1つ持つディレクトリがある</para>
-    /// <para>手順: 同じ親の下へ MoveDirectory する</para>
-    /// <para>期待: 移動元は無く、移動先にそのファイルがある</para>
+    /// <para>Given: a directory with one file.</para>
+    /// <para>When: MoveDirectory moves it under the same parent.</para>
+    /// <para>Then: the source does not exist, and the destination has the file.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveDirectory_同じボリュームでは元を残さないこと()
+    public async Task MoveDirectory_DoesNotLeaveSourceOnSameVolume()
     {
         await using TempDirectory directory = TempDirectory.Create();
         string source = System.IO.Path.Combine(directory.Path, "src");
@@ -50,15 +50,15 @@ public sealed class SameVolumeMoveTests
     }
 
     /// <summary>
-    /// 別ボリュームのファイル移動はコピーしない
+    /// A file move to another volume does not copy.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一時ディレクトリと、別の固定ボリューム上の空ディレクトリがある</para>
-    /// <para>手順: そのボリュームへ MoveFile する</para>
-    /// <para>期待: IOException になり、移動元は残り、移動先のファイルは無い</para>
+    /// <para>Given: a temporary directory, and an empty directory on another fixed volume.</para>
+    /// <para>When: MoveFile moves to that volume.</para>
+    /// <para>Then: IOException, the source remains, and the destination file does not exist.</para>
     /// </remarks>
     [OtherFixedVolumeFact]
-    public async Task MoveFile_別ボリュームではコピーしないこと()
+    public async Task MoveFile_DoesNotCopyToAnotherVolume()
     {
         await using TempDirectory directory = TempDirectory.Create();
         string? other = CreateOtherVolumeDirectory();
@@ -84,15 +84,15 @@ public sealed class SameVolumeMoveTests
     }
 
     /// <summary>
-    /// 別ボリュームのディレクトリ移動はコピーしない
+    /// A directory move to another volume does not copy.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルを1つ持つディレクトリと、別の固定ボリューム上の空ディレクトリがある</para>
-    /// <para>手順: そのボリュームへ MoveDirectory する</para>
-    /// <para>期待: IOException になり、移動元のファイルは残り、移動先のディレクトリは無い</para>
+    /// <para>Given: a directory with one file, and an empty directory on another fixed volume.</para>
+    /// <para>When: MoveDirectory moves to that volume.</para>
+    /// <para>Then: IOException, the source file remains, and the destination directory does not exist.</para>
     /// </remarks>
     [OtherFixedVolumeFact]
-    public async Task MoveDirectory_別ボリュームではコピーしないこと()
+    public async Task MoveDirectory_DoesNotCopyToAnotherVolume()
     {
         await using TempDirectory directory = TempDirectory.Create();
         string? other = CreateOtherVolumeDirectory();
@@ -154,7 +154,7 @@ public sealed class SameVolumeMoveTests
         {
             if (!OperatingSystem.IsWindows())
             {
-                Skip = "Windows 専用: 別ボリューム";
+                Skip = "Windows only: another volume";
                 return;
             }
 
@@ -173,7 +173,7 @@ public sealed class SameVolumeMoveTests
 
             if (!found)
             {
-                Skip = "別の固定ボリュームが無い";
+                Skip = "No other fixed volume";
             }
         }
     }

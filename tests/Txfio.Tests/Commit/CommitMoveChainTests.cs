@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitMoveChainTests
 {
     /// <summary>
-    /// 退避してから差し替えると、元の内容は退避先に残り、新しい内容が元のパスに入る
+    /// Moving aside and then replacing keeps the original content at the backup and puts the new content at the original path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: Move(a→a.bak) のあと a.txt へ Add し、CommitAsync する</para>
-    /// <para>期待: Succeeded で a.bak は旧内容、a.txt は新しい内容</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: Move(a→a.bak), then Add to a.txt, then CommitAsync.</para>
+    /// <para>Then: Succeeded, a.bak has the old content, and a.txt has the new content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_退避して差し替えると両方残ること()
+    public async Task CommitAsync_MoveAsideAndReplaceKeepsBoth()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -30,15 +30,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// ログのローテーションは空いている端から適用される
+    /// Log rotation is applied from the free end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: log.txt と log.1 があり、log.2 は無い</para>
-    /// <para>手順: Move(log.1→log.2)、Move(log→log.1)、log.txt へ Add し、CommitAsync する</para>
-    /// <para>期待: Succeeded で log.2 は旧 log.1、log.1 は旧 log、log.txt は新しい内容</para>
+    /// <para>Given: log.txt and log.1 exist, and log.2 does not.</para>
+    /// <para>When: Move(log.1→log.2), Move(log→log.1), Add to log.txt, then CommitAsync.</para>
+    /// <para>Then: Succeeded, log.2 is the old log.1, log.1 is the old log, and log.txt has the new content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ローテーションは空いている端から適用されること()
+    public async Task CommitAsync_RotationIsAppliedFromFreeEnd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "log.txt"), "current");
@@ -58,15 +58,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// ディレクトリの連鎖も空いている端から移す
+    /// A chain of directories also moves from the free end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: old/a.txt と mid/b.txt があり、next は無い</para>
-    /// <para>手順: Move(mid→next) のあと Move(old→mid) し、CommitAsync する</para>
-    /// <para>期待: Succeeded で next に旧 mid の中身があり、mid に旧 old の中身があり、old は無い</para>
+    /// <para>Given: old/a.txt and mid/b.txt exist, and next does not.</para>
+    /// <para>When: Move(mid→next), then Move(old→mid), then CommitAsync.</para>
+    /// <para>Then: Succeeded, next has the old mid content, mid has the old old content, and old is gone.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ディレクトリの連鎖も空いている端から移ること()
+    public async Task CommitAsync_DirectoryChainMovesFromFreeEnd()
     {
         await using TempDirectory work = TempDirectory.Create();
         string oldDir = System.IO.Path.Combine(work.Path, "old");
@@ -88,15 +88,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// リスト上は塞がった端が先でも、投影は空いている端からになる
+    /// Even if the occupied end comes first in the list, projection starts from the free end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt があり、c.txt は無く、操作の並びは Move(a→b) が先</para>
-    /// <para>手順: InApplyOrder と TryStamp を呼ぶ</para>
-    /// <para>期待: 適用順は Move(b→c) が先で、TryStamp は成功する</para>
+    /// <para>Given: a.txt and b.txt exist, c.txt does not, and Move(a→b) comes first in the list of operations.</para>
+    /// <para>When: InApplyOrder and TryStamp are called.</para>
+    /// <para>Then: in apply order Move(b→c) comes first, and TryStamp succeeds.</para>
     /// </remarks>
     [Fact]
-    public async Task InApplyOrder_逆順の連鎖は空いている端が先になること()
+    public async Task InApplyOrder_ReversedChainPutsFreeEndFirst()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -116,15 +116,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 空いている端が無い循環は、コミット前の投影で失敗する
+    /// A cycle without a free end fails in the projection before commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt があり、操作は Move(a→b) と Move(b→a)</para>
-    /// <para>手順: TryStamp を呼ぶ</para>
-    /// <para>期待: 失敗する</para>
+    /// <para>Given: a.txt and b.txt exist, and the operations are Move(a→b) and Move(b→a).</para>
+    /// <para>When: TryStamp is called.</para>
+    /// <para>Then: it fails.</para>
     /// </remarks>
     [Fact]
-    public async Task TryStamp_循環は失敗すること()
+    public async Task TryStamp_CycleFails()
     {
         await using TempDirectory work = TempDirectory.Create();
         string left = System.IO.Path.Combine(work.Path, "a.txt");
@@ -141,15 +141,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 退避したあと元へ Add してから Delete すると、Add だけが消え、退避は残る
+    /// After moving aside, an Add to the source followed by a Delete removes only the Add, and the backup remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: Move(a→a.bak)、a.txt へ Add、a.txt を Delete し、CommitAsync する</para>
-    /// <para>期待: 予約は Move だけで、Succeeded のあと a.bak は旧内容、a.txt は無い</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: Move(a→a.bak), Add to a.txt, Delete a.txt, then CommitAsync.</para>
+    /// <para>Then: only the Move is scheduled; after Succeeded, a.bak has the old content and a.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_退避した元へAddしてDeleteするとAddだけ消えること()
+    public async Task CommitAsync_AddThenDeleteAtMovedSourceRemovesOnlyAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -169,15 +169,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 連鎖で入ってきたファイルを Delete すると、入ってきた元のファイルを消す
+    /// Deleting a file that came in through a chain deletes the file it came from.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と c.txt がある</para>
-    /// <para>手順: Move(a→b)、Move(c→a)、a.txt を Delete し、CommitAsync する</para>
-    /// <para>期待: Succeeded で b.txt は旧 a、a.txt と c.txt は無い</para>
+    /// <para>Given: a.txt and c.txt exist.</para>
+    /// <para>When: Move(a→b), Move(c→a), Delete a.txt, then CommitAsync.</para>
+    /// <para>Then: Succeeded, b.txt is the old a, and neither a.txt nor c.txt exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_連鎖で入ってきたファイルをDeleteすると入ってきた元を消すこと()
+    public async Task CommitAsync_DeletingFileFromChainDeletesItsSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
@@ -196,15 +196,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 退避した元へ Add したあと退避先を Update すると、元は新しい内容で置き換わる
+    /// After an Add to a moved source, updating the backup replaces the source with new content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: Move(a→b)、a.txt へ Add、b.txt へ Update し、CommitAsync する</para>
-    /// <para>期待: 予約は Add(b) と Update(a) で、Succeeded のあと b.txt は Update、a.txt は Add の内容</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: Move(a→b), Add to a.txt, Update b.txt, then CommitAsync.</para>
+    /// <para>Then: the scheduled operations are Add(b) and Update(a); after Succeeded, b.txt has the Update content and a.txt has the Add content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_退避した元へAddしたあと退避先をUpdateすると元はAddの内容になること()
+    public async Task CommitAsync_UpdateBackupAfterAddToSourceLeavesAddContentAtSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -227,15 +227,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 退避した元へ Add したあと元を Move すると、動くのは Add の内容である
+    /// After an Add to a moved source, moving the source moves the Add content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: Move(a→b)、a.txt へ Add、Move(a→c) し、CommitAsync する</para>
-    /// <para>期待: Succeeded で b.txt は旧 a、c.txt は Add の内容、a.txt は無い</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: Move(a→b), Add to a.txt, Move(a→c), then CommitAsync.</para>
+    /// <para>Then: Succeeded, b.txt is the old a, c.txt has the Add content, and a.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_退避した元へAddしたあと元をMoveするとAddの内容が動くこと()
+    public async Task CommitAsync_MovingSourceAfterAddMovesAddContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -255,15 +255,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 連鎖で入ってきたファイルを Move すると、入ってきた元からの Move に畳む
+    /// Moving a file that came in through a chain folds into a Move from where it came.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と c.txt がある</para>
-    /// <para>手順: Move(a→b)、Move(c→a)、Move(a→d) し、CommitAsync する</para>
-    /// <para>期待: Succeeded で b.txt は旧 a、d.txt は旧 c、a.txt と c.txt は無い</para>
+    /// <para>Given: a.txt and c.txt exist.</para>
+    /// <para>When: Move(a→b), Move(c→a), Move(a→d), then CommitAsync.</para>
+    /// <para>Then: Succeeded, b.txt is the old a, d.txt is the old c, and neither a.txt nor c.txt exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_連鎖で入ってきたファイルをMoveすると入ってきた元から動くこと()
+    public async Task CommitAsync_MovingFileFromChainMovesItsSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
@@ -283,15 +283,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 移動元へ別のファイルが入ってくる Move の移動先を Update すると、畳めないので拒否する
+    /// Updating the destination of a Move whose source another file will move into cannot be folded, so it is rejected.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と c.txt がある</para>
-    /// <para>手順: Move(a→b)、Move(c→a) のあと、b.txt へ UpdateAsync する</para>
-    /// <para>期待: InvalidOperationException で、予約は 2 件の Move のまま</para>
+    /// <para>Given: a.txt and c.txt exist.</para>
+    /// <para>When: after Move(a→b) and Move(c→a), UpdateAsync on b.txt.</para>
+    /// <para>Then: InvalidOperationException, and the two Moves stay scheduled.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_移動元へ別のファイルが入ってくるMoveの移動先だとInvalidOperationExceptionになること()
+    public async Task UpdateAsync_ThrowsAtDestinationWhoseSourceReceivesAnotherFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
@@ -310,15 +310,15 @@ public sealed class CommitMoveChainTests
     }
 
     /// <summary>
-    /// 移動済みで何も入ってこないパスをもう一度 Move の元にすると、元が無いので失敗する
+    /// Using an already moved path with nothing coming in as a Move source again fails, because there is no source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: Move(a→b) のあと、Move(a→c) する</para>
-    /// <para>期待: ExternalConflictException で、予約は Move(a→b) のまま</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: Move(a→b), then Move(a→c).</para>
+    /// <para>Then: ExternalConflictException, and Move(a→b) stays scheduled.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動済みの元をもう一度動かすとExternalConflictExceptionになること()
+    public async Task MoveAsync_MovingMovedSourceAgainThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");

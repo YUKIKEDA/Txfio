@@ -3,15 +3,15 @@ namespace Txfio.Tests.Staging;
 public sealed class PathMathTests
 {
     /// <summary>
-    /// 配下の判定はディレクトリ自身を含めず、名前の前方一致だけのパスも含めない
+    /// "Under" excludes the directory itself, and paths that only share a name prefix.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリ root/a</para>
-    /// <para>手順: root/a、root/a/b、root/ab を IsUnder と IsEqualOrUnder で調べる</para>
-    /// <para>期待: root/a は IsEqualOrUnder だけ、root/a/b は両方、root/ab はどちらでもない</para>
+    /// <para>Given: a directory root/a.</para>
+    /// <para>When: root/a, root/a/b, and root/ab are checked with IsUnder and IsEqualOrUnder.</para>
+    /// <para>Then: root/a matches only IsEqualOrUnder, root/a/b matches both, and root/ab matches neither.</para>
     /// </remarks>
     [Fact]
-    public void IsUnder_自身と前方一致だけのパスを含めないこと()
+    public void IsUnder_ExcludesItselfAndPrefixOnlyPaths()
     {
         string directory = Path.Combine(Path.GetTempPath(), "root", "a");
         string child = Path.Combine(directory, "b");
@@ -26,15 +26,15 @@ public sealed class PathMathTests
     }
 
     /// <summary>
-    /// ディレクトリそのものと配下を、別のディレクトリの同じ位置へ置き換える
+    /// Moves the directory itself and paths under it to the same position under another directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: from と to の 2 つのディレクトリ（from は末尾に区切り文字がある）</para>
-    /// <para>手順: from 自身と from/x/y.txt を Rebase する</para>
-    /// <para>期待: to と to/x/y.txt</para>
+    /// <para>Given: two directories, from and to (from ends with a separator).</para>
+    /// <para>When: from itself and from/x/y.txt are passed to Rebase.</para>
+    /// <para>Then: to and to/x/y.txt.</para>
     /// </remarks>
     [Fact]
-    public void Rebase_そのものと配下を移し先へ置き換えること()
+    public void Rebase_MovesItselfAndChildrenToDestination()
     {
         string root = Path.Combine(Path.GetTempPath(), "root");
         string from = Path.Combine(root, "from");
@@ -47,15 +47,15 @@ public sealed class PathMathTests
     }
 
     /// <summary>
-    /// 子が親より先に来るよう、深い順に並べる
+    /// Sorts deepest first, so that children come before their parents.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a、a/b、a/b/c、a/d の 4 つ（浅い順）</para>
-    /// <para>手順: SortDeepestFirst する</para>
-    /// <para>期待: a/b/c、a/d、a/b、a の順</para>
+    /// <para>Given: four paths, a, a/b, a/b/c, and a/d (shallowest first).</para>
+    /// <para>When: SortDeepestFirst is called.</para>
+    /// <para>Then: the order is a/b/c, a/d, a/b, a.</para>
     /// </remarks>
     [Fact]
-    public void SortDeepestFirst_子を親より先に並べること()
+    public void SortDeepestFirst_PutsChildrenBeforeParents()
     {
         string a = Path.Combine(Path.GetTempPath(), "a");
         string ab = Path.Combine(a, "b");

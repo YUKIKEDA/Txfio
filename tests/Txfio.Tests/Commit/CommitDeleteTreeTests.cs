@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitDeleteTreeTests
 {
     /// <summary>
-    /// コミットはディレクトリと配下を消す
+    /// Commit deletes the directory and everything under it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子ディレクトリとファイルがある木を DeleteTree している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で木も journal も無い</para>
+    /// <para>Given: a tree with a child directory and files is scheduled with DeleteTree.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and neither the tree nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_配下ごと消えること()
+    public async Task CommitAsync_DeletesEverythingUnderIt()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "tree");
@@ -30,15 +30,15 @@ public sealed class CommitDeleteTreeTests
     }
 
     /// <summary>
-    /// 予約後に増えた子もコミットで消える
+    /// Children added after scheduling are deleted at commit too.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空ディレクトリを DeleteTree したあと、外部が子ファイルを作っている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded でディレクトリも子も無い</para>
+    /// <para>Given: after an empty directory is scheduled with DeleteTree, a child file is created externally.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and neither the directory nor the child exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_予約後に増えた子も消えること()
+    public async Task CommitAsync_DeletesChildrenAddedAfterScheduling()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "tree");
@@ -55,15 +55,15 @@ public sealed class CommitDeleteTreeTests
     }
 
     /// <summary>
-    /// コミット前にディレクトリがファイルへ変わると Failed で、そのファイルは残る
+    /// If the directory becomes a file before commit, the result is Failed and that file remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリを DeleteTree したあと、外部が同じパスをファイルにしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で、そのファイルは残る</para>
+    /// <para>Given: after a directory is scheduled with DeleteTree, the same path is made a file externally.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, and that file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ファイルにすり替わるとFailedになること()
+    public async Task CommitAsync_FailsWhenSwappedForFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "tree");

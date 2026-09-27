@@ -7,15 +7,15 @@ namespace Txfio.Tests.Text;
 public sealed class TextOnInterfaceTests
 {
     /// <summary>
-    /// 手書きの ITransaction が WriteAllTextAsync を受け取れる
+    /// A hand-written ITransaction can receive WriteAllTextAsync.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 具象の Transaction ではない ITransaction がある</para>
-    /// <para>手順: WriteAllTextAsync する</para>
-    /// <para>期待: ArgumentException にならず、渡したパスと文字列を記録する</para>
+    /// <para>Given: an ITransaction that is not the concrete Transaction.</para>
+    /// <para>When: WriteAllTextAsync is called.</para>
+    /// <para>Then: no ArgumentException, and it records the path and string passed.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_手書きのITransactionが受け取れること()
+    public async Task WriteAllTextAsync_HandWrittenTransactionReceivesCall()
     {
         RecordingTransaction transaction = new RecordingTransaction();
 
@@ -26,15 +26,15 @@ public sealed class TextOnInterfaceTests
     }
 
     /// <summary>
-    /// 手書きの ITransaction が ReadAllTextAsync で文字列を返せる
+    /// A hand-written ITransaction can return a string from ReadAllTextAsync.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 読み取り結果を持つ ITransaction がある</para>
-    /// <para>手順: ReadAllTextAsync する</para>
-    /// <para>期待: ストリームを介さず、記録した文字列が返る</para>
+    /// <para>Given: an ITransaction that holds a read result.</para>
+    /// <para>When: ReadAllTextAsync is called.</para>
+    /// <para>Then: the recorded string is returned without going through a stream.</para>
     /// </remarks>
     [Fact]
-    public async Task ReadAllTextAsync_手書きのITransactionが文字列を返せること()
+    public async Task ReadAllTextAsync_HandWrittenTransactionReturnsString()
     {
         RecordingTransaction transaction = new RecordingTransaction { Text = "hello" };
 

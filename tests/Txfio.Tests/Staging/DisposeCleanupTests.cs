@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class DisposeCleanupTests
 {
     /// <summary>
-    /// 後片付けの途中で失敗しても本体の例外が届く
+    /// Even if cleanup fails partway, the original exception reaches the caller.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add が 2 件と空の CreateDirectory があり、先の .txnew を共有なしで開いている</para>
-    /// <para>手順: その状態で InvalidOperationException を出して Dispose する</para>
-    /// <para>期待: 届く例外は InvalidOperationException であり、後の .txnew と空ディレクトリは消え、開いている .txnew とジャーナルは残る</para>
+    /// <para>Given: two Adds and an empty CreateDirectory, and the first .txnew is open without sharing.</para>
+    /// <para>When: an InvalidOperationException is thrown in that state and the transaction is disposed.</para>
+    /// <para>Then: the exception that arrives is InvalidOperationException, the later .txnew and the empty directory are gone, and the open .txnew and the journal remain.</para>
     /// </remarks>
-    [WindowsFact("開いたファイルは削除できない")]
-    public async Task DisposeAsync_後片付けが失敗しても本体の例外が届くこと()
+    [WindowsFact("An open file cannot be deleted")]
+    public async Task DisposeAsync_OriginalExceptionArrivesWhenCleanupFails()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -32,10 +32,10 @@ public sealed class DisposeCleanupTests
                     Directory.GetFiles(work.Path, "*.txnew"),
                     path => System.IO.Path.GetFileName(path).StartsWith("a.txt.", StringComparison.OrdinalIgnoreCase));
                 hold = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None);
-                throw new InvalidOperationException("元の失敗");
+                throw new InvalidOperationException("original failure");
             });
 
-            Assert.Equal("元の失敗", error.Message);
+            Assert.Equal("original failure", error.Message);
             Assert.NotNull(hold);
             Assert.True(File.Exists(hold.Name));
             Assert.DoesNotContain(
@@ -61,15 +61,15 @@ public sealed class DisposeCleanupTests
     }
 
     /// <summary>
-    /// 後片付けが成功すると本体の例外が届き、ジャーナルは消える
+    /// When cleanup succeeds, the original exception arrives and the journal is deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add が 1 件ある</para>
-    /// <para>手順: InvalidOperationException を出して Dispose する</para>
-    /// <para>期待: 届く例外は InvalidOperationException であり、.txnew とジャーナルは無い</para>
+    /// <para>Given: one Add.</para>
+    /// <para>When: an InvalidOperationException is thrown and the transaction is disposed.</para>
+    /// <para>Then: the exception that arrives is InvalidOperationException, and there is no .txnew and no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task DisposeAsync_後片付けが成功すると本体の例外が届きジャーナルは消えること()
+    public async Task DisposeAsync_OriginalExceptionArrivesAndJournalIsDeletedWhenCleanupSucceeds()
     {
         await using TempDirectory work = TempDirectory.Create();
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -77,24 +77,24 @@ public sealed class DisposeCleanupTests
             await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path);
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("a");
             await transaction.AddAsync("a.txt", content);
-            throw new InvalidOperationException("元の失敗");
+            throw new InvalidOperationException("original failure");
         });
 
-        Assert.Equal("元の失敗", error.Message);
+        Assert.Equal("original failure", error.Message);
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
     /// <summary>
-    /// 破棄は操作の .txnew に .prev を付けた退避を消し、操作に無い退避は探さない
+    /// Discard deletes the backups that are an operation's .txnew with .prev appended, and does not search for backups not in the operations.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の Add があり、その .txnew.prev と、操作に無い別フォルダの同じトランザクション ID の .txnew.prev を置く</para>
-    /// <para>手順: DisposeAsync する</para>
-    /// <para>期待: Add の .txnew と .prev とジャーナルは消え、操作に無い .prev は残る（ワークフォルダを走査しない）</para>
+    /// <para>Given: an Add of a.txt, its .txnew.prev, and a .txnew.prev with the same transaction ID in another folder that is not in the operations.</para>
+    /// <para>When: DisposeAsync is called.</para>
+    /// <para>Then: the Add's .txnew, .prev, and the journal are deleted, and the .prev not in the operations remains (the work folder is not walked).</para>
     /// </remarks>
     [Fact]
-    public async Task DisposeAsync_操作の退避だけを消してワークフォルダを走査しないこと()
+    public async Task DisposeAsync_DeletesOnlyOperationBackupsWithoutWalkingWorkFolder()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");

@@ -1,7 +1,7 @@
 namespace Txfio.Tests.Support;
 
 /// <summary>
-/// テストごとに一意な一時ディレクトリを作り、破棄時に削除する
+/// Creates a unique temporary directory per test, and deletes it on dispose.
 /// </summary>
 public sealed class TempDirectory : IAsyncDisposable
 {
@@ -13,14 +13,14 @@ public sealed class TempDirectory : IAsyncDisposable
     }
 
     /// <summary>
-    /// 作成したディレクトリの絶対パス
+    /// Gets the absolute path of the created directory.
     /// </summary>
     public string Path => _path;
 
     /// <summary>
-    /// 一時ディレクトリを新規作成する
+    /// Creates a new temporary directory.
     /// </summary>
-    /// <returns>作成済みの一時ディレクトリ</returns>
+    /// <returns>The created temporary directory.</returns>
     public static TempDirectory Create()
     {
         string path = System.IO.Path.Combine(

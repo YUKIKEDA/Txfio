@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitCreateDirectoryTests
 {
     /// <summary>
-    /// コミットはディレクトリと、素のファイル API で書いた中身を残す
+    /// Commit keeps the directory and the contents written with the plain file API.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、素のファイル API で子ファイルを書いている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded でディレクトリと子が残り、journal は無い</para>
+    /// <para>Given: after CreateDirectory, a child file is written with the plain file API.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, the directory and the child remain, and there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ディレクトリと中身が残ること()
+    public async Task CommitAsync_KeepsDirectoryAndContents()
     {
         await using TempDirectory work = TempDirectory.Create();
         string child = System.IO.Path.Combine(work.Path, "drop", "a.txt");
@@ -29,15 +29,15 @@ public sealed class CommitCreateDirectoryTests
     }
 
     /// <summary>
-    /// コミット前にディレクトリがファイルへ変わると Failed で、そのファイルは残る
+    /// If the directory becomes a file before commit, the result is Failed and that file remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、同じパスをファイルにしている</para>
-    /// <para>手順: CommitAsync してから破棄する</para>
-    /// <para>期待: Failed で、そのファイルは残る</para>
+    /// <para>Given: after CreateDirectory, the same path is made a file.</para>
+    /// <para>When: CommitAsync runs, then the transaction is discarded.</para>
+    /// <para>Then: Failed, and that file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ファイルにすり替わるとFailedになること()
+    public async Task CommitAsync_FailsWhenSwappedForFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
@@ -56,15 +56,15 @@ public sealed class CommitCreateDirectoryTests
     }
 
     /// <summary>
-    /// 他の操作の検証失敗でも、作ったディレクトリは破棄で消える
+    /// Even when another operation fails the check, discard deletes the created directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory と、コミット前に消されたファイルの Update がある</para>
-    /// <para>手順: CommitAsync してから破棄する</para>
-    /// <para>期待: Failed で、drop と中のファイルが無い</para>
+    /// <para>Given: a CreateDirectory, and an Update of a file that was deleted before commit.</para>
+    /// <para>When: CommitAsync runs, then the transaction is discarded.</para>
+    /// <para>Then: Failed, and drop and the file inside it are gone.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_検証失敗の破棄でディレクトリが消えること()
+    public async Task CommitAsync_DiscardAfterFailedCheckDeletesDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string updated = System.IO.Path.Combine(work.Path, "a.txt");
@@ -88,15 +88,15 @@ public sealed class CommitCreateDirectoryTests
     }
 
     /// <summary>
-    /// 配下の Add はコミットで本物のパスへ残り、ディレクトリも残る
+    /// An Add under it stays at the real path after commit, and so does the directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory し、drop/a.txt を Add している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で a.txt が残り、.txnew は無い</para>
+    /// <para>Given: drop is created with CreateDirectory, and drop/a.txt is added.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, a.txt remains, and there is no .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_配下のAddが残ること()
+    public async Task CommitAsync_KeepsAddUnderDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string child = System.IO.Path.Combine(work.Path, "drop", "a.txt");

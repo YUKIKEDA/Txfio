@@ -5,15 +5,15 @@ namespace Txfio.Tests.Read;
 public sealed class GetEntriesTests
 {
     /// <summary>
-    /// 直下の一覧は、コミット後の姿を返す
+    /// The list of direct children returns the post-commit view.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt、b.txt、ディレクトリ d がある</para>
-    /// <para>手順: a.txt を Delete、c.txt を Add、b.txt を e.txt へ Move してから、ワークフォルダ自身の直下を一覧する</para>
-    /// <para>期待: c.txt、d、e.txt の 3 件であり、d だけディレクトリである</para>
+    /// <para>Given: a.txt, b.txt, and a directory d exist.</para>
+    /// <para>When: a.txt is deleted, c.txt is added, and b.txt is moved to e.txt, then the direct children of the work folder itself are listed.</para>
+    /// <para>Then: three entries, c.txt, d, and e.txt, and only d is a directory.</para>
     /// </remarks>
     [Fact]
-    public async Task GetEntriesAsync_コミット後の姿の直下を返すこと()
+    public async Task GetEntriesAsync_ReturnsDirectChildrenInPostCommitView()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
@@ -31,15 +31,15 @@ public sealed class GetEntriesTests
     }
 
     /// <summary>
-    /// ディレクトリ Move の移動先は移動元の中身を返し、移動元は無い
+    /// The destination of a directory Move returns the source's contents, and the source does not exist.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d/x.txt がある</para>
-    /// <para>手順: Move(d→e) してから e と d を一覧する</para>
-    /// <para>期待: e は e/x.txt の 1 件、d は ExternalConflictException</para>
+    /// <para>Given: d/x.txt exists.</para>
+    /// <para>When: Move(d→e), then e and d are listed.</para>
+    /// <para>Then: e has one entry, e/x.txt, and d throws ExternalConflictException.</para>
     /// </remarks>
     [Fact]
-    public async Task GetEntriesAsync_ディレクトリMoveの移動先は移動元の中身を返すこと()
+    public async Task GetEntriesAsync_DirectoryMoveDestinationReturnsSourceContents()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
@@ -54,15 +54,15 @@ public sealed class GetEntriesTests
     }
 
     /// <summary>
-    /// ファイルと、DeleteTree の対象は一覧できない
+    /// A file, and the target of a DeleteTree, cannot be listed.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と t/x.txt がある</para>
-    /// <para>手順: t を DeleteTree してから、a.txt と t を一覧する</para>
-    /// <para>期待: a.txt は UnsupportedOperationException、t は ExternalConflictException</para>
+    /// <para>Given: a.txt and t/x.txt exist.</para>
+    /// <para>When: t is scheduled with DeleteTree, then a.txt and t are listed.</para>
+    /// <para>Then: a.txt throws UnsupportedOperationException, and t throws ExternalConflictException.</para>
     /// </remarks>
     [Fact]
-    public async Task GetEntriesAsync_ファイルと消えるディレクトリは一覧できないこと()
+    public async Task GetEntriesAsync_CannotListFileOrDeletedDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");

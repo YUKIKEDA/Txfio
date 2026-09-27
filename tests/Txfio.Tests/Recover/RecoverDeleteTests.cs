@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverDeleteTests
 {
     /// <summary>
-    /// 未コミット Delete の Recover は対象を残す
+    /// Recover of an uncommitted Delete keeps the target.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、Delete の journal と対象ファイルが残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で journal は消え、対象は残る</para>
+    /// <para>Given: no live transaction, and a Delete journal and its target file remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, the journal is deleted, and the target remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_未コミットのDeleteは対象を残してRolledBackになること()
+    public async Task RecoverAsync_UncommittedDeleteKeepsTargetAndRollsBack()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverDeleteFiles leftover = await LeftoverDeleteFiles.WriteDeleteAsync(
@@ -29,15 +29,15 @@ public sealed class RecoverDeleteTests
     }
 
     /// <summary>
-    /// Committing の Delete 残骸は Recover が削除を完了する
+    /// Recover finishes the leftovers of a Committing Delete.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、Committing の Delete journal と対象が残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で対象も journal も無い</para>
+    /// <para>Given: no live transaction, and a Committing Delete journal and its target remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, and neither the target nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_CommittingのDeleteを完了してRolledForwardになること()
+    public async Task RecoverAsync_FinishesCommittingDeleteAndRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverDeleteFiles leftover = await LeftoverDeleteFiles.WriteDeleteAsync(

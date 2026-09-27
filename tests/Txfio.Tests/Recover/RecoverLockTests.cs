@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverLockTests
 {
     /// <summary>
-    /// クラッシュ後の Recover はロックファイルを消し、別トランザクションは同じパスを使える
+    /// Recover after a crash deletes the lock files, and another transaction can use the same path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add を AfterCommitting で止め、Dispose している</para>
-    /// <para>手順: RecoverAsync したあと、別トランザクションが同じパスを Update する</para>
-    /// <para>期待: RolledForward で対象は Add の内容になり、ロックファイルは消え、Update できる（ロックファイルは作り直される）</para>
+    /// <para>Given: an Add is stopped at AfterCommitting and disposed.</para>
+    /// <para>When: after RecoverAsync, another transaction updates the same path.</para>
+    /// <para>Then: RolledForward, the target has the Add content, the lock files are gone, and the Update works (the lock files are recreated).</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_AfterCommittingのあとロックファイルを消し別トランザクションが同じパスを使えること()
+    public async Task RecoverAsync_DeletesLockFilesAfterAfterCommittingAndAnotherTransactionCanUsePath()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -43,15 +43,15 @@ public sealed class RecoverLockTests
     }
 
     /// <summary>
-    /// 落ちたトランザクションのあとで取り直したロックでは、コミットも Recover も進まない
+    /// With a lock retaken after a crashed transaction, neither commit nor Recover proceeds.
     /// </summary>
     /// <remarks>
-    /// <para>前提: holder を開始したあと、Add を AfterCommitting で止めて Dispose している。holder は別のパスを Add している</para>
-    /// <para>手順: RecoverAsync し、holder で CommitAsync する。holder を Dispose してから、もう一度 RecoverAsync する</para>
-    /// <para>期待: 1 回目の Recover は LockContentionException で対象は無い。コミットは RecoveryRequiredException で holder の対象も無い。2 回目は RolledForward で対象は止めた Add の内容になる</para>
+    /// <para>Given: after holder begins, an Add is stopped at AfterCommitting and disposed. holder has added another path.</para>
+    /// <para>When: RecoverAsync runs, and holder calls CommitAsync. After holder is disposed, RecoverAsync runs again.</para>
+    /// <para>Then: the first Recover is LockContentionException and the target does not exist. The commit throws RecoveryRequiredException and holder's target does not exist either. The second is RolledForward, and the target has the stopped Add content.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_取り直したロックがあるあいだは処理しないこと()
+    public async Task RecoverAsync_DoesNotProcessWhileRetakenLockExists()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -86,15 +86,15 @@ public sealed class RecoverLockTests
     }
 
     /// <summary>
-    /// Recover は、過去の操作が残したパスロックと意図ロックのファイルを消す
+    /// Recover deletes the path lock and intent lock files left by past operations.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub/a.txt を Add してコミットし、パスロックと意図ロックのファイルが残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: sub/a.txt のパスロックと意図ロックのファイルは無く、残る .lock は Recover が開いていたワークフォルダ全体のロックだけである</para>
+    /// <para>Given: sub/a.txt is added and committed, and its path lock and intent lock files remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: the path lock and intent lock files of sub/a.txt are gone, and the only remaining .lock is the work-folder lock Recover had open.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_残ったロックファイルを消すこと()
+    public async Task RecoverAsync_DeletesLeftoverLockFiles()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -121,15 +121,15 @@ public sealed class RecoverLockTests
     }
 
     /// <summary>
-    /// 生きているトランザクションがロックを持っているあいだは、Recover は何もしないのでロックファイルも残る
+    /// While a live transaction holds locks, Recover does nothing, so the lock files remain.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションが a.txt を Add している</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: LockContentionException で、a.txt のロックファイルは残る</para>
+    /// <para>Given: a transaction has added a.txt.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: LockContentionException, and the lock file of a.txt remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_生きているトランザクションがいるとロックファイルを消さないこと()
+    public async Task RecoverAsync_KeepsLockFilesWhileTransactionIsAlive()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);

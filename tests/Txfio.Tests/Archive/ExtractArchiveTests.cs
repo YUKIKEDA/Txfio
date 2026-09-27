@@ -24,15 +24,15 @@ public sealed class ExtractArchiveTests
     };
 
     /// <summary>
-    /// 入れ子と空ディレクトリを展開し、各ファイルを Add する
+    /// Extracts nested and empty directories, and adds each file.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt、sub/b.txt、空の empty/ を持つ ZIP がワークフォルダにある</para>
-    /// <para>手順: out へ ExtractArchiveAsync してコミットする</para>
-    /// <para>期待: コミット前は Add が 2 件で本物のファイルは無く、コミット後は元の内容で現れ、empty も作られている</para>
+    /// <para>Given: the work folder has a ZIP with a.txt, sub/b.txt, and an empty empty/.</para>
+    /// <para>When: ExtractArchiveAsync extracts it to out, then commits.</para>
+    /// <para>Then: before commit there are two Adds and no real files; after commit they appear with the original content, and empty is created too.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_入れ子と空ディレクトリを展開してAddすること()
+    public async Task ExtractArchiveAsync_ExtractsNestedAndEmptyDirectoriesAndAddsFiles()
     {
         await using TempDirectory work = TempDirectory.Create();
         await CreateZipAsync(
@@ -56,15 +56,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 展開したファイルはエントリの日時になり、進み具合は合計サイズ付きで通知する
+    /// Extracted files get the entry time, and progress is reported with the total size.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 日時が 2021-02-03 04:05:06 で内容が hello と world! の 2 エントリを持つ ZIP がある</para>
-    /// <para>手順: 進み具合を受け取りながら ExtractArchiveAsync してコミットする</para>
-    /// <para>期待: ファイルの日時はエントリと同じで、通知の全体は 11 バイト、最後の通知は 11 バイトである</para>
+    /// <para>Given: a ZIP with two entries, hello and world!, both timed 2021-02-03 04:05:06.</para>
+    /// <para>When: ExtractArchiveAsync runs with a progress receiver, then commits.</para>
+    /// <para>Then: the file times match the entries, the reported total is 11 bytes, and the last report is 11 bytes.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_エントリの日時と合計サイズの進み具合になること()
+    public async Task ExtractArchiveAsync_UsesEntryTimeAndReportsTotalSize()
     {
         await using TempDirectory work = TempDirectory.Create();
         DateTime written = new DateTime(2021, 2, 3, 4, 5, 6, DateTimeKind.Local);
@@ -81,15 +81,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 同じトランザクションで作った未コミットの ZIP を展開できる
+    /// An uncommitted ZIP created in the same transaction can be extracted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree/a.txt から CreateArchiveAsync で tree.zip を作り、まだコミットしていない</para>
-    /// <para>手順: tree.zip を copy へ ExtractArchiveAsync してコミットする</para>
-    /// <para>期待: copy/a.txt が元の内容で現れる</para>
+    /// <para>Given: tree.zip is created from tree/a.txt with CreateArchiveAsync and not committed yet.</para>
+    /// <para>When: tree.zip is extracted to copy with ExtractArchiveAsync, then committed.</para>
+    /// <para>Then: copy/a.txt appears with the original content.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_未コミットのZIPを展開できること()
+    public async Task ExtractArchiveAsync_ExtractsUncommittedZip()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -104,17 +104,17 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 危険なエントリ名があると何も残さずに失敗する
+    /// A dangerous entry name fails without leaving anything.
     /// </summary>
-    /// <param name="names">ZIP のエントリ名</param>
+    /// <param name="names">The ZIP entry names.</param>
     /// <remarks>
-    /// <para>前提: 危険な名前を含む ZIP がワークフォルダにある</para>
-    /// <para>手順: out へ ExtractArchiveAsync する</para>
-    /// <para>期待: InvalidDataException になり、out も .txnew も未確定操作も無い</para>
+    /// <para>Given: the work folder has a ZIP with a dangerous name.</para>
+    /// <para>When: ExtractArchiveAsync extracts it to out.</para>
+    /// <para>Then: it throws InvalidDataException, and there is no out, no .txnew, and no pending change.</para>
     /// </remarks>
     [Theory]
     [MemberData(nameof(DangerousNames))]
-    public async Task ExtractArchiveAsync_危険なエントリ名なら何も残さずInvalidDataExceptionになること(string[] names)
+    public async Task ExtractArchiveAsync_DangerousEntryNameThrowsInvalidDataExceptionAndLeavesNothing(string[] names)
     {
         await using TempDirectory work = TempDirectory.Create();
         string archive = System.IO.Path.Combine(work.Path, "in.zip");
@@ -129,15 +129,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 外の Shift_JIS 名の ZIP をエンコーディングを指定して取り込む
+    /// Imports an external ZIP with Shift_JIS names by specifying the encoding.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダの外に、Shift_JIS で 日本語.txt と書いた ZIP がある</para>
-    /// <para>手順: Shift_JIS を指定して ImportArchiveAsync してコミットする</para>
-    /// <para>期待: 日本語.txt が元の内容で現れ、外の ZIP は残る</para>
+    /// <para>Given: outside the work folder, a ZIP whose entry is a Japanese file name written in Shift_JIS.</para>
+    /// <para>When: ImportArchiveAsync runs with Shift_JIS specified, then commits.</para>
+    /// <para>Then: the Japanese file name appears with the original content, and the external ZIP remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportArchiveAsync_ShiftJIS名のZIPをエンコーディング指定で取り込むこと()
+    public async Task ImportArchiveAsync_ImportsShiftJisNamesWithEncoding()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Encoding shiftJis = Encoding.GetEncoding(932);
@@ -147,6 +147,8 @@ public sealed class ExtractArchiveTests
         await using (FileStream stream = File.Create(archive))
         {
             using ZipArchive zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: false, shiftJis);
+
+            // The Japanese name is on purpose: Shift_JIS decoding needs characters outside ASCII.
             await using StreamWriter writer = new StreamWriter(zip.CreateEntry("日本語.txt").Open());
             await writer.WriteAsync("naiyou");
         }
@@ -161,15 +163,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// ZIP のパスが不正なら拒否する
+    /// Rejects an invalid ZIP path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダに in.zip、外にディレクトリ sub がある</para>
-    /// <para>手順: ワークフォルダの中の ZIP、外の無い ZIP、外のディレクトリを ImportArchiveAsync し、無い ZIP を ExtractArchiveAsync する</para>
-    /// <para>期待: 順に ArgumentException、ExternalConflictException、UnsupportedOperationException、ExternalConflictException で、out は作られない</para>
+    /// <para>Given: the work folder has in.zip, and outside there is a directory sub.</para>
+    /// <para>When: ImportArchiveAsync is called with the ZIP inside the work folder, a missing external ZIP, and the external directory, and ExtractArchiveAsync with a missing ZIP.</para>
+    /// <para>Then: in order, ArgumentException, ExternalConflictException, UnsupportedOperationException, and ExternalConflictException, and out is not created.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportArchiveAsync_ZIPのパスが不正なら拒否すること()
+    public async Task ImportArchiveAsync_RejectsInvalidZipPath()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -190,15 +192,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 展開先が不正なら拒否する
+    /// Rejects an invalid destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: in.zip と既存の exists ディレクトリがあり、busy/new.txt を Add している</para>
-    /// <para>手順: exists、親の無いパス、Add の親である busy へ ExtractArchiveAsync する</para>
-    /// <para>期待: 先の 2 つは ExternalConflictException、最後は InvalidOperationException で、未確定操作は Add の 1 件のままである</para>
+    /// <para>Given: in.zip and an existing directory exists, and busy/new.txt is added.</para>
+    /// <para>When: ExtractArchiveAsync targets exists, a path without a parent, and busy, the parent of the Add.</para>
+    /// <para>Then: the first two throw ExternalConflictException, the last throws InvalidOperationException, and the pending changes stay one Add.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_展開先が不正なら拒否すること()
+    public async Task ExtractArchiveAsync_RejectsInvalidDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await CreateZipAsync(System.IO.Path.Combine(work.Path, "in.zip"), ("a.txt", "alpha"));
@@ -222,15 +224,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 取り消しと破棄では展開先ごと残さない
+    /// Cancellation and discard leave no destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub/a.txt と b.txt を持つ ZIP がある</para>
-    /// <para>手順: 最初の通知で取り消す ExtractArchiveAsync のあと、別の展開先へ展開してコミットせずに Dispose する</para>
-    /// <para>期待: 取り消しでは未確定操作が増えず、Dispose のあとはどちらの展開先も .txnew も残らない</para>
+    /// <para>Given: a ZIP with sub/a.txt and b.txt.</para>
+    /// <para>When: an ExtractArchiveAsync is canceled at the first progress report, then the ZIP is extracted to another destination and the transaction is disposed without commit.</para>
+    /// <para>Then: cancellation adds no pending change, and after Dispose neither destination nor any .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_取り消しと破棄では展開先を残さないこと()
+    public async Task ExtractArchiveAsync_CancelAndDiscardLeaveNoDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await CreateZipAsync(System.IO.Path.Combine(work.Path, "in.zip"), ("sub/a.txt", "alpha"), ("b.txt", "beta"));
@@ -251,15 +253,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 展開後のサイズの合計が上限を超える ZIP は、何もステージせずに失敗する
+    /// A ZIP whose total extracted size exceeds the limit fails without staging anything.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 5 バイトの a.txt と 4 バイトの b.txt を持つ ZIP がワークフォルダにある</para>
-    /// <para>手順: 上限 8 バイトで ExtractArchiveAsync したあと、上限 9 バイトでもう一度展開する</para>
-    /// <para>期待: 1 回目は InvalidDataException であり、展開先も .txnew も操作も無く、2 回目は成功して Add が 2 件</para>
+    /// <para>Given: the work folder has a ZIP with a 5-byte a.txt and a 4-byte b.txt.</para>
+    /// <para>When: ExtractArchiveAsync runs with a limit of 8 bytes, then again with a limit of 9 bytes.</para>
+    /// <para>Then: the first throws InvalidDataException and leaves no destination, no .txnew, and no operation; the second succeeds with two Adds.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_展開後の合計が上限を超えると何もステージしないこと()
+    public async Task ExtractArchiveAsync_TotalOverLimitStagesNothing()
     {
         await using TempDirectory work = TempDirectory.Create();
         await CreateZipAsync(
@@ -280,15 +282,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 上限が 0 未満なら ArgumentOutOfRangeException になる
+    /// A negative limit throws ArgumentOutOfRangeException.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ZIP がワークフォルダの外にある</para>
-    /// <para>手順: 上限 -1 で ImportArchiveAsync する</para>
-    /// <para>期待: ArgumentOutOfRangeException であり、操作は無い</para>
+    /// <para>Given: a ZIP outside the work folder.</para>
+    /// <para>When: ImportArchiveAsync runs with a limit of -1.</para>
+    /// <para>Then: it throws ArgumentOutOfRangeException, and there is no operation.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportArchiveAsync_上限が負ならArgumentOutOfRangeExceptionになること()
+    public async Task ImportArchiveAsync_NegativeLimitThrowsArgumentOutOfRangeException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -303,15 +305,15 @@ public sealed class ExtractArchiveTests
     }
 
     /// <summary>
-    /// 無圧縮で Length を偽った ZIP は、読んだバイト数が上限を超えたら ExtractArchiveAsync が書きかけを消して失敗する
+    /// For a Stored ZIP with a false Length, ExtractArchiveAsync stops when the bytes read exceed the limit, and deletes the partial output.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 100 バイトの無圧縮エントリがあり、セントラルディレクトリの Length は 10 である</para>
-    /// <para>手順: 上限 50 で ExtractArchiveAsync する</para>
-    /// <para>期待: InvalidDataException であり、展開先も .txnew も操作も無い</para>
+    /// <para>Given: a 100-byte Stored entry whose Length in the central directory is 10.</para>
+    /// <para>When: ExtractArchiveAsync runs with a limit of 50.</para>
+    /// <para>Then: it throws InvalidDataException, and there is no destination, no .txnew, and no operation.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_無圧縮でLengthを偽ると読んだバイト数で止めて書きかけを消すこと()
+    public async Task ExtractArchiveAsync_StoredEntryWithFalseLengthStopsAtBytesReadAndDeletesPartialOutput()
     {
         await using TempDirectory work = TempDirectory.Create();
         string archive = System.IO.Path.Combine(work.Path, "in.zip");

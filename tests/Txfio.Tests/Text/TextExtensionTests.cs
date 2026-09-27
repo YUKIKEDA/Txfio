@@ -7,15 +7,15 @@ namespace Txfio.Tests.Text;
 public sealed class TextExtensionTests
 {
     /// <summary>
-    /// 無いファイルへの WriteAllText は Add になり、コミットまでディスクに無い
+    /// WriteAllText to a missing file is an Add, and nothing is on disk until commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダに a.txt が無い</para>
-    /// <para>手順: WriteAllTextAsync してから読む</para>
-    /// <para>期待: pending は Add で内容が読め、本物のファイルは無い</para>
+    /// <para>Given: a.txt does not exist in the work folder.</para>
+    /// <para>When: WriteAllTextAsync, then a read.</para>
+    /// <para>Then: the pending change is an Add, the content can be read, and the real file does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_無いファイルはAddになること()
+    public async Task WriteAllTextAsync_MissingFileBecomesAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -29,15 +29,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 既存ファイルへの WriteAllText は Update になり、ディスクは古いまま
+    /// WriteAllText to an existing file is an Update, and the disk stays old.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の内容は old である</para>
-    /// <para>手順: WriteAllTextAsync してコミットする</para>
-    /// <para>期待: コミット前のディスクは old、成功後は new、pending は Update</para>
+    /// <para>Given: a.txt contains old.</para>
+    /// <para>When: WriteAllTextAsync, then commit.</para>
+    /// <para>Then: the disk is old before commit and new after success, and the pending change is an Update.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_既存ファイルはUpdateになること()
+    public async Task WriteAllTextAsync_ExistingFileBecomesUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -54,15 +54,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 新規のまま続けて書くと Add のまま内容が置き換わる
+    /// Writing again while still new keeps the Add and replaces the content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt はディスクに無い</para>
-    /// <para>手順: WriteAllTextAsync を 2 回する</para>
-    /// <para>期待: pending は Add が 1 件で、読めるのは 2 回目の内容</para>
+    /// <para>Given: a.txt is not on disk.</para>
+    /// <para>When: WriteAllTextAsync is called twice.</para>
+    /// <para>Then: one pending Add, and the second content is read.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_新規への再書きはAddのままであること()
+    public async Task WriteAllTextAsync_RewriteOfNewFileStaysAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -75,15 +75,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// Delete のあとに書くと Update になる
+    /// Writing after a Delete is an Update.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt があり、Delete 済みである</para>
-    /// <para>手順: WriteAllTextAsync する</para>
-    /// <para>期待: pending は Update が 1 件で、新しい内容が読める</para>
+    /// <para>Given: a.txt exists and is deleted.</para>
+    /// <para>When: WriteAllTextAsync is called.</para>
+    /// <para>Then: one pending Update, and the new content can be read.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_DeleteのあとはUpdateになること()
+    public async Task WriteAllTextAsync_AfterDeleteBecomesUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -98,15 +98,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// null の文字列は空文字列として Add する
+    /// A null string is added as an empty string.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt が無い</para>
-    /// <para>手順: contents に null を渡して WriteAllTextAsync する</para>
-    /// <para>期待: 空文字列が読め、pending は Add</para>
+    /// <para>Given: a.txt does not exist.</para>
+    /// <para>When: WriteAllTextAsync is called with null contents.</para>
+    /// <para>Then: an empty string is read, and the pending change is an Add.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_nullは空文字列として書くこと()
+    public async Task WriteAllTextAsync_WritesNullAsEmptyString()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -118,15 +118,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// エンコーディング省略時の書き込みは BOM なし UTF-8 である
+    /// A write without an encoding is UTF-8 without a BOM.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt が無い</para>
-    /// <para>手順: エンコーディングを省略して書き、コミットする</para>
-    /// <para>期待: 先頭バイトは h で、BOM は無い</para>
+    /// <para>Given: a.txt does not exist.</para>
+    /// <para>When: it is written without an encoding, then committed.</para>
+    /// <para>Then: the first byte is h, and there is no BOM.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_省略時はBOMなしUTF8であること()
+    public async Task WriteAllTextAsync_DefaultIsUtf8WithoutBom()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -141,15 +141,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// UTF-8 BOM 付きのファイルは、エンコーディングを省略しても文字だけ読める
+    /// A file with a UTF-8 BOM reads only the characters even without an encoding.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt は EF BB BF のあと hello である</para>
-    /// <para>手順: ReadAllTextAsync する</para>
-    /// <para>期待: hello であり、BOM は文字列に含まれない</para>
+    /// <para>Given: a.txt is EF BB BF followed by hello.</para>
+    /// <para>When: ReadAllTextAsync is called.</para>
+    /// <para>Then: hello, and the BOM is not in the string.</para>
     /// </remarks>
     [Fact]
-    public async Task ReadAllTextAsync_BOMを検出すること()
+    public async Task ReadAllTextAsync_DetectsBom()
     {
         await using TempDirectory work = TempDirectory.Create();
         byte[] payload = new byte[] { 0xEF, 0xBB, 0xBF, (byte)'h', (byte)'e', (byte)'l', (byte)'l', (byte)'o' };
@@ -162,15 +162,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 指定したエンコーディングで往復でき、BOM があればエンコーディング省略の読みでも同じ文字になる
+    /// A given encoding round-trips, and with a BOM, a read without an encoding gives the same characters.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt が無い</para>
-    /// <para>手順: UTF-16 で書き、省略した読みと指定した読みの両方をする</para>
-    /// <para>期待: どちらも hello で、コミット後の先頭は FF FE</para>
+    /// <para>Given: a.txt does not exist.</para>
+    /// <para>When: it is written in UTF-16, and read both without and with the encoding.</para>
+    /// <para>Then: both are hello, and after commit the first bytes are FF FE.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_指定エンコーディングは往復できること()
+    public async Task WriteAllTextAsync_GivenEncodingRoundTrips()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -187,15 +187,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 行の書きは末尾改行を付け、読みは改行を含めない
+    /// Writing lines adds a trailing newline, and reading lines excludes newlines.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt が無い</para>
-    /// <para>手順: 2 行を WriteAllLinesAsync し、行と文字列の両方で読む</para>
-    /// <para>期待: 行は a と b、文字列は各行のあとに Environment.NewLine がある</para>
+    /// <para>Given: a.txt does not exist.</para>
+    /// <para>When: two lines are written with WriteAllLinesAsync, and read both as lines and as a string.</para>
+    /// <para>Then: the lines are a and b, and the string has Environment.NewLine after each line.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllLinesAsync_行は改行で区切ること()
+    public async Task WriteAllLinesAsync_SeparatesLinesWithNewlines()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -207,15 +207,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// contents が null なら書かずに ArgumentNullException になる
+    /// Null contents throw ArgumentNullException without writing.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションを開始している</para>
-    /// <para>手順: contents に null を渡す</para>
-    /// <para>期待: ArgumentNullException になり、pending は空</para>
+    /// <para>Given: a transaction has begun.</para>
+    /// <para>When: null is passed as contents.</para>
+    /// <para>Then: ArgumentNullException, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllLinesAsync_nullはArgumentNullExceptionになること()
+    public async Task WriteAllLinesAsync_NullThrowsArgumentNullException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -226,15 +226,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// エンコーディングが null なら書かない
+    /// A null encoding does not write.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションを開始している</para>
-    /// <para>手順: encoding に null を渡して WriteAllTextAsync する</para>
-    /// <para>期待: ArgumentNullException になり、pending は空</para>
+    /// <para>Given: a transaction has begun.</para>
+    /// <para>When: WriteAllTextAsync is called with a null encoding.</para>
+    /// <para>Then: ArgumentNullException, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_エンコーディングnullはArgumentNullExceptionになること()
+    public async Task WriteAllTextAsync_NullEncodingThrowsArgumentNullException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -245,15 +245,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 無いファイルとディレクトリは ReadAsync と同じ例外になる
+    /// A missing file and a directory throw the same exceptions as ReadAsync.
     /// </summary>
     /// <remarks>
-    /// <para>前提: missing.txt は無く、dir はディレクトリである</para>
-    /// <para>手順: それぞれ ReadAllTextAsync する</para>
-    /// <para>期待: 無いファイルは ExternalConflictException、ディレクトリは UnsupportedOperationException</para>
+    /// <para>Given: missing.txt does not exist, and dir is a directory.</para>
+    /// <para>When: ReadAllTextAsync is called on each.</para>
+    /// <para>Then: the missing file throws ExternalConflictException, and the directory throws UnsupportedOperationException.</para>
     /// </remarks>
     [Fact]
-    public async Task ReadAllTextAsync_無いファイルとディレクトリは読めないこと()
+    public async Task ReadAllTextAsync_CannotReadMissingFileOrDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "dir"));
@@ -264,15 +264,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// Move 先への WriteAllText は移動先の Add と元の Delete になる
+    /// WriteAllText to a Move destination becomes an Add at the destination and a Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を b.txt へ Move している</para>
-    /// <para>手順: b.txt へ WriteAllTextAsync する</para>
-    /// <para>期待: pending は b.txt の Add と a.txt の Delete で、b.txt の内容が読める。a.txt はディスクに残る</para>
+    /// <para>Given: a.txt is moved to b.txt.</para>
+    /// <para>When: WriteAllTextAsync is called on b.txt.</para>
+    /// <para>Then: the pending changes are an Add of b.txt and a Delete of a.txt, and the content of b.txt can be read. a.txt remains on disk.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_Move先はAddとDeleteになること()
+    public async Task WriteAllTextAsync_MoveDestinationBecomesAddAndDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -293,15 +293,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// Move 先への WriteAllLines も移動先の Add と元の Delete になる
+    /// WriteAllLines to a Move destination also becomes an Add at the destination and a Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を b.txt へ Move している</para>
-    /// <para>手順: b.txt へ WriteAllLinesAsync する</para>
-    /// <para>期待: pending は Add と Delete で、書いた行が読める</para>
+    /// <para>Given: a.txt is moved to b.txt.</para>
+    /// <para>When: WriteAllLinesAsync is called on b.txt.</para>
+    /// <para>Then: the pending changes are an Add and a Delete, and the written lines can be read.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllLinesAsync_Move先はAddとDeleteになること()
+    public async Task WriteAllLinesAsync_MoveDestinationBecomesAddAndDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "x");
@@ -317,15 +317,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// ディレクトリの Move 先への WriteAllText は失敗する
+    /// WriteAllText to the destination of a directory Move fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub を other へ Move している</para>
-    /// <para>手順: other へ WriteAllTextAsync する</para>
-    /// <para>期待: InvalidOperationException で、pending は Move のままである</para>
+    /// <para>Given: sub is moved to other.</para>
+    /// <para>When: WriteAllTextAsync is called on other.</para>
+    /// <para>Then: InvalidOperationException, and the pending change stays the Move.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_ディレクトリのMove先はInvalidOperationExceptionになること()
+    public async Task WriteAllTextAsync_DirectoryMoveDestinationThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -339,15 +339,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// Move の移動元への WriteAllText は Add になる
+    /// WriteAllText to the source of a Move is an Add.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を a.bak へ Move している</para>
-    /// <para>手順: a.txt へ WriteAllTextAsync する</para>
-    /// <para>期待: pending は Move と Add で、a.txt は新しい内容が読め、a.bak は旧内容が読める</para>
+    /// <para>Given: a.txt is moved to a.bak.</para>
+    /// <para>When: WriteAllTextAsync is called on a.txt.</para>
+    /// <para>Then: the pending changes are a Move and an Add, a.txt reads the new content, and a.bak reads the old content.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_Moveの移動元はAddになること()
+    public async Task WriteAllTextAsync_MoveSourceBecomesAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -366,15 +366,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 既存ディレクトリへの文字列の書き込みはその場で失敗する
+    /// Writing a string to an existing directory fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスに空ディレクトリがある</para>
-    /// <para>手順: WriteAllTextAsync する</para>
-    /// <para>期待: ExternalConflictException になり、.txnew も操作も無い</para>
+    /// <para>Given: an empty directory exists at the target path.</para>
+    /// <para>When: WriteAllTextAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and there is no .txnew and no operation.</para>
     /// </remarks>
     [Fact]
-    public async Task WriteAllTextAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    public async Task WriteAllTextAsync_ExistingDirectoryThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
@@ -385,15 +385,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 既存ファイルへの追記は、中身に足した Update になる
+    /// Appending to an existing file is an Update with the appended content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt に "one" がある</para>
-    /// <para>手順: "two" を 2 回追記してコミットする</para>
-    /// <para>期待: 操作は Update 1 件であり、コミット後の a.txt は "onetwotwo"</para>
+    /// <para>Given: a.txt contains "one".</para>
+    /// <para>When: "two" is appended twice, then committed.</para>
+    /// <para>Then: one Update, and after commit a.txt is "onetwotwo".</para>
     /// </remarks>
     [Fact]
-    public async Task AppendAllTextAsync_既存ファイルに足してUpdateになること()
+    public async Task AppendAllTextAsync_AppendsToExistingFileAsUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -409,15 +409,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 無いファイルへの追記は Add になる
+    /// Appending to a missing file is an Add.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt は無い</para>
-    /// <para>手順: 行を追記してコミットする</para>
-    /// <para>期待: 操作は Add 1 件であり、コミット後の a.txt の行は x と y</para>
+    /// <para>Given: a.txt does not exist.</para>
+    /// <para>When: lines are appended, then committed.</para>
+    /// <para>Then: one Add, and after commit the lines of a.txt are x and y.</para>
     /// </remarks>
     [Fact]
-    public async Task AppendAllLinesAsync_無いファイルはAddになること()
+    public async Task AppendAllLinesAsync_MissingFileBecomesAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -430,15 +430,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// BOM のあるエンコーディングで追記しても、BOM は先頭にしか付かない
+    /// Appending with an encoding that has a BOM puts the BOM only at the start.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt は無い</para>
-    /// <para>手順: UTF-8（BOM あり）で 2 回追記してコミットする</para>
-    /// <para>期待: ファイルの BOM は先頭の 1 つだけであり、中身は 2 回分</para>
+    /// <para>Given: a.txt does not exist.</para>
+    /// <para>When: text is appended twice with UTF-8 (with BOM), then committed.</para>
+    /// <para>Then: the file has only one BOM at the start, and the content of both appends.</para>
     /// </remarks>
     [Fact]
-    public async Task AppendAllTextAsync_BOMは新しく書くときだけ付けること()
+    public async Task AppendAllTextAsync_AddsBomOnlyForNewFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -452,15 +452,15 @@ public sealed class TextExtensionTests
     }
 
     /// <summary>
-    /// 既存ディレクトリへの追記はその場で失敗する
+    /// Appending to an existing directory fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスに空ディレクトリがある</para>
-    /// <para>手順: AppendAllTextAsync する</para>
-    /// <para>期待: ExternalConflictException になり、.txnew も操作も無い</para>
+    /// <para>Given: an empty directory exists at the target path.</para>
+    /// <para>When: AppendAllTextAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and there is no .txnew and no operation.</para>
     /// </remarks>
     [Fact]
-    public async Task AppendAllTextAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    public async Task AppendAllTextAsync_ExistingDirectoryThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));

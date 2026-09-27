@@ -6,15 +6,15 @@ namespace Txfio.Tests.Staging;
 public sealed class CopyTests
 {
     /// <summary>
-    /// ファイルのコピーはコピー元を残し、コピー先は Add になる
+    /// A file copy keeps the source, and the destination becomes an Add.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt があり、b.txt は無い</para>
-    /// <para>手順: a.txt を b.txt へ CopyAsync する</para>
-    /// <para>期待: pending は b.txt の Add で、a.txt は残り、b.txt はまだ無い</para>
+    /// <para>Given: a.txt exists, and b.txt does not.</para>
+    /// <para>When: a.txt is copied to b.txt with CopyAsync.</para>
+    /// <para>Then: the pending change is an Add of b.txt, a.txt remains, and b.txt does not exist yet.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ファイルはコピー元を残してAddになること()
+    public async Task CopyAsync_FileKeepsSourceAndBecomesAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -32,15 +32,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// ディレクトリのコピーはファイルごとの Add と空ディレクトリを作る
+    /// A directory copy creates an Add per file and empty directories.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルと空のサブディレクトリがある</para>
-    /// <para>手順: そのディレクトリを CopyAsync する</para>
-    /// <para>期待: pending はコピー先ファイルの Add 1 件で、空ディレクトリはあり、コピー元は残る</para>
+    /// <para>Given: a file and an empty subdirectory.</para>
+    /// <para>When: the directory is copied with CopyAsync.</para>
+    /// <para>Then: one pending Add for the destination file, the empty directory exists, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ディレクトリはファイルごとのAddと空ディレクトリになること()
+    public async Task CopyAsync_DirectoryBecomesAddPerFileAndEmptyDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -60,15 +60,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 未コミット Dispose ではコピーが作ったディレクトリを消す
+    /// Dispose without commit deletes the directories the copy created.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルと空のサブディレクトリがあるディレクトリをコピーした直後である</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: コピー先は無く、コピー元は残る</para>
+    /// <para>Given: right after copying a directory with a file and an empty subdirectory.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: the destination does not exist, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_未コミットDisposeでは作ったディレクトリが消えること()
+    public async Task CopyAsync_DisposeWithoutCommitDeletesCreatedDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -86,15 +86,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// このトランザクションの .txnew はコピーしない
+    /// This transaction's .txnew files are not copied.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 本物のファイルと、このトランザクションの ID が付いた .txnew が同じディレクトリにある</para>
-    /// <para>手順: そのディレクトリを CopyAsync する</para>
-    /// <para>期待: コピー先に入るのは本物のファイルだけで、.txnew はコピーされない</para>
+    /// <para>Given: a real file and a .txnew with this transaction's ID are in the same directory.</para>
+    /// <para>When: the directory is copied with CopyAsync.</para>
+    /// <para>Then: only the real file goes to the destination, and the .txnew is not copied.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_このトランザクションのtxnewはコピーしないこと()
+    public async Task CopyAsync_DoesNotCopyThisTransactionsTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -116,15 +116,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 配下のジャンクションは辿らず、そのエントリもコピーしない
+    /// Junctions under it are not followed, and those entries are not copied.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 本物のファイルと、別ディレクトリへのジャンクションがある</para>
-    /// <para>手順: そのディレクトリを CopyAsync する</para>
-    /// <para>期待: コピー先には本物のファイルだけで、ジャンクションの先は無い</para>
+    /// <para>Given: a real file, and a junction to another directory.</para>
+    /// <para>When: the directory is copied with CopyAsync.</para>
+    /// <para>Then: the destination has only the real file, and nothing from the junction target.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task CopyAsync_ジャンクションは辿らないこと()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task CopyAsync_DoesNotFollowJunctions()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -153,15 +153,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// コピー元ディレクトリがジャンクションなら操作できない
+    /// A source directory that is a junction cannot be used.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 中にファイルがあるディレクトリへのジャンクションがある</para>
-    /// <para>手順: そのジャンクションを CopyAsync する</para>
-    /// <para>期待: InvalidOperationException になり、コピー先は無く、ジャンクションの先は残る</para>
+    /// <para>Given: a junction to a directory that contains a file.</para>
+    /// <para>When: the junction is copied with CopyAsync.</para>
+    /// <para>Then: InvalidOperationException, the destination does not exist, and the junction target remains.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task CopyAsync_コピー元がジャンクションならInvalidOperationExceptionになること()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task CopyAsync_JunctionSourceThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "target");
@@ -188,15 +188,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// ファイルのシンボリックリンクはコピーしない
+    /// A symbolic link to a file is not copied.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルへのシンボリックリンクがある</para>
-    /// <para>手順: そのリンクを CopyAsync する</para>
-    /// <para>期待: InvalidOperationException になり、リンク先は残り、コピー先は無い</para>
+    /// <para>Given: a symbolic link to a file.</para>
+    /// <para>When: the link is copied with CopyAsync.</para>
+    /// <para>Then: InvalidOperationException, the link target remains, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ファイルのシンボリックリンクはInvalidOperationExceptionになること()
+    public async Task CopyAsync_FileSymbolicLinkThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "target.txt");
@@ -215,15 +215,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// コピー先が既にあると失敗する
+    /// The copy fails when the destination already exists.
     /// </summary>
     /// <remarks>
-    /// <para>前提: コピー元とコピー先のファイルがある</para>
-    /// <para>手順: CopyAsync する</para>
-    /// <para>期待: ExternalConflictException になり、pending は空で、両方の内容は残る</para>
+    /// <para>Given: source and destination files exist.</para>
+    /// <para>When: CopyAsync is called.</para>
+    /// <para>Then: ExternalConflictException, no pending changes, and both contents remain.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_コピー先があるとExternalConflictExceptionになること()
+    public async Task CopyAsync_ExistingDestinationThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
@@ -240,15 +240,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 親が無いコピー先は失敗する
+    /// A destination without a parent fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: コピー元のファイルがあり、親ディレクトリは無い</para>
-    /// <para>手順: 無い親の下へ CopyAsync する</para>
-    /// <para>期待: ExternalConflictException になり、ディレクトリは作られない</para>
+    /// <para>Given: the source file exists, and the parent directory does not.</para>
+    /// <para>When: CopyAsync targets a path under the missing parent.</para>
+    /// <para>Then: ExternalConflictException, and no directory is created.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_親が無いとExternalConflictExceptionになること()
+    public async Task CopyAsync_MissingParentThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
@@ -263,15 +263,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 同じパスへはコピーできない
+    /// A path cannot be copied to itself.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: a.txt を a.txt へ CopyAsync する</para>
-    /// <para>期待: InvalidOperationException になり、ファイルは残る</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: a.txt is copied to a.txt with CopyAsync.</para>
+    /// <para>Then: InvalidOperationException, and the file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_同じパスはInvalidOperationExceptionになること()
+    public async Task CopyAsync_SamePathThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -286,15 +286,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// ディレクトリを自分自身の配下へはコピーできない
+    /// A directory cannot be copied under itself.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリがある</para>
-    /// <para>手順: その配下へ CopyAsync する</para>
-    /// <para>期待: InvalidOperationException になり、配下は作られない</para>
+    /// <para>Given: a directory exists.</para>
+    /// <para>When: CopyAsync targets a path under it.</para>
+    /// <para>Then: InvalidOperationException, and nothing is created under it.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_自分の配下はInvalidOperationExceptionになること()
+    public async Task CopyAsync_UnderItselfThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -309,15 +309,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 更新予約したファイルはコピーできない
+    /// A file scheduled for Update cannot be copied.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Update している</para>
-    /// <para>手順: a.txt を b.txt へ CopyAsync する</para>
-    /// <para>期待: InvalidOperationException になり、pending は Update のまま、b.txt は無い</para>
+    /// <para>Given: a.txt is updated.</para>
+    /// <para>When: a.txt is copied to b.txt with CopyAsync.</para>
+    /// <para>Then: InvalidOperationException, the pending change stays Update, and b.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_更新予約したファイルはInvalidOperationExceptionになること()
+    public async Task CopyAsync_FileScheduledForUpdateThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -332,15 +332,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 配下に操作があるディレクトリはコピーできない
+    /// A directory with an operation under it cannot be copied.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリの配下へ Add している</para>
-    /// <para>手順: そのディレクトリを CopyAsync する</para>
-    /// <para>期待: InvalidOperationException になり、コピー先は作られない</para>
+    /// <para>Given: a file is added under the directory.</para>
+    /// <para>When: the directory is copied with CopyAsync.</para>
+    /// <para>Then: InvalidOperationException, and the destination is not created.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_配下に操作があるとInvalidOperationExceptionになること()
+    public async Task CopyAsync_OperationUnderDirectoryThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "src"));
@@ -355,15 +355,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 全削除の配下へはコピーできない
+    /// A path under a DeleteTree cannot be copied.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリを DeleteTree している</para>
-    /// <para>手順: その配下から外へ CopyAsync する</para>
-    /// <para>期待: InvalidOperationException になり、pending は DeleteTree のまま</para>
+    /// <para>Given: a directory is scheduled with DeleteTree.</para>
+    /// <para>When: a path under it is copied outside it with CopyAsync.</para>
+    /// <para>Then: InvalidOperationException, and the pending change stays DeleteTree.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_全削除の配下はInvalidOperationExceptionになること()
+    public async Task CopyAsync_UnderDeleteTreeThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
@@ -379,15 +379,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 取り消しでは作りかけのコピー先を消す
+    /// Cancellation deletes the partly created destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルがあるディレクトリがある</para>
-    /// <para>手順: CopyAsync 中に進捗の通知で取り消す</para>
-    /// <para>期待: OperationCanceledException になり、コピー先は無く、pending は空</para>
+    /// <para>Given: a directory with a file.</para>
+    /// <para>When: the CopyAsync is canceled from a progress report.</para>
+    /// <para>Then: OperationCanceledException, the destination does not exist, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_取り消しでは作ったディレクトリが消えること()
+    public async Task CopyAsync_CancelDeletesCreatedDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -406,15 +406,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// ファイルコピーの進捗はファイル長を総量にする
+    /// File copy progress uses the file length as the total.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 81921 バイトのファイルがある</para>
-    /// <para>手順: 進捗を受け取って CopyAsync する</para>
-    /// <para>期待: 81920 バイト時点と末尾が通知され、総量は 81921</para>
+    /// <para>Given: a file of 81921 bytes.</para>
+    /// <para>When: CopyAsync runs with a progress receiver.</para>
+    /// <para>Then: reports arrive at 81920 bytes and at the end, and the total is 81921.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ファイルの進捗はファイル長を総量にすること()
+    public async Task CopyAsync_FileProgressUsesFileLengthAsTotal()
     {
         await using TempDirectory work = TempDirectory.Create();
         byte[] bytes = new byte[81921];
@@ -431,15 +431,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// 空ディレクトリの進捗は 0 バイトを 1 回通知する
+    /// Progress of an empty directory reports 0 bytes once.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のディレクトリがある</para>
-    /// <para>手順: 進捗を受け取って CopyAsync する</para>
-    /// <para>期待: TotalBytes が null の 0 バイトが 1 回で、コピー先ディレクトリがある</para>
+    /// <para>Given: an empty directory.</para>
+    /// <para>When: CopyAsync runs with a progress receiver.</para>
+    /// <para>Then: one report of 0 bytes with a null TotalBytes, and the destination directory exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_空ディレクトリは0バイトを1回通知すること()
+    public async Task CopyAsync_EmptyDirectoryReportsZeroBytesOnce()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "src"));
@@ -454,15 +454,15 @@ public sealed class CopyTests
     }
 
     /// <summary>
-    /// ディレクトリコピーの進捗は書き終えた合計で、総量は不明
+    /// Directory copy progress is the total written, and the overall total is unknown.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 2 バイトのファイルが 2 つある</para>
-    /// <para>手順: 進捗を受け取って CopyAsync する</para>
-    /// <para>期待: 通知は 2 回で、総量はすべて null、最後は書き終えた合計が 4 バイト</para>
+    /// <para>Given: two files of 2 bytes each.</para>
+    /// <para>When: CopyAsync runs with a progress receiver.</para>
+    /// <para>Then: two reports, every total is null, and the last reports 4 bytes written in total.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ディレクトリの進捗は合計バイトで総量は不明なこと()
+    public async Task CopyAsync_DirectoryProgressIsWrittenTotalWithUnknownTotal()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");

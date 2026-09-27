@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverUnreadableJournalTests
 {
     /// <summary>
-    /// 壊れたジャーナルは残し、その guid の .txnew だけ消す
+    /// A broken journal is kept, and only the .txnew files of its guid are deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d/ があり、その中の Add の .txnew と、別 guid の .txnew がある。ジャーナルは途中までの JSON</para>
-    /// <para>手順: RecoverAsync してから BeginAsync する</para>
-    /// <para>期待: JournalUnreadable。ジャーナルと d/ と別 guid の .txnew は残る。Add の .txnew は消える。Begin は RecoveryRequiredException</para>
+    /// <para>Given: d/ exists with the .txnew of an Add inside, and a .txnew of another guid. The journal is truncated JSON.</para>
+    /// <para>When: RecoverAsync runs, then BeginAsync.</para>
+    /// <para>Then: JournalUnreadable. The journal, d/, and the other guid's .txnew remain. The Add's .txnew is deleted. Begin throws RecoveryRequiredException.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_壊れたジャーナルは残しtxnewだけ消してJournalUnreadableになること()
+    public async Task RecoverAsync_KeepsBrokenJournalDeletesOnlyTxnewAndReturnsJournalUnreadable()
     {
         await using TempDirectory work = TempDirectory.Create();
         string directory = System.IO.Path.Combine(work.Path, "d");
@@ -42,15 +42,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 読めるジャーナルを処理しても、壊れたものがあれば JournalUnreadable を返す
+    /// Even after processing readable journals, it returns JournalUnreadable if one is broken.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Add と、途中までの JSON のジャーナルがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable。Committing の対象は確定し、そのジャーナルは消える。壊れたジャーナルは残る</para>
+    /// <para>Given: a Committing Add, and a journal of truncated JSON.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable. The Committing target is finished and its journal deleted. The broken journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_壊れたジャーナルがあるとJournalUnreadableを優先すること()
+    public async Task RecoverAsync_BrokenJournalGivesJournalUnreadablePriority()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles committed = await LeftoverAddFiles.WriteAddAsync(
@@ -78,15 +78,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 読み取りの共有違反は再送出し、.txnew を残す
+    /// A sharing violation while reading is rethrown, and the .txnew is kept.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 未コミットの Add 残骸があり、ジャーナルを共有なしで開いている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: IOException。ジャーナルと .txnew は残る</para>
+    /// <para>Given: leftovers of an uncommitted Add, and the journal is open without sharing.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: IOException. The journal and the .txnew remain.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ジャーナルの読み取りが失敗するとIOExceptionでtxnewを残すこと()
+    public async Task RecoverAsync_JournalReadFailureThrowsIOExceptionAndKeepsTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -108,15 +108,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 上書きの途中で残った一時ファイルは、読めるジャーナルの復旧で消える
+    /// A temporary file left during an overwrite is deleted when a readable journal is recovered.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 未コミットの Add 残骸と、ジャーナルの隣の .tmp がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack。一時ファイルとジャーナルと .txnew は消える</para>
+    /// <para>Given: leftovers of an uncommitted Add, and a .tmp next to the journal.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack. The temporary file, the journal, and the .txnew are deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_上書きの一時ファイルを消してからロールバックすること()
+    public async Task RecoverAsync_DeletesOverwriteTempFileThenRollsBack()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -136,15 +136,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 操作を積んだあとのジャーナルは完全な JSON で、一時ファイルは残らない
+    /// After operations are recorded, the journal is complete JSON and no temporary file remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダ</para>
-    /// <para>手順: BeginAsync して AddAsync する</para>
-    /// <para>期待: tx-*.journal が 1 件あり、中身は JSON として読める。*.tmp は無い</para>
+    /// <para>Given: an empty work folder.</para>
+    /// <para>When: BeginAsync, then AddAsync.</para>
+    /// <para>Then: there is one tx-*.journal, its content reads as JSON, and there is no *.tmp.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_ジャーナルの上書き後に一時ファイルが残らないこと()
+    public async Task AddAsync_LeavesNoTempFileAfterJournalOverwrite()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -160,15 +160,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 読めないジャーナルの掃除は退避も消し、シンボリックリンクの先は辿らない
+    /// Cleanup of an unreadable journal deletes backups too, and does not follow symbolic links.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 壊れたジャーナルがあり、その ID の .txnew と .txnew.prev がワークフォルダにある。ワークフォルダの外を指すディレクトリのシンボリックリンクがあり、外にも同じ ID の .txnew がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable で、ワークフォルダの .txnew と .prev は消え、外の .txnew は残る</para>
+    /// <para>Given: a broken journal, and the .txnew and .txnew.prev of its ID in the work folder. A directory symbolic link points outside the work folder, and outside there is also a .txnew of the same ID.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable; the .txnew and .prev in the work folder are deleted, and the .txnew outside remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_読めないジャーナルの掃除は退避も消しリンクの先は辿らないこと()
+    public async Task RecoverAsync_UnreadableCleanupDeletesBackupsAndDoesNotFollowLinks()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -194,15 +194,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// BeginAsync はジャーナルの一時ファイルを残さない
+    /// BeginAsync leaves no journal temporary file.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダ</para>
-    /// <para>手順: BeginAsync する</para>
-    /// <para>期待: ジャーナルが 1 つあり、.journal.tmp は無い</para>
+    /// <para>Given: an empty work folder.</para>
+    /// <para>When: BeginAsync runs.</para>
+    /// <para>Then: there is one journal, and no .journal.tmp.</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_ジャーナルの一時ファイルを残さないこと()
+    public async Task BeginAsync_LeavesNoJournalTempFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -213,15 +213,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 初回のジャーナルを移す前に落ちた一時ファイルは、Recover が消してワークフォルダを塞がない
+    /// A temporary file left by a crash before the first journal was renamed is deleted by Recover, so it does not block the work folder.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ジャーナルが無く、途中までの JSON の tx-{guid}.journal.tmp だけがある</para>
-    /// <para>手順: RecoverAsync してから BeginAsync する</para>
-    /// <para>期待: NoPendingTransactions で一時ファイルは消え、BeginAsync は成功する</para>
+    /// <para>Given: there is no journal, only a tx-{guid}.journal.tmp of truncated JSON.</para>
+    /// <para>When: RecoverAsync runs, then BeginAsync.</para>
+    /// <para>Then: NoPendingTransactions, the temporary file is gone, and BeginAsync succeeds.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ジャーナルの無い一時ファイルは消してNoPendingTransactionsになること()
+    public async Task RecoverAsync_DeletesTempFileWithoutJournalAndReturnsNoPendingTransactions()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -240,15 +240,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 持ち主が生きている一時ファイルは、ジャーナルがまだ無くても Recover が消さない
+    /// A temporary file whose owner is alive is not deleted by Recover, even without a journal yet.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ジャーナルが無く tx-{guid}.journal.tmp があり、その guid の生存ロックを開いたままにしている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: NoPendingTransactions で、一時ファイルは残る</para>
+    /// <para>Given: there is no journal, tx-{guid}.journal.tmp exists, and the liveness lock of that guid is kept open.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: NoPendingTransactions, and the temporary file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_持ち主が生きている一時ファイルは消さないこと()
+    public async Task RecoverAsync_KeepsTempFileWhoseOwnerIsAlive()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -265,15 +265,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 版が違うジャーナルは読めないとし、.txnew にも触れない
+    /// A journal with a different version is unreadable, and its .txnew files are not touched.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add のジャーナルの version を 2 に書き換え、その .txnew がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable であり、ジャーナルも .txnew も残る</para>
+    /// <para>Given: the version of an Add journal is rewritten to 2, and its .txnew exists.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable, and both the journal and the .txnew remain.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_版が違うジャーナルは何にも触れずJournalUnreadableになること()
+    public async Task RecoverAsync_DifferentVersionTouchesNothingAndReturnsJournalUnreadable()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -294,15 +294,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 版が違い、種別も名前に無いジャーナルは、.txnew にも触れない
+    /// A journal with a different version and an unknown kind does not touch the .txnew either.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add のジャーナルの version を 2 に、種別を NotAKind に書き換え、その .txnew がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable であり、ジャーナルも .txnew も残る</para>
+    /// <para>Given: the version of an Add journal is rewritten to 2 and its kind to NotAKind, and its .txnew exists.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable, and both the journal and the .txnew remain.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_版が違い種別も未知のジャーナルは何にも触れないこと()
+    public async Task RecoverAsync_DifferentVersionAndUnknownKindTouchesNothing()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -327,15 +327,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// 数値で書いた種別のジャーナルは読めないとする
+    /// A journal with a numeric kind is unreadable.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Add のジャーナルで、種別を数値の 99 に書き換えている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable であり、ジャーナルは残り、.txnew は消え、a.txt は作られない</para>
+    /// <para>Given: in a Committing Add journal, the kind is rewritten to the number 99.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable, the journal remains, the .txnew is deleted, and a.txt is not created.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_数値の種別は読めないジャーナルになること()
+    public async Task RecoverAsync_NumericKindMakesJournalUnreadable()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -356,15 +356,15 @@ public sealed class RecoverUnreadableJournalTests
     }
 
     /// <summary>
-    /// path が空の操作があるジャーナルは読めないとする
+    /// A journal with an operation whose path is empty is unreadable.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Add のジャーナルで、path を空文字列に書き換えている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable であり、ジャーナルは残り、.txnew は消える</para>
+    /// <para>Given: in a Committing Add journal, the path is rewritten to an empty string.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable, the journal remains, and the .txnew is deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_pathが空の操作は読めないジャーナルになること()
+    public async Task RecoverAsync_EmptyPathMakesJournalUnreadable()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(

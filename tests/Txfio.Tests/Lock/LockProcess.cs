@@ -4,7 +4,7 @@ using System.Text;
 namespace Txfio.Tests;
 
 /// <summary>
-/// ロックを持つ子プロセス
+/// A child process that holds a lock.
 /// </summary>
 public sealed class LockProcess : IAsyncDisposable
 {
@@ -23,13 +23,13 @@ public sealed class LockProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// 停止ファイルができるまで、相対パスのロックを持つプロセスを起動する
+    /// Starts a process that holds the lock on a relative path until a stop file appears.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="relativePath">Add する相対パス</param>
-    /// <param name="readyFile">Add のあとに作る準備ファイル</param>
-    /// <param name="stopFile">できるまで待つ停止ファイル</param>
-    /// <returns>起動した子プロセス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="relativePath">The relative path to add.</param>
+    /// <param name="readyFile">The ready file created after the Add.</param>
+    /// <param name="stopFile">The stop file to wait for.</param>
+    /// <returns>The started child process.</returns>
     public static LockProcess StartHoldUntilStop(
         string workFolder,
         string relativePath,
@@ -40,22 +40,22 @@ public sealed class LockProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// 終了するまで、相対パスのロックを持つプロセスを起動する
+    /// Starts a process that holds the lock on a relative path until it exits.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="relativePath">Add する相対パス</param>
-    /// <param name="readyFile">Add のあとに作る準備ファイル</param>
-    /// <returns>起動した子プロセス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="relativePath">The relative path to add.</param>
+    /// <param name="readyFile">The ready file created after the Add.</param>
+    /// <returns>The started child process.</returns>
     public static LockProcess StartHoldUntilKilled(string workFolder, string relativePath, string readyFile)
     {
         return Start(ProcessLockChild.HoldUntilKilled, workFolder, relativePath, readyFile, stopFile: null);
     }
 
     /// <summary>
-    /// 準備ファイルができるまで待つ
+    /// Waits until the ready file appears.
     /// </summary>
-    /// <param name="readyFile">子プロセスが Add のあとに作るファイル</param>
-    /// <returns>準備完了</returns>
+    /// <param name="readyFile">The file the child process creates after the Add.</param>
+    /// <returns>A task that completes when the child is ready.</returns>
     public async Task WaitUntilReadyAsync(string readyFile)
     {
         using CancellationTokenSource timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -65,7 +65,7 @@ public sealed class LockProcess : IAsyncDisposable
             {
                 if (_process.HasExited)
                 {
-                    Assert.Fail("子プロセスが準備前に終了しました: " + ErrorText());
+                    Assert.Fail("The child process exited before it was ready: " + ErrorText());
                 }
 
                 await Task.Delay(20, timeout.Token);
@@ -73,14 +73,14 @@ public sealed class LockProcess : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            Assert.Fail("子プロセスが準備できなかった: " + ErrorText());
+            Assert.Fail("The child process did not become ready: " + ErrorText());
         }
     }
 
     /// <summary>
-    /// 停止ファイルを作り、終了コード 0 を待つ
+    /// Creates the stop file, and waits for exit code 0.
     /// </summary>
-    /// <returns>子プロセスが終了したこと</returns>
+    /// <returns>A task that completes when the child process exits.</returns>
     public async Task StopAsync()
     {
         await File.WriteAllTextAsync(_stopFile!, "stop");
@@ -91,16 +91,16 @@ public sealed class LockProcess : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            Assert.Fail("子プロセスが停止しなかった: " + ErrorText());
+            Assert.Fail("The child process did not stop: " + ErrorText());
         }
 
         Assert.Equal(0, _process.ExitCode);
     }
 
     /// <summary>
-    /// 子プロセスを Dispose せず終了する
+    /// Ends the child process without Dispose.
     /// </summary>
-    /// <returns>終了したこと</returns>
+    /// <returns>A task that completes when it has exited.</returns>
     public async Task KillAsync()
     {
         if (!_process.HasExited)

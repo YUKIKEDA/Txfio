@@ -6,15 +6,15 @@ namespace Txfio.Tests.Transfer;
 public sealed class DirectoryImportExportTests
 {
     /// <summary>
-    /// 外のディレクトリはファイルごとの Add と空ディレクトリを作る
+    /// An external directory creates an Add per file and empty directories.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外にファイルと空のサブディレクトリがある</para>
-    /// <para>手順: ImportAsync してコミットする</para>
-    /// <para>期待: Succeeded でコピー先にファイルと空ディレクトリがあり、コピー元も残る</para>
+    /// <para>Given: outside there is a file and an empty subdirectory.</para>
+    /// <para>When: ImportAsync, then commit.</para>
+    /// <para>Then: Succeeded, the destination has the file and the empty directory, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_ディレクトリはファイルごとのAddになりコピー元は残ること()
+    public async Task ImportAsync_DirectoryBecomesAddPerFileAndKeepsSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -37,15 +37,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 未コミット Dispose では取り込みが作ったディレクトリを消す
+    /// Dispose without commit deletes the directories the import created.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外のディレクトリを Import した直後である</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: コピー先は無く、コピー元は残る</para>
+    /// <para>Given: right after an external directory is imported.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: the destination does not exist, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_未コミットDisposeでは作ったディレクトリが消えること()
+    public async Task ImportAsync_DisposeWithoutCommitDeletesCreatedDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -62,15 +62,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// ディレクトリの Import は取り込み先を予約し、無関係なパスは通す
+    /// A directory Import reserves the destination, and lets unrelated paths pass.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外にディレクトリがあり、ワークフォルダに別のファイルがある</para>
-    /// <para>手順: ディレクトリを Import してから、別トランザクションがそのファイルを Delete し、取り込み先の配下を Add する</para>
-    /// <para>期待: 別ファイルは Delete でき、配下の Add は LockContentionException で Path は取り込み先である</para>
+    /// <para>Given: an external directory, and another file in the work folder.</para>
+    /// <para>When: the directory is imported, then another transaction deletes that file and adds a file under the destination.</para>
+    /// <para>Then: the other file can be deleted, and the Add under the destination throws LockContentionException with Path set to the destination.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_ディレクトリは取り込み先だけを予約すること()
+    public async Task ImportAsync_DirectoryReservesOnlyDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -94,15 +94,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// ワークフォルダを含むディレクトリの配下へは取り込めない
+    /// A directory that contains the work folder cannot be imported under it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダの親ディレクトリがある</para>
-    /// <para>手順: その親をワークフォルダの配下へ ImportAsync する</para>
-    /// <para>期待: InvalidOperationException になり、コピー先は作られない</para>
+    /// <para>Given: the parent directory of the work folder.</para>
+    /// <para>When: that parent is imported under the work folder with ImportAsync.</para>
+    /// <para>Then: InvalidOperationException, and the destination is not created.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_コピー先がコピー元の配下ならInvalidOperationExceptionになること()
+    public async Task ImportAsync_DestinationUnderSourceThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string parent = System.IO.Path.GetDirectoryName(work.Path)!;
@@ -116,15 +116,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// コピー先が既にある、または親が無いと取り込めない
+    /// An import fails when the destination already exists or has no parent.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外にディレクトリがあり、ワークフォルダには既存ディレクトリがある</para>
-    /// <para>手順: 既存ディレクトリと、親の無いパスへ ImportAsync する</para>
-    /// <para>期待: どちらも ExternalConflictException になり、コピー元は残る</para>
+    /// <para>Given: an external directory, and an existing directory in the work folder.</para>
+    /// <para>When: ImportAsync targets the existing directory and a path without a parent.</para>
+    /// <para>Then: both throw ExternalConflictException, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_コピー先が不正ならExternalConflictExceptionになること()
+    public async Task ImportAsync_InvalidDestinationThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -148,15 +148,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 全削除の配下へはディレクトリを取り込めない
+    /// A directory cannot be imported under a DeleteTree.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリを DeleteTree し、外に別のディレクトリがある</para>
-    /// <para>手順: 全削除の配下へ ImportAsync する</para>
-    /// <para>期待: InvalidOperationException になり、pending は DeleteTree のまま</para>
+    /// <para>Given: a directory is scheduled with DeleteTree, and another directory exists outside.</para>
+    /// <para>When: ImportAsync targets a path under the DeleteTree.</para>
+    /// <para>Then: InvalidOperationException, and the pending change stays DeleteTree.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_全削除の配下はInvalidOperationExceptionになること()
+    public async Task ImportAsync_UnderDeleteTreeThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -173,15 +173,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 配下のジャンクションは取り込まない
+    /// Junctions under it are not imported.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外に、本物のファイルと別ディレクトリへのジャンクションがある</para>
-    /// <para>手順: そのディレクトリを ImportAsync する</para>
-    /// <para>期待: コピー先には本物のファイルだけで、ジャンクションの先は無い</para>
+    /// <para>Given: outside there is a real file and a junction to another directory.</para>
+    /// <para>When: the directory is imported with ImportAsync.</para>
+    /// <para>Then: the destination has only the real file, and nothing from the junction target.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task ImportAsync_ジャンクションは辿らないこと()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task ImportAsync_DoesNotFollowJunctions()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -209,15 +209,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// ファイルのシンボリックリンクは取り込めない
+    /// A symbolic link to a file cannot be imported.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外にファイルへのシンボリックリンクがある</para>
-    /// <para>手順: そのリンクを ImportAsync する</para>
-    /// <para>期待: InvalidOperationException になり、pending は空</para>
+    /// <para>Given: outside there is a symbolic link to a file.</para>
+    /// <para>When: the link is imported with ImportAsync.</para>
+    /// <para>Then: InvalidOperationException, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_ファイルのシンボリックリンクはInvalidOperationExceptionになること()
+    public async Task ImportAsync_FileSymbolicLinkThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -236,15 +236,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 空ディレクトリの取り込みは 0 バイトを 1 回通知する
+    /// Importing an empty directory reports 0 bytes once.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外に空のディレクトリがある</para>
-    /// <para>手順: 進捗を受け取って ImportAsync する</para>
-    /// <para>期待: TotalBytes が null の 0 バイトが 1 回で、コピー先ディレクトリがある</para>
+    /// <para>Given: an empty directory outside.</para>
+    /// <para>When: ImportAsync runs with a progress receiver.</para>
+    /// <para>Then: one report of 0 bytes with a null TotalBytes, and the destination directory exists.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_空ディレクトリは0バイトを1回通知すること()
+    public async Task ImportAsync_EmptyDirectoryReportsZeroBytesOnce()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -261,15 +261,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 取り込みの取り消しでは作りかけを消す
+    /// Canceling an import deletes what was partly created.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 外にファイルがあるディレクトリがある</para>
-    /// <para>手順: ImportAsync 中に進捗の通知で取り消す</para>
-    /// <para>期待: OperationCanceledException になり、コピー先は無く、コピー元は残る</para>
+    /// <para>Given: a directory with a file outside.</para>
+    /// <para>When: the ImportAsync is canceled from a progress report.</para>
+    /// <para>Then: OperationCanceledException, the destination does not exist, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_取り消しでは作ったディレクトリが消えること()
+    public async Task ImportAsync_CancelDeletesCreatedDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -289,15 +289,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// ディレクトリの Export は外に中身を出し、ワークフォルダは変えない
+    /// A directory Export copies the contents outside, and does not change the work folder.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルと空のサブディレクトリがある</para>
-    /// <para>手順: ExportAsync する</para>
-    /// <para>期待: 外にファイルと空ディレクトリがあり、ワークフォルダは元のまま、pending は空、ロックは無い</para>
+    /// <para>Given: a file and an empty subdirectory.</para>
+    /// <para>When: ExportAsync is called.</para>
+    /// <para>Then: outside has the file and the empty directory, the work folder is unchanged, there are no pending changes, and no locks.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_ディレクトリは外にコピーしワークフォルダは変えないこと()
+    public async Task ExportAsync_CopiesDirectoryOutsideWithoutChangingWorkFolder()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -317,15 +317,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// Update 済みのファイルは .txnew の内容で出る
+    /// An updated file is exported with the content of its .txnew.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリ内のファイルを Update している</para>
-    /// <para>手順: そのディレクトリを ExportAsync する</para>
-    /// <para>期待: 外は新しい内容、ディスク上の本物は古い内容、pending は Update のまま</para>
+    /// <para>Given: a file in the directory is updated.</para>
+    /// <para>When: the directory is exported with ExportAsync.</para>
+    /// <para>Then: outside has the new content, the real file on disk has the old content, and the pending change stays Update.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_Update済みはステージングの内容になること()
+    public async Task ExportAsync_UpdatedFileHasStagedContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -344,15 +344,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 未コミットの Add はディレクトリの Export に含まれない
+    /// An uncommitted Add is not included in a directory Export.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 本物のファイルと、同じディレクトリへの未コミット Add がある</para>
-    /// <para>手順: そのディレクトリを ExportAsync する</para>
-    /// <para>期待: 外に出るのは本物のファイルだけで、Add は pending に残る</para>
+    /// <para>Given: a real file, and an uncommitted Add in the same directory.</para>
+    /// <para>When: the directory is exported with ExportAsync.</para>
+    /// <para>Then: only the real file goes outside, and the Add stays pending.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_未コミットのAddは含まれないこと()
+    public async Task ExportAsync_ExcludesUncommittedAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -373,15 +373,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 成功したディレクトリの Export は Dispose 後も残る
+    /// A directory Export that succeeded stays after Dispose.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルがあるディレクトリがある</para>
-    /// <para>手順: ExportAsync して Dispose する</para>
-    /// <para>期待: 外のコピー先が残る</para>
+    /// <para>Given: a directory with a file.</para>
+    /// <para>When: ExportAsync, then Dispose.</para>
+    /// <para>Then: the destination outside remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_成功したディレクトリはDispose後も残ること()
+    public async Task ExportAsync_SucceededDirectoryStaysAfterDispose()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -398,15 +398,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// ディレクトリ Export の取り消しでは作りかけを消す
+    /// Canceling a directory Export deletes what was partly created.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルがあるディレクトリがある</para>
-    /// <para>手順: ExportAsync 中に進捗の通知で取り消す</para>
-    /// <para>期待: OperationCanceledException になり、外のコピー先は無い</para>
+    /// <para>Given: a directory with a file.</para>
+    /// <para>When: the ExportAsync is canceled from a progress report.</para>
+    /// <para>Then: OperationCanceledException, and the destination outside does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_取り消しでは作ったディレクトリが消えること()
+    public async Task ExportAsync_CancelDeletesCreatedDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -426,15 +426,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 配下のジャンクションは外へ出さない
+    /// Junctions under it are not exported.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 本物のファイルと、別ディレクトリへのジャンクションがある</para>
-    /// <para>手順: そのディレクトリを ExportAsync する</para>
-    /// <para>期待: 外には本物のファイルだけで、ジャンクションの先は無い</para>
+    /// <para>Given: a real file, and a junction to another directory.</para>
+    /// <para>When: the directory is exported with ExportAsync.</para>
+    /// <para>Then: outside has only the real file, and nothing from the junction target.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task ExportAsync_ジャンクションは辿らないこと()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task ExportAsync_DoesNotFollowJunctions()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -463,15 +463,15 @@ public sealed class DirectoryImportExportTests
     }
 
     /// <summary>
-    /// 空ディレクトリの Export は 0 バイトを 1 回通知する
+    /// Exporting an empty directory reports 0 bytes once.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のディレクトリがある</para>
-    /// <para>手順: 進捗を受け取って ExportAsync する</para>
-    /// <para>期待: TotalBytes が null の 0 バイトが 1 回で、外にディレクトリがある</para>
+    /// <para>Given: an empty directory.</para>
+    /// <para>When: ExportAsync runs with a progress receiver.</para>
+    /// <para>Then: one report of 0 bytes with a null TotalBytes, and the directory exists outside.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_空ディレクトリは0バイトを1回通知すること()
+    public async Task ExportAsync_EmptyDirectoryReportsZeroBytesOnce()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();

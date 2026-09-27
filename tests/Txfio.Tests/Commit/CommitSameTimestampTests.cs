@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitSameTimestampTests
 {
     /// <summary>
-    /// 同じ長さで更新時刻も同じ Update は、本物を新しい内容にする
+    /// An Update with the same length and the same last write time still makes the real file the new content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の内容は old。Update の .txnew は同じ長さで、最終更新日時を本物と揃えてある</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded。本物は new になり、.txnew は消える</para>
+    /// <para>Given: a.txt contains old. The Update's .txnew has the same length, and its last write time matches the real file.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded. The real file becomes new, and the .txnew is gone.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_更新時刻が同じUpdateでも新しい内容になること()
+    public async Task CommitAsync_UpdateWithSameTimestampWritesNewContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -32,15 +32,15 @@ public sealed class CommitSameTimestampTests
     }
 
     /// <summary>
-    /// 同じ更新時刻の Update を止めても、Recover が新しい内容にする
+    /// Even if an Update with the same last write time is stopped, Recover makes it the new content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の内容は old。Update の .txnew は同じ長さで、最終更新日時を本物と揃えてある</para>
-    /// <para>手順: AfterCommitting で CommitAsync を止め、RecoverAsync する</para>
-    /// <para>期待: 止めた直後は old のまま .txnew が残る。Recover のあと RolledForward で本物は new</para>
+    /// <para>Given: a.txt contains old. The Update's .txnew has the same length, and its last write time matches the real file.</para>
+    /// <para>When: CommitAsync is stopped at AfterCommitting, then RecoverAsync runs.</para>
+    /// <para>Then: right after the stop, the content is still old and the .txnew remains. After Recover, RolledForward and the real file is new.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_更新時刻が同じUpdateを止めてもRecoverが新しい内容にすること()
+    public async Task CommitAsync_RecoverWritesNewContentForStoppedUpdateWithSameTimestamp()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");

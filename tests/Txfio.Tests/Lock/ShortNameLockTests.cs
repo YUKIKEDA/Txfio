@@ -7,15 +7,15 @@ namespace Txfio.Tests.Lock;
 public sealed class ShortNameLockTests
 {
     /// <summary>
-    /// 短縮名と長い名前は同じロックになる
+    /// A short name and a long name map to the same lock.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長い名前のディレクトリがあり、その 8.3 短縮名もある</para>
-    /// <para>手順: 一方が長い名前で Add し、もう一方が短縮名で Add する</para>
-    /// <para>期待: LockContentionException になり、Path は長い名前のファイルである</para>
+    /// <para>Given: a directory with a long name, which also has an 8.3 short name.</para>
+    /// <para>When: one transaction adds with the long name, and the other with the short name.</para>
+    /// <para>Then: LockContentionException, and Path is the file with the long name.</para>
     /// </remarks>
     [ShortNameFact]
-    public async Task AddAsync_短縮名と長い名前は同じロックになること()
+    public async Task AddAsync_ShortAndLongNamesShareOneLock()
     {
         await using TempDirectory parent = TempDirectory.Create();
         string longDirectory = System.IO.Path.Combine(parent.Path, "Program Files");
@@ -36,15 +36,15 @@ public sealed class ShortNameLockTests
     }
 
     /// <summary>
-    /// 同じトランザクションでは短縮名と長い名前は 1 件になる
+    /// In the same transaction, a short name and a long name become one entry.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長い名前のディレクトリがあり、その 8.3 短縮名もある</para>
-    /// <para>手順: 短縮名で Add したあと、長い名前で Add する</para>
-    /// <para>期待: pending は 1 件であり、パスは長い名前のファイルである</para>
+    /// <para>Given: a directory with a long name, which also has an 8.3 short name.</para>
+    /// <para>When: an Add with the short name is followed by an Add with the long name.</para>
+    /// <para>Then: there is one pending change, and its path is the file with the long name.</para>
     /// </remarks>
     [ShortNameFact]
-    public async Task AddAsync_同じトランザクションでは短縮名と長い名前が1件になること()
+    public async Task AddAsync_ShortAndLongNamesBecomeOneEntryInSameTransaction()
     {
         await using TempDirectory parent = TempDirectory.Create();
         string longDirectory = System.IO.Path.Combine(parent.Path, "Program Files");
@@ -64,15 +64,15 @@ public sealed class ShortNameLockTests
     }
 
     /// <summary>
-    /// 無い中間ディレクトリは短縮名のまま長い親に付く
+    /// A missing intermediate directory is appended to the long parent as the short name given.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長い名前のディレクトリがあり、その 8.3 短縮名もあり、短縮名の先にディレクトリは無い</para>
-    /// <para>手順: 短縮名の先に無いディレクトリへ Add する</para>
-    /// <para>期待: ExternalConflictException の Path は、長い名前の親に渡したまだ無いディレクトリを付けたものである</para>
+    /// <para>Given: a directory with a long name, which also has an 8.3 short name, and no directory under the short name.</para>
+    /// <para>When: a file is added under a directory that does not exist under the short name.</para>
+    /// <para>Then: the Path of ExternalConflictException is the long-name parent with the missing directory as passed appended.</para>
     /// </remarks>
     [ShortNameFact]
-    public async Task AddAsync_無い中間ディレクトリは短縮名のまま長い親に付くこと()
+    public async Task AddAsync_MissingIntermediateDirectoryIsAppendedToLongParent()
     {
         await using TempDirectory parent = TempDirectory.Create();
         string longDirectory = System.IO.Path.Combine(parent.Path, "Program Files");
@@ -92,15 +92,15 @@ public sealed class ShortNameLockTests
     }
 
     /// <summary>
-    /// 短縮名で開いたワークフォルダは長い名前と同じロックになる
+    /// A work folder opened with its short name shares locks with the long name.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長い名前のディレクトリがあり、その 8.3 短縮名もある</para>
-    /// <para>手順: 短縮名で Begin して Add し、長い名前で Begin した側が同じファイルを Add する</para>
-    /// <para>期待: LockContentionException になり、pending のパスは長い名前のファイルである</para>
+    /// <para>Given: a directory with a long name, which also has an 8.3 short name.</para>
+    /// <para>When: one side begins with the short name and adds, and the side that began with the long name adds the same file.</para>
+    /// <para>Then: LockContentionException, and the pending path is the file with the long name.</para>
     /// </remarks>
     [ShortNameFact]
-    public async Task BeginAsync_短縮名で開いたワークフォルダは長い名前でロックを共有すること()
+    public async Task BeginAsync_WorkFolderOpenedWithShortNameSharesLocksWithLongName()
     {
         await using TempDirectory parent = TempDirectory.Create();
         string longWork = System.IO.Path.Combine(parent.Path, "Program Files");
@@ -142,7 +142,7 @@ public sealed class ShortNameLockTests
         {
             if (!OperatingSystem.IsWindows())
             {
-                Skip = "Windows 専用: 8.3 短縮名";
+                Skip = "Windows only: 8.3 short names";
                 return;
             }
 
@@ -158,7 +158,7 @@ public sealed class ShortNameLockTests
                 if (shortPath is null
                     || string.Equals(shortPath, nested, StringComparison.OrdinalIgnoreCase))
                 {
-                    Skip = "8.3 短縮名が無い";
+                    Skip = "No 8.3 short name";
                 }
             }
             finally

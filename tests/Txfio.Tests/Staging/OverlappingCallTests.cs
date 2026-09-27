@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class OverlappingCallTests
 {
     /// <summary>
-    /// 重なった Add は拒否し、先の Add は残る
+    /// An overlapping Add is rejected, and the earlier Add remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 先の Add が内容の読み取りで待っている</para>
-    /// <para>手順: 別の Add を重ね、待っていた Add を終わらせ、そのあとにもう 1 件 Add する</para>
-    /// <para>期待: 重なった Add は InvalidOperationException で記録されず、先の Add とあとの Add だけが残る</para>
+    /// <para>Given: an earlier Add is waiting while reading its content.</para>
+    /// <para>When: another Add overlaps, the waiting Add finishes, and then one more Add is made.</para>
+    /// <para>Then: the overlapping Add throws InvalidOperationException and is not recorded, and only the earlier and later Adds remain.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_重なるとInvalidOperationExceptionで先の操作は残ること()
+    public async Task AddAsync_OverlapThrowsInvalidOperationExceptionAndKeepsEarlierOperation()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -36,15 +36,15 @@ public sealed class OverlappingCallTests
     }
 
     /// <summary>
-    /// 進行中の一覧取得と破棄は拒否する
+    /// Listing and disposing while a call is in progress are rejected.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add が内容の読み取りで待っている</para>
-    /// <para>手順: GetPendingChanges と DisposeAsync を重ね、待っていた Add を終わらせてから破棄する</para>
-    /// <para>期待: 重なった呼び出しは InvalidOperationException で、Add は残り、終わったあとの破棄はできる</para>
+    /// <para>Given: an Add is waiting while reading its content.</para>
+    /// <para>When: GetPendingChanges and DisposeAsync overlap, the waiting Add finishes, and then the transaction is disposed.</para>
+    /// <para>Then: the overlapping calls throw InvalidOperationException, the Add remains, and disposing after it finishes works.</para>
     /// </remarks>
     [Fact]
-    public async Task GetPendingChanges_進行中だとInvalidOperationExceptionになること()
+    public async Task GetPendingChanges_InProgressThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -70,15 +70,15 @@ public sealed class OverlappingCallTests
     }
 
     /// <summary>
-    /// 進行中の progress から同じトランザクションを呼ぶと拒否する
+    /// Calling the same transaction from a progress callback in progress is rejected.
     /// </summary>
     /// <remarks>
-    /// <para>前提: なし</para>
-    /// <para>手順: Add の progress から別の Add を呼ぶ</para>
-    /// <para>期待: InvalidOperationException で、どちらのファイルも記録されない</para>
+    /// <para>Given: nothing.</para>
+    /// <para>When: another Add is called from the progress of an Add.</para>
+    /// <para>Then: InvalidOperationException, and neither file is recorded.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_progressから重なるとInvalidOperationExceptionになること()
+    public async Task AddAsync_OverlapFromProgressThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -96,15 +96,15 @@ public sealed class OverlappingCallTests
     }
 
     /// <summary>
-    /// 別のトランザクションの Add は同時に進む
+    /// Adds of different transactions proceed at the same time.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションが 2 つある</para>
-    /// <para>手順: 両方の Add が内容の読み取りで待つところまで進めてから、両方を終わらせる</para>
-    /// <para>期待: どちらも例外にならず、それぞれの pending が 1 件である</para>
+    /// <para>Given: two transactions.</para>
+    /// <para>When: both Adds proceed until they wait while reading their content, then both finish.</para>
+    /// <para>Then: neither throws, and each has one pending change.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_別トランザクションなら同時に進むこと()
+    public async Task AddAsync_DifferentTransactionsProceedConcurrently()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction left = await global::Txfio.Txfio.BeginAsync(work.Path);

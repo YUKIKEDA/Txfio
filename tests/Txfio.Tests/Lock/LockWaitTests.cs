@@ -5,15 +5,15 @@ namespace Txfio.Tests.Lock;
 public sealed class LockWaitTests
 {
     /// <summary>
-    /// 待ちを渡さなければ、使用中のパスはすぐに失敗する
+    /// Without a wait, a path in use fails right away.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方が a.txt を Add している</para>
-    /// <para>手順: もう一方を待ちゼロで始め、同じパスを Add する</para>
-    /// <para>期待: 待たずに LockContentionException になり、Path は a.txt である</para>
+    /// <para>Given: one transaction has added a.txt.</para>
+    /// <para>When: the other begins with a zero wait and adds the same path.</para>
+    /// <para>Then: LockContentionException without waiting, and Path is a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_待ちがゼロなら使用中のパスですぐ失敗すること()
+    public async Task AddAsync_FailsImmediatelyOnPathInUseWithZeroWait()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -32,15 +32,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// 待っているあいだに相手が破棄すると、その操作は成功する
+    /// If the other side disposes during the wait, the operation succeeds.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方が a.txt を Add しており、もう一方の待ちは 2 秒</para>
-    /// <para>手順: 200ms 後に先のトランザクションを破棄し、同じパスを Add する</para>
-    /// <para>期待: Add は成功し、未確定の操作が 1 件ある</para>
+    /// <para>Given: one transaction has added a.txt, and the other has a 2-second wait.</para>
+    /// <para>When: the first transaction is disposed after 200 ms, and the same path is added.</para>
+    /// <para>Then: the Add succeeds, and there is one pending operation.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_待ちのあいだに相手が破棄すると成功すること()
+    public async Task AddAsync_SucceedsWhenOtherDisposesDuringWait()
     {
         await using TempDirectory work = TempDirectory.Create();
         ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -64,15 +64,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// 期限までに空かなければ失敗し、次の呼び出しはまた同じ上限から待つ
+    /// If the lock is not free by the deadline it fails, and the next call waits from the same limit again.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方が a.txt を Add しており、待つ側の上限は 300ms</para>
-    /// <para>手順: 同じパスを Add して失敗させたあと、相手を破棄してもう一度 Add する</para>
-    /// <para>期待: 1 回目は LockContentionException で Path は a.txt、2 回目は成功する</para>
+    /// <para>Given: one transaction has added a.txt, and the waiting side has a limit of 300 ms.</para>
+    /// <para>When: the same path is added and fails, then the other side is disposed and the Add is tried again.</para>
+    /// <para>Then: the first is LockContentionException with Path a.txt, and the second succeeds.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_期限切れのあとの呼び出しはまた待てること()
+    public async Task AddAsync_CallAfterTimeoutCanWaitAgain()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -92,15 +92,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// 待ちの取り消しは競合にしない
+    /// Canceling the wait is not contention.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方が a.txt を Add しており、もう一方は期限のない待ち</para>
-    /// <para>手順: 同じパスの Add を、150ms 後に取り消す</para>
-    /// <para>期待: OperationCanceledException で、待つ側の未確定操作は空のまま、先のロックは残る</para>
+    /// <para>Given: one transaction has added a.txt, and the other waits without a deadline.</para>
+    /// <para>When: an Add of the same path is canceled after 150 ms.</para>
+    /// <para>Then: OperationCanceledException, the waiting side has no pending changes, and the first lock remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_待ちの取り消しはOperationCanceledExceptionになること()
+    public async Task AddAsync_CancelingWaitThrowsOperationCanceledException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -128,15 +128,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// 2 本目を待っているあいだ、先に取ったパスは持ち続ける
+    /// While waiting for the second path, the path taken first is kept.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt があり、別トランザクションが m.txt を Add しており、待つ側の上限は 300ms</para>
-    /// <para>手順: a.txt を m.txt へ Move する</para>
-    /// <para>期待: LockContentionException で Path は m.txt、未確定操作は空で、a.txt は別トランザクションから Add できない</para>
+    /// <para>Given: a.txt exists, another transaction has added m.txt, and the waiting side has a limit of 300 ms.</para>
+    /// <para>When: a.txt is moved to m.txt.</para>
+    /// <para>Then: LockContentionException with Path m.txt, no pending changes, and a.txt cannot be added from another transaction.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_2本目の期限切れでも先のロックを持ち続けること()
+    public async Task MoveAsync_KeepsFirstLockWhenSecondTimesOut()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -156,15 +156,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// 排他を待っているあいだはワークフォルダ全体のロックを持たないので、待っている者同士で塞がない
+    /// While waiting for an exclusive lock, the work-folder lock is not held, so waiters do not block each other.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方が a.txt を Add しており、sub があり、排他を待つ 2 件の上限はそれぞれ 5 秒</para>
-    /// <para>手順: 2 件の DeleteTree を別スレッドで始め、先のトランザクションを破棄し、先に進んだ方を破棄してから、もう一方を待つ</para>
-    /// <para>期待: どちらも 3 秒以内に成功する</para>
+    /// <para>Given: one transaction has added a.txt, sub exists, and the two waiters for exclusive locks each have a limit of 5 seconds.</para>
+    /// <para>When: two DeleteTrees start on separate threads, the first transaction is disposed, the one that proceeded is disposed, and then the other is awaited.</para>
+    /// <para>Then: both succeed within 3 seconds.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_排他を待っているあいだはワークフォルダ全体のロックを持たないこと()
+    public async Task DeleteTreeAsync_DoesNotHoldWorkFolderLockWhileWaitingForExclusive()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -194,15 +194,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// しるしが空くと、ディレクトリ作成は成功する
+    /// When the share-lost marker becomes free, creating a directory succeeds.
     /// </summary>
     /// <remarks>
-    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちは 2 秒</para>
-    /// <para>手順: 200ms 後にそのハンドルを閉じ、sub を CreateDirectory する</para>
-    /// <para>期待: sub ができる</para>
+    /// <para>Given: <c>.txfio/share-lost.lock</c> is open as shared, and the wait is 2 seconds.</para>
+    /// <para>When: the handle is closed after 200 ms, and sub is created with CreateDirectory.</para>
+    /// <para>Then: sub exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_しるしが空くとディレクトリ作成が成功すること()
+    public async Task CreateDirectoryAsync_SucceedsWhenMarkerBecomesFree()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
@@ -225,15 +225,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// しるしが使用中でも、ディレクトリ作成はワークフォルダ全体のロックを待たない
+    /// Even when the share-lost marker is in use, creating a directory does not wait for the work-folder lock.
     /// </summary>
     /// <remarks>
-    /// <para>前提: `.txfio/share-lost.lock` を共有で開いており、待ちはゼロ</para>
-    /// <para>手順: sub を CreateDirectory する</para>
-    /// <para>期待: sub ができる（ワークフォルダ全体を排他にするのは Recover だけ）</para>
+    /// <para>Given: <c>.txfio/share-lost.lock</c> is open as shared, and the wait is zero.</para>
+    /// <para>When: sub is created with CreateDirectory.</para>
+    /// <para>Then: sub exists (only Recover makes the whole work folder exclusive).</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_しるしが使用中でもワークフォルダ全体のロックを待たないこと()
+    public async Task CreateDirectoryAsync_DoesNotWaitForWorkFolderLockWhenMarkerInUse()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
@@ -251,15 +251,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// パスのロックファイルを開いていても、ディレクトリ作成は失敗しない
+    /// Creating a directory does not fail just because a path lock file is open.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の .lock を共有なしで開いている</para>
-    /// <para>手順: sub を CreateDirectory する</para>
-    /// <para>期待: sub ができる</para>
+    /// <para>Given: the .lock of a.txt is open without sharing.</para>
+    /// <para>When: sub is created with CreateDirectory.</para>
+    /// <para>Then: sub exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_パスのロックファイルだけでは失敗しないこと()
+    public async Task CreateDirectoryAsync_DoesNotFailOnPathLockFileAlone()
     {
         await using TempDirectory work = TempDirectory.Create();
         string foreign = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
@@ -274,15 +274,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// 復旧も、ワークフォルダ全体のロックが空くまで待つ
+    /// Recovery also waits until the work-folder lock is free.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションが a.txt を Add している</para>
-    /// <para>手順: 待ち 300ms で Recover して失敗させ、破棄したあと 2 秒の待ちで Recover する</para>
-    /// <para>期待: 1 回目は LockContentionException で Path はワークフォルダ、2 回目は NoPendingTransactions</para>
+    /// <para>Given: a transaction has added a.txt.</para>
+    /// <para>When: Recover with a 300 ms wait fails, the transaction is disposed, and Recover runs with a 2-second wait.</para>
+    /// <para>Then: the first is LockContentionException with Path set to the work folder, and the second is NoPendingTransactions.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ワークフォルダ全体のロックが空くまで待つこと()
+    public async Task RecoverAsync_WaitsUntilWorkFolderLockIsFree()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -299,15 +299,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// 負の待ちは拒否し、期限なしは開始できる
+    /// A negative wait is rejected, and no deadline can begin.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダがある</para>
-    /// <para>手順: 負の TimeSpan で Begin と Recover を呼び、Timeout.InfiniteTimeSpan で Begin する</para>
-    /// <para>期待: 負の時間は ArgumentOutOfRangeException、期限なしはトランザクションが始まる</para>
+    /// <para>Given: a work folder exists.</para>
+    /// <para>When: Begin and Recover are called with a negative TimeSpan, and Begin with Timeout.InfiniteTimeSpan.</para>
+    /// <para>Then: the negative time throws ArgumentOutOfRangeException, and no deadline begins a transaction.</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_負の待ちはArgumentOutOfRangeExceptionになること()
+    public async Task BeginAsync_NegativeWaitThrowsArgumentOutOfRangeException()
     {
         await using TempDirectory work = TempDirectory.Create();
 
@@ -321,15 +321,15 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// ロックを待っているあいだ、呼び出したスレッドは止まらない
+    /// While waiting for a lock, the calling thread is not blocked.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方が a.txt を Add しており、もう一方の待ちは 5 秒</para>
-    /// <para>手順: 同じパスへの Add を呼び、戻った Task を待たずに経過時間と状態を見る。そのあと先のトランザクションを破棄する</para>
-    /// <para>期待: 呼び出しは 1 秒未満で戻り、Task は未完了のまま待っており、相手の破棄後に成功する</para>
+    /// <para>Given: one transaction has added a.txt, and the other has a 5-second wait.</para>
+    /// <para>When: an Add of the same path is called, and the elapsed time and state are checked without awaiting the returned Task. Then the first transaction is disposed.</para>
+    /// <para>Then: the call returns in under one second, the Task is still waiting, and it succeeds after the other side is disposed.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_待っているあいだ呼び出したスレッドを止めないこと()
+    public async Task AddAsync_DoesNotBlockCallingThreadWhileWaiting()
     {
         await using TempDirectory work = TempDirectory.Create();
         ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -344,7 +344,7 @@ public sealed class LockWaitTests
             Task waiting = waiter.AddAsync("a.txt", content);
             long returned = Environment.TickCount64 - started;
 
-            Assert.True(returned < 1000, "呼び出しが " + returned + "ms 止まった");
+            Assert.True(returned < 1000, "The call blocked for " + returned + " ms");
             Assert.False(waiting.IsCompleted);
             await holder.DisposeAsync();
             await waiting;

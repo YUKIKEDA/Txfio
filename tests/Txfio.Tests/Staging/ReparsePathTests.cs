@@ -6,15 +6,15 @@ namespace Txfio.Tests.Staging;
 public sealed class ReparsePathTests
 {
     /// <summary>
-    /// 外を指すジャンクション経由の Add は書けない
+    /// An Add through a junction that points outside cannot write.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダ内のジャンクションが、外のディレクトリを指している</para>
-    /// <para>手順: その配下へ AddAsync する</para>
-    /// <para>期待: InvalidOperationException になり、外は空で、.txnew も無い</para>
+    /// <para>Given: a junction in the work folder points to a directory outside.</para>
+    /// <para>When: AddAsync is called on a path under it.</para>
+    /// <para>Then: InvalidOperationException, the outside is empty, and there is no .txnew.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task AddAsync_外を指すジャンクション経由では書けないこと()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task AddAsync_CannotWriteThroughJunctionPointingOutside()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -41,15 +41,15 @@ public sealed class ReparsePathTests
     }
 
     /// <summary>
-    /// 内側を指すジャンクション経由の Add も書けない
+    /// An Add through a junction that points inside cannot write either.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダ内のジャンクションが、同じワークフォルダ内のディレクトリを指している</para>
-    /// <para>手順: その配下へ AddAsync する</para>
-    /// <para>期待: InvalidOperationException になり、指しているディレクトリにファイルは無い</para>
+    /// <para>Given: a junction in the work folder points to a directory in the same work folder.</para>
+    /// <para>When: AddAsync is called on a path under it.</para>
+    /// <para>Then: InvalidOperationException, and the directory it points to has no file.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task AddAsync_内側を指すジャンクション経由でも書けないこと()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task AddAsync_CannotWriteThroughJunctionPointingInside()
     {
         await using TempDirectory work = TempDirectory.Create();
         string real = System.IO.Path.Combine(work.Path, "real");
@@ -75,15 +75,15 @@ public sealed class ReparsePathTests
     }
 
     /// <summary>
-    /// ジャンクションの先に無いパスでも拒否する
+    /// It is rejected even for a path that does not exist beyond the junction.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダ内のジャンクションが、外のディレクトリを指している</para>
-    /// <para>手順: ジャンクションの先に無いディレクトリ配下へ AddAsync する</para>
-    /// <para>期待: InvalidOperationException になり、外にディレクトリもファイルも無い</para>
+    /// <para>Given: a junction in the work folder points to a directory outside.</para>
+    /// <para>When: AddAsync is called on a path under a directory that does not exist beyond the junction.</para>
+    /// <para>Then: InvalidOperationException, and there is no directory or file outside.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task AddAsync_ジャンクションの先に無いパスでも拒否すること()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task AddAsync_RejectsMissingPathBeyondJunction()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -108,15 +108,15 @@ public sealed class ReparsePathTests
     }
 
     /// <summary>
-    /// ワークフォルダ自身がジャンクションでも直下には書ける
+    /// Even if the work folder itself is a junction, paths directly under it can be written.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 実ディレクトリへのジャンクションがある</para>
-    /// <para>手順: そのジャンクションをワークフォルダにして、直下へ AddAsync する</para>
-    /// <para>期待: pending は Add 1 件で、実ディレクトリに .txnew があり、対象ファイルは無い</para>
+    /// <para>Given: a junction to a real directory.</para>
+    /// <para>When: the junction is used as the work folder, and AddAsync is called directly under it.</para>
+    /// <para>Then: one pending Add, the real directory has the .txnew, and the target file does not exist.</para>
     /// </remarks>
-    [WindowsFact("ジャンクション（mklink /J）")]
-    public async Task BeginAsync_ワークフォルダがジャンクションでも直下へAddできること()
+    [WindowsFact("Junctions (mklink /J)")]
+    public async Task BeginAsync_CanAddUnderWorkFolderThatIsJunction()
     {
         await using TempDirectory parent = TempDirectory.Create();
         string real = System.IO.Path.Combine(parent.Path, "real");
@@ -141,15 +141,15 @@ public sealed class ReparsePathTests
     }
 
     /// <summary>
-    /// 渡したパスがワークフォルダの外なら ArgumentException のまま
+    /// A path passed outside the work folder stays ArgumentException.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダと、その外のディレクトリがある</para>
-    /// <para>手順: 外の絶対パスへ AddAsync する</para>
-    /// <para>期待: ArgumentException になり、外にファイルは無い</para>
+    /// <para>Given: a work folder, and a directory outside it.</para>
+    /// <para>When: AddAsync is called with an absolute path outside.</para>
+    /// <para>Then: ArgumentException, and there is no file outside.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_渡したパスがワークフォルダの外ならArgumentExceptionになること()
+    public async Task AddAsync_PassedPathOutsideWorkFolderThrowsArgumentException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();

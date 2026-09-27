@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class DeleteTreeTests
 {
     /// <summary>
-    /// 未コミット Dispose では木が残る
+    /// Dispose without commit keeps the tree.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子ファイルがあるディレクトリを DeleteTree した直後である</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: ディレクトリと子ファイルが残る</para>
+    /// <para>Given: right after DeleteTree of a directory with a child file.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: the directory and the child file remain.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_未コミットDisposeでは木が残ること()
+    public async Task DeleteTreeAsync_DisposeWithoutCommitKeepsTree()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "tree");
@@ -30,15 +30,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// 全削除はジャーナル 1 件で、実体はまだ残る
+    /// DeleteTree is one journal entry, and nothing on disk is deleted yet.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子ディレクトリとファイルがある</para>
-    /// <para>手順: DeleteTreeAsync する</para>
-    /// <para>期待: pending は DeleteTree 1 件で、実体は残る</para>
+    /// <para>Given: a child directory and files exist.</para>
+    /// <para>When: DeleteTreeAsync is called.</para>
+    /// <para>Then: one pending DeleteTree, and everything on disk remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_配下があっても1件のDeleteTreeになること()
+    public async Task DeleteTreeAsync_IsOneDeleteTreeEvenWithChildren()
     {
         await using TempDirectory work = TempDirectory.Create();
         string nested = System.IO.Path.Combine(work.Path, "tree", "child");
@@ -54,15 +54,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// 空ディレクトリも全削除として予約できる
+    /// An empty directory can be scheduled with DeleteTree too.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空ディレクトリがある</para>
-    /// <para>手順: DeleteTreeAsync する</para>
-    /// <para>期待: pending は DeleteTree 1 件である</para>
+    /// <para>Given: an empty directory exists.</para>
+    /// <para>When: DeleteTreeAsync is called.</para>
+    /// <para>Then: one pending DeleteTree.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_空ディレクトリを予約できること()
+    public async Task DeleteTreeAsync_SchedulesEmptyDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -73,15 +73,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// ファイルの全削除は未対応
+    /// DeleteTree of a file is not supported.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルがある</para>
-    /// <para>手順: そのファイルを DeleteTreeAsync する</para>
-    /// <para>期待: UnsupportedOperationException になり、pending は空である</para>
+    /// <para>Given: a file exists.</para>
+    /// <para>When: DeleteTreeAsync is called on the file.</para>
+    /// <para>Then: UnsupportedOperationException, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_ファイルはUnsupportedOperationExceptionになること()
+    public async Task DeleteTreeAsync_FileThrowsUnsupportedOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "file");
@@ -91,15 +91,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// 無いディレクトリは予約できない
+    /// A missing directory cannot be scheduled.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象ディレクトリが無い</para>
-    /// <para>手順: DeleteTreeAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は対象である</para>
+    /// <para>Given: the target directory does not exist.</para>
+    /// <para>When: DeleteTreeAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is the target.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_無いディレクトリはExternalConflictExceptionになること()
+    public async Task DeleteTreeAsync_MissingDirectoryThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string missing = System.IO.Path.Combine(work.Path, "missing");
@@ -110,15 +110,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// 配下に操作があると全削除できない
+    /// DeleteTree is not possible with an operation under the directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 配下ファイルを Delete している</para>
-    /// <para>手順: 親を DeleteTreeAsync する</para>
-    /// <para>期待: InvalidOperationException になり、先の Delete は残る</para>
+    /// <para>Given: a file under it is deleted.</para>
+    /// <para>When: DeleteTreeAsync is called on the parent.</para>
+    /// <para>Then: InvalidOperationException, and the earlier Delete remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_配下に操作があるとInvalidOperationExceptionになること()
+    public async Task DeleteTreeAsync_OperationUnderDirectoryThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "tree");
@@ -133,15 +133,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// 全削除のあとの配下操作は拒否する
+    /// Operations under a DeleteTree are rejected.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリを DeleteTree している</para>
-    /// <para>手順: 配下へ Add する</para>
-    /// <para>期待: InvalidOperationException になり、DeleteTree は残る</para>
+    /// <para>Given: a directory is scheduled with DeleteTree.</para>
+    /// <para>When: a file is added under it.</para>
+    /// <para>Then: InvalidOperationException, and the DeleteTree remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_全削除の配下はInvalidOperationExceptionになること()
+    public async Task AddAsync_UnderDeleteTreeThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -155,15 +155,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// ディレクトリ Move の移動先を全削除すると、元ディレクトリの DeleteTree になる
+    /// DeleteTree of the destination of a directory Move becomes a DeleteTree of the source directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 中身があるディレクトリを Move している</para>
-    /// <para>手順: 移動先を DeleteTreeAsync する</para>
-    /// <para>期待: pending は元ディレクトリの DeleteTree 1 件である</para>
+    /// <para>Given: a directory with contents is moved.</para>
+    /// <para>When: DeleteTreeAsync is called on the destination.</para>
+    /// <para>Then: one pending DeleteTree of the source directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_ディレクトリMoveの移動先は元のDeleteTreeになること()
+    public async Task DeleteTreeAsync_DirectoryMoveDestinationBecomesSourceDeleteTree()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "tree");
@@ -180,15 +180,15 @@ public sealed class DeleteTreeTests
     }
 
     /// <summary>
-    /// ディレクトリ Move の配下は全削除できない
+    /// Something under a directory Move cannot be deleted with DeleteTree.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリを Move している</para>
-    /// <para>手順: 移動元の子ディレクトリを DeleteTreeAsync する</para>
-    /// <para>期待: InvalidOperationException になり、Move は残る</para>
+    /// <para>Given: a directory is moved.</para>
+    /// <para>When: DeleteTreeAsync is called on a child directory of the source.</para>
+    /// <para>Then: InvalidOperationException, and the Move remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_ディレクトリMoveの配下はInvalidOperationExceptionになること()
+    public async Task DeleteTreeAsync_UnderDirectoryMoveThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree", "child"));

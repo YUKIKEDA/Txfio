@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitDirectoryDeleteTests
 {
     /// <summary>
-    /// 空ディレクトリのコミットは対象を消し、ジャーナルを残さない
+    /// Committing an empty directory deletes the target and leaves no journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空ディレクトリを Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded でディレクトリも journal も無い</para>
+    /// <para>Given: an empty directory is deleted.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and neither the directory nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_空ディレクトリが消えること()
+    public async Task CommitAsync_EmptyDirectoryIsGone()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -28,15 +28,15 @@ public sealed class CommitDirectoryDeleteTests
     }
 
     /// <summary>
-    /// 子と親を Delete したコミットは両方消す
+    /// Committing Deletes of a child and its parent deletes both.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 直下ファイルと親ディレクトリを Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で子も親も無い</para>
+    /// <para>Given: a direct child file and its parent directory are deleted.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and neither the child nor the parent exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_子と親のDeleteで両方消えること()
+    public async Task CommitAsync_DeletesChildAndParent()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -54,15 +54,15 @@ public sealed class CommitDirectoryDeleteTests
     }
 
     /// <summary>
-    /// Move 出しのあと親を Delete したコミットは先へ移し、元のディレクトリを消す
+    /// Committing a Move out followed by a Delete of the parent moves the file and deletes the original directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 直下ファイルを外へ Move し、親を Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: 先に内容があり、元のディレクトリは無い</para>
+    /// <para>Given: a direct child file is moved out, and the parent is deleted.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: the destination has the content, and the original directory is gone.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Move出しのあと親が消えること()
+    public async Task CommitAsync_ParentIsGoneAfterMoveOut()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -79,15 +79,15 @@ public sealed class CommitDirectoryDeleteTests
     }
 
     /// <summary>
-    /// コミット前に直下へ外部がファイルを足すと Failed で、ディレクトリは残る
+    /// If a file is added directly under it externally before commit, the result is Failed and the directory remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空ディレクトリを Delete したあと、外部が直下にファイルを作っている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で、ディレクトリは残る</para>
+    /// <para>Given: after an empty directory is deleted, a file is created directly under it externally.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, and the directory remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_外部が子を足すとFailedになること()
+    public async Task CommitAsync_FailsWhenChildAddedExternally()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");

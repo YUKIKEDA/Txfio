@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverLivenessTests
 {
     /// <summary>
-    /// 変更中のトランザクションがあれば、Recover は哨兵を取れず何もしない
+    /// While a transaction is making changes, Recover cannot take the work-folder lock and does nothing.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションが Add と CreateDirectory をし、作ったディレクトリへ素のファイル API で書いている</para>
-    /// <para>手順: Dispose もコミットもしないまま RecoverAsync し、そのあと同じトランザクションで CommitAsync する</para>
-    /// <para>期待: LockContentionException（Path はワークフォルダ）で、ジャーナル、.txnew、ディレクトリの中身が残り、コミットは Succeeded になる</para>
+    /// <para>Given: a transaction has an Add and a CreateDirectory, and has written into the created directory with the plain file API.</para>
+    /// <para>When: RecoverAsync runs without Dispose or commit, then CommitAsync runs on the same transaction.</para>
+    /// <para>Then: LockContentionException (Path is the work folder); the journal, the .txnew, and the directory contents remain; and the commit is Succeeded.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_変更中のトランザクションがあるとLockContentionExceptionで何もしないこと()
+    public async Task RecoverAsync_DoesNothingWithLockContentionWhileTransactionIsActive()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -42,15 +42,15 @@ public sealed class RecoverLivenessTests
     }
 
     /// <summary>
-    /// 生きているトランザクションの生存ロックはジャーナルと同じ名前で、終われば消える
+    /// The liveness lock of a live transaction has the same name as its journal, and is gone when the transaction ends.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションを開始している</para>
-    /// <para>手順: コミット前と、空のまま CommitAsync したあとで、.txfio の tx-*.lock を数える</para>
-    /// <para>期待: コミット前はジャーナルと同じ名前の 1 つがあり、コミット後は無い</para>
+    /// <para>Given: a transaction has begun.</para>
+    /// <para>When: the tx-*.lock files in .txfio are counted before commit and after an empty CommitAsync.</para>
+    /// <para>Then: before commit there is one with the same name as the journal, and after commit there is none.</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_生存ロックはジャーナルと組になりコミットで消えること()
+    public async Task BeginAsync_LivenessLockPairsWithJournalAndGoesAwayAtCommit()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -66,15 +66,15 @@ public sealed class RecoverLivenessTests
     }
 
     /// <summary>
-    /// 破棄したトランザクションの生存ロックは消え、Recover するものは無い
+    /// The liveness lock of a discarded transaction is gone, and there is nothing to recover.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add したトランザクションがある</para>
-    /// <para>手順: コミットせずに Dispose し、RecoverAsync する</para>
-    /// <para>期待: tx-*.lock が無く、NoPendingTransactions になる</para>
+    /// <para>Given: a transaction with an Add.</para>
+    /// <para>When: it is disposed without commit, and RecoverAsync runs.</para>
+    /// <para>Then: there is no tx-*.lock, and the result is NoPendingTransactions.</para>
     /// </remarks>
     [Fact]
-    public async Task DisposeAsync_破棄すると生存ロックが消えること()
+    public async Task DisposeAsync_DiscardRemovesLivenessLock()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -89,15 +89,15 @@ public sealed class RecoverLivenessTests
     }
 
     /// <summary>
-    /// Committing を書いたあとでも、持ち主が生きているあいだは Recover しない
+    /// Even after Committing is written, Recover does not run while the owner is alive.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add を AfterCommitting で止め、まだ Dispose していない</para>
-    /// <para>手順: RecoverAsync し、Dispose してからもう一度 RecoverAsync する</para>
-    /// <para>期待: 1 回目は LockContentionException で対象は無く、2 回目は RolledForward で対象は Add の内容になる</para>
+    /// <para>Given: an Add is stopped at AfterCommitting and not disposed yet.</para>
+    /// <para>When: RecoverAsync runs, the transaction is disposed, and RecoverAsync runs again.</para>
+    /// <para>Then: the first is LockContentionException and the target does not exist; the second is RolledForward and the target has the Add content.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_Committingでも持ち主が生きていれば触れないこと()
+    public async Task RecoverAsync_DoesNotTouchCommittingWhileOwnerIsAlive()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -121,15 +121,15 @@ public sealed class RecoverLivenessTests
     }
 
     /// <summary>
-    /// 生きているトランザクションを飛ばしても、落ちたトランザクションは復旧する
+    /// Even when a live transaction is skipped, a crashed transaction is recovered.
     /// </summary>
     /// <remarks>
-    /// <para>前提: まだ操作していない生きているトランザクションと、そのあと AfterCommitting で止めて Dispose したトランザクションがある</para>
-    /// <para>手順: RecoverAsync し、生きている方で Add してコミットする</para>
-    /// <para>期待: RolledForward で止めた Add が反映され、生きている方のジャーナルと生存ロックは残り、コミットは Succeeded になる</para>
+    /// <para>Given: a live transaction with no operations yet, and another transaction stopped at AfterCommitting and disposed.</para>
+    /// <para>When: RecoverAsync runs, and the live one adds and commits.</para>
+    /// <para>Then: RolledForward applies the stopped Add, the live one's journal and liveness lock remain, and its commit is Succeeded.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_落ちた方だけを復旧すること()
+    public async Task RecoverAsync_RecoversOnlyCrashedTransaction()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -156,15 +156,15 @@ public sealed class RecoverLivenessTests
     }
 
     /// <summary>
-    /// 生存ロックの無いジャーナルは、落ちたトランザクションとしてロールバックする
+    /// A journal without a liveness lock is rolled back as a crashed transaction.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 未コミットのジャーナルだけがあり、tx-*.lock は無い（生存ロック導入前の版が残したジャーナル）</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で、ジャーナルも tx-*.lock も残らない</para>
+    /// <para>Given: only an uncommitted journal exists, and there is no tx-*.lock (a journal left by a version before liveness locks).</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, and neither the journal nor any tx-*.lock remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_生存ロックが無いジャーナルはロールバックすること()
+    public async Task RecoverAsync_RollsBackJournalWithoutLivenessLock()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");

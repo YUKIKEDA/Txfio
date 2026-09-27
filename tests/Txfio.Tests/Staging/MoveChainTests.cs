@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class MoveChainTests
 {
     /// <summary>
-    /// 空いている端から呼ぶと、別ファイルの Move は 2 件のまま残る
+    /// When called from the free end, Moves of different files stay as two.
     /// </summary>
     /// <remarks>
-    /// <para>前提: log.txt と log.1 があり、log.2 は無い</para>
-    /// <para>手順: Move(log.1→log.2) のあと Move(log→log.1) する</para>
-    /// <para>期待: pending は 2 件の Move で、ディスク上のファイルはまだ動いていない</para>
+    /// <para>Given: log.txt and log.1 exist, and log.2 does not.</para>
+    /// <para>When: Move(log.1→log.2), then Move(log→log.1).</para>
+    /// <para>Then: two pending Moves, and the files on disk have not moved yet.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_別ファイルの連鎖は畳まずに残ること()
+    public async Task MoveAsync_ChainOfDifferentFilesIsNotFolded()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "log.txt"), "current");
@@ -36,15 +36,15 @@ public sealed class MoveChainTests
     }
 
     /// <summary>
-    /// ファイル Move の移動元へは、ディスク上にファイルがあっても Add できる
+    /// An Add to the source of a file Move works even though the file is on disk.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を a.bak へ Move している</para>
-    /// <para>手順: a.txt へ AddAsync する</para>
-    /// <para>期待: pending は Move と Add で、a.txt の旧内容はディスクに残る</para>
+    /// <para>Given: a.txt is moved to a.bak.</para>
+    /// <para>When: AddAsync is called on a.txt.</para>
+    /// <para>Then: the pending changes are the Move and the Add, and the old content of a.txt remains on disk.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_ファイルMoveの移動元へ書けること()
+    public async Task AddAsync_CanWriteToFileMoveSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -64,15 +64,15 @@ public sealed class MoveChainTests
     }
 
     /// <summary>
-    /// ディレクトリ Move の移動元への Add は失敗する
+    /// An Add to the source of a directory Move fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: dir を dir.bak へ Move している</para>
-    /// <para>手順: dir へ AddAsync する</para>
-    /// <para>期待: InvalidOperationException で、pending は Move のまま</para>
+    /// <para>Given: dir is moved to dir.bak.</para>
+    /// <para>When: AddAsync is called on dir.</para>
+    /// <para>Then: InvalidOperationException, and the pending change stays the Move.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_ディレクトリMoveの移動元は失敗すること()
+    public async Task AddAsync_DirectoryMoveSourceFails()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "dir"));
@@ -87,15 +87,15 @@ public sealed class MoveChainTests
     }
 
     /// <summary>
-    /// 移動先が存在し、別の Move の移動元でもないときは失敗する
+    /// A Move fails when the destination exists and is not the source of another Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt がある</para>
-    /// <para>手順: Move(a→b) する</para>
-    /// <para>期待: ExternalConflictException で、Path は移動先、pending は空</para>
+    /// <para>Given: a.txt and b.txt exist.</para>
+    /// <para>When: Move(a→b).</para>
+    /// <para>Then: ExternalConflictException with Path set to the destination, and no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先が別のMoveの移動元でなければ失敗すること()
+    public async Task MoveAsync_FailsWhenDestinationIsNotAnotherMoveSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
@@ -110,15 +110,15 @@ public sealed class MoveChainTests
     }
 
     /// <summary>
-    /// 互いに移動先になる Move は循環として受け付けない
+    /// Moves that are each other's destinations are rejected as a cycle.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt があり、b.txt は無い</para>
-    /// <para>手順: Move(a→b) のあと Move(b→a) する</para>
-    /// <para>期待: 2 件目は InvalidOperationException で、pending は 1 件のまま、ファイルは動いていない</para>
+    /// <para>Given: a.txt exists, and b.txt does not.</para>
+    /// <para>When: Move(a→b), then Move(b→a).</para>
+    /// <para>Then: the second throws InvalidOperationException, the pending changes stay one, and no file has moved.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_循環は受け付けないこと()
+    public async Task MoveAsync_RejectsCycle()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -136,15 +136,15 @@ public sealed class MoveChainTests
     }
 
     /// <summary>
-    /// 一時名を挟んだ入れ替えは、畳み込みが循環になるので 3 件目で失敗する
+    /// A swap through a temporary name fails at the third Move, because folding makes a cycle.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt があり、tmp は無い</para>
-    /// <para>手順: Move(a→tmp)、Move(b→a)、Move(tmp→b) の順に呼ぶ</para>
-    /// <para>期待: 3 件目は InvalidOperationException で、pending は先の 2 件の Move のまま</para>
+    /// <para>Given: a.txt and b.txt exist, and tmp does not.</para>
+    /// <para>When: Move(a→tmp), Move(b→a), and Move(tmp→b) are called in order.</para>
+    /// <para>Then: the third throws InvalidOperationException, and the pending changes stay the first two Moves.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_一時名の入れ替えは3件目で失敗すること()
+    public async Task MoveAsync_SwapThroughTemporaryNameFailsAtThirdMove()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
@@ -162,15 +162,15 @@ public sealed class MoveChainTests
     }
 
     /// <summary>
-    /// ディレクトリも、空いている端からなら連鎖を残す
+    /// Directories also keep a chain when called from the free end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: old と mid があり、next は無い</para>
-    /// <para>手順: Move(mid→next) のあと Move(old→mid) する</para>
-    /// <para>期待: pending は 2 件のディレクトリ Move である</para>
+    /// <para>Given: old and mid exist, and next does not.</para>
+    /// <para>When: Move(mid→next), then Move(old→mid).</para>
+    /// <para>Then: two pending directory Moves.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ディレクトリの連鎖も畳まずに残ること()
+    public async Task MoveAsync_DirectoryChainIsNotFolded()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "old"));

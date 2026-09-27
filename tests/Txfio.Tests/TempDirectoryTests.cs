@@ -5,15 +5,15 @@ namespace Txfio.Tests;
 public sealed class TempDirectoryTests
 {
     /// <summary>
-    /// 一時ディレクトリは作成でき、破棄すると消える
+    /// A temporary directory can be created, and is deleted on dispose.
     /// </summary>
     /// <remarks>
-    /// <para>前提: なし</para>
-    /// <para>手順: Create したあと DisposeAsync する</para>
-    /// <para>期待: 作成直後はディレクトリが存在し、破棄後は存在しない</para>
+    /// <para>Given: nothing.</para>
+    /// <para>When: Create, then DisposeAsync.</para>
+    /// <para>Then: the directory exists right after creation, and does not after disposal.</para>
     /// </remarks>
     [Fact]
-    public async Task Createすると一意のディレクトリができ破棄で消えること()
+    public async Task Create_MakesUniqueDirectoryThatDisposeDeletes()
     {
         string path;
         await using (TempDirectory dir = TempDirectory.Create())

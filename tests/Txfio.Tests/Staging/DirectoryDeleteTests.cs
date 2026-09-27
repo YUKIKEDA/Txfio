@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class DirectoryDeleteTests
 {
     /// <summary>
-    /// 未コミット Dispose ではディレクトリが残る
+    /// Dispose without commit keeps the directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空ディレクトリを Delete した直後である</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: ディレクトリが残る</para>
+    /// <para>Given: right after a Delete of an empty directory.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: the directory remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_未コミットDisposeではディレクトリが残ること()
+    public async Task DeleteAsync_DisposeWithoutCommitKeepsDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -27,15 +27,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// 直下に未追跡のファイルがあると失敗する
+    /// It fails when there is an untracked file directly under the directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリ直下にファイルがある</para>
-    /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
+    /// <para>Given: a file directly under the directory.</para>
+    /// <para>When: DeleteAsync is called on the parent.</para>
+    /// <para>Then: ExternalConflictException, and Path is the parent directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_未追跡の子ファイルがあるとExternalConflictExceptionになること()
+    public async Task DeleteAsync_UntrackedChildFileThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -47,15 +47,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// 直下に未追跡のディレクトリがあると失敗する
+    /// It fails when there is an untracked directory directly under the directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリ直下に空の子ディレクトリがある</para>
-    /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
+    /// <para>Given: an empty child directory directly under the directory.</para>
+    /// <para>When: DeleteAsync is called on the parent.</para>
+    /// <para>Then: ExternalConflictException, and Path is the parent directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_未追跡の子ディレクトリがあるとExternalConflictExceptionになること()
+    public async Task DeleteAsync_UntrackedChildDirectoryThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -66,15 +66,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// 子ファイルを Delete してから親を Delete できる
+    /// After a child file is deleted, the parent can be deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 直下ファイルを Delete している</para>
-    /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: pending は Delete 2 件で、実体はまだ残る</para>
+    /// <para>Given: a direct child file is deleted.</para>
+    /// <para>When: DeleteAsync is called on the parent.</para>
+    /// <para>Then: two pending Deletes, and everything on disk still remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_子を予約してから親も予約できること()
+    public async Task DeleteAsync_SchedulesParentAfterChild()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -91,15 +91,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// Move 出しのあと親を Delete できる
+    /// After a Move out, the parent can be deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 直下ファイルをディレクトリの外へ Move している</para>
-    /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: 例外にならず、ディレクトリは残る</para>
+    /// <para>Given: a direct child file is moved out of the directory.</para>
+    /// <para>When: DeleteAsync is called on the parent.</para>
+    /// <para>Then: no exception, and the directory remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_Move出しのあと親を予約できること()
+    public async Task DeleteAsync_SchedulesParentAfterMoveOut()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -114,15 +114,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// 削除予約済みディレクトリへの Add は失敗する
+    /// An Add into a directory scheduled for deletion fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空ディレクトリを Delete している</para>
-    /// <para>手順: 直下へ AddAsync する</para>
-    /// <para>期待: InvalidOperationException になる</para>
+    /// <para>Given: an empty directory is deleted.</para>
+    /// <para>When: AddAsync is called directly under it.</para>
+    /// <para>Then: InvalidOperationException.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_削除予約済みディレクトリへの追加はInvalidOperationExceptionになること()
+    public async Task AddAsync_IntoDirectoryScheduledForDeletionThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -133,15 +133,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// 削除するディレクトリへの Move 入りは失敗する
+    /// A Move into a directory being deleted fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空ディレクトリを Delete している</para>
-    /// <para>手順: 直下へ MoveAsync する</para>
-    /// <para>期待: InvalidOperationException になる</para>
+    /// <para>Given: an empty directory is deleted.</para>
+    /// <para>When: MoveAsync targets a path directly under it.</para>
+    /// <para>Then: InvalidOperationException.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_削除予約済みディレクトリへの移動はInvalidOperationExceptionになること()
+    public async Task MoveAsync_IntoDirectoryScheduledForDeletionThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -152,15 +152,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// メタデータフォルダの Delete は失敗する
+    /// A Delete of the metadata folder fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションを開始している</para>
-    /// <para>手順: .txfio を DeleteAsync する</para>
-    /// <para>期待: InvalidOperationException になる</para>
+    /// <para>Given: a transaction has begun.</para>
+    /// <para>When: DeleteAsync is called on .txfio.</para>
+    /// <para>Then: InvalidOperationException.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_メタデータフォルダだとInvalidOperationExceptionになること()
+    public async Task DeleteAsync_MetadataFolderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -168,15 +168,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// メタデータフォルダ配下の Add は失敗する
+    /// An Add under the metadata folder fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションを開始している</para>
-    /// <para>手順: .txfio 配下へ AddAsync する</para>
-    /// <para>期待: InvalidOperationException になり .txnew は無い</para>
+    /// <para>Given: a transaction has begun.</para>
+    /// <para>When: AddAsync is called on a path under .txfio.</para>
+    /// <para>Then: InvalidOperationException, and there is no .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_メタデータフォルダ配下だとInvalidOperationExceptionになること()
+    public async Task AddAsync_UnderMetadataFolderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -187,15 +187,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// メタデータフォルダ配下の Update は失敗する
+    /// An Update under the metadata folder fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: .txfio 配下にファイルがある</para>
-    /// <para>手順: UpdateAsync する</para>
-    /// <para>期待: InvalidOperationException になり、ファイルは残る</para>
+    /// <para>Given: a file exists under .txfio.</para>
+    /// <para>When: UpdateAsync is called.</para>
+    /// <para>Then: InvalidOperationException, and the file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task Update_メタデータフォルダ配下だとInvalidOperationExceptionになること()
+    public async Task Update_UnderMetadataFolderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
@@ -209,15 +209,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// メタデータフォルダ配下への Move は失敗する
+    /// A Move to a path under the metadata folder fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダにファイルがある</para>
-    /// <para>手順: .txfio 配下へ MoveAsync する</para>
-    /// <para>期待: InvalidOperationException になる</para>
+    /// <para>Given: a file exists in the work folder.</para>
+    /// <para>When: MoveAsync targets a path under .txfio.</para>
+    /// <para>Then: InvalidOperationException.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_メタデータフォルダ配下だとInvalidOperationExceptionになること()
+    public async Task MoveAsync_UnderMetadataFolderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -228,15 +228,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// メタデータフォルダ配下の Delete は失敗する
+    /// A Delete under the metadata folder fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: .txfio 配下にファイルがある</para>
-    /// <para>手順: そのパスを DeleteAsync する</para>
-    /// <para>期待: InvalidOperationException になる</para>
+    /// <para>Given: a file exists under .txfio.</para>
+    /// <para>When: DeleteAsync is called on that path.</para>
+    /// <para>Then: InvalidOperationException.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_メタデータフォルダ配下だとInvalidOperationExceptionになること()
+    public async Task DeleteAsync_UnderMetadataFolderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
@@ -246,15 +246,15 @@ public sealed class DirectoryDeleteTests
     }
 
     /// <summary>
-    /// 残っている Add がある親ディレクトリは Delete できない
+    /// A parent directory with a remaining Add cannot be deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 直下へ Add している</para>
-    /// <para>手順: 親を DeleteAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
+    /// <para>Given: a file is added directly under it.</para>
+    /// <para>When: DeleteAsync is called on the parent.</para>
+    /// <para>Then: ExternalConflictException, and Path is the parent directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_残るAddがある親はExternalConflictExceptionになること()
+    public async Task DeleteAsync_ParentWithRemainingAddThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");

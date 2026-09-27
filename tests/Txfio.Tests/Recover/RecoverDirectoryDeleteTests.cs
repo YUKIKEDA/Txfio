@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverDirectoryDeleteTests
 {
     /// <summary>
-    /// 未コミットのディレクトリ Delete の Recover は対象を残す
+    /// Recover of an uncommitted directory Delete keeps the target.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、ディレクトリ Delete の journal と空ディレクトリが残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で journal は消え、ディレクトリは残る</para>
+    /// <para>Given: no live transaction, and a directory Delete journal and an empty directory remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, the journal is deleted, and the directory remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_未コミットのディレクトリDeleteは対象を残してRolledBackになること()
+    public async Task RecoverAsync_UncommittedDirectoryDeleteKeepsTargetAndRollsBack()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverDirectoryDeleteFiles leftover = await LeftoverDirectoryDeleteFiles.WriteDirectoryDeleteAsync(
@@ -28,15 +28,15 @@ public sealed class RecoverDirectoryDeleteTests
     }
 
     /// <summary>
-    /// Committing の空ディレクトリ Delete は Recover が削除を完了する
+    /// Recover finishes a Committing Delete of an empty directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing のディレクトリ Delete journal と空ディレクトリがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward でディレクトリも journal も無い</para>
+    /// <para>Given: a Committing directory Delete journal and an empty directory.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, and neither the directory nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_Committingの空ディレクトリDeleteを完了してRolledForwardになること()
+    public async Task RecoverAsync_FinishesCommittingEmptyDirectoryDeleteAndRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverDirectoryDeleteFiles leftover = await LeftoverDirectoryDeleteFiles.WriteDirectoryDeleteAsync(
@@ -51,15 +51,15 @@ public sealed class RecoverDirectoryDeleteTests
     }
 
     /// <summary>
-    /// Committing で直下が空でなければディレクトリを残し、journal は消す
+    /// With Committing, if the directory has direct children, it keeps the directory and deletes the journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing のディレクトリ Delete journal があり、直下にファイルがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: ConflictDetected でディレクトリは残り、journal は消える</para>
+    /// <para>Given: a Committing directory Delete journal exists, and a file is directly under the directory.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: ConflictDetected, the directory remains, and the journal is deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_Committingのディレクトリに子があるとConflictDetectedになること()
+    public async Task RecoverAsync_CommittingDirectoryWithChildIsConflictDetected()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverDirectoryDeleteFiles leftover = await LeftoverDirectoryDeleteFiles.WriteDirectoryDeleteAsync(
