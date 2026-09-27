@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// ワークフォルダに対する 1 件のトランザクション
+/// One transaction on a work folder.
 /// </summary>
 internal sealed partial class Transaction : ITransaction
 {
@@ -15,7 +15,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly TimeSpan _lockWait;
     private readonly ExternalChangeSet? _externalChanges;
 
-    // ジャーナルに書いてあると分かっている行と作成ディレクトリ（分からなくなったら null にして全体を書き直す）
+    // The rows and created directories known to be in the journal (set to null when unknown, to rewrite the whole journal).
     private JournalOperation[]? _persistedRows = Array.Empty<JournalOperation>();
     private string[]? _persistedDirectories = Array.Empty<string>();
     private FileStream? _liveness;
@@ -26,15 +26,15 @@ internal sealed partial class Transaction : ITransaction
     private LockAttempt _lockAttempt;
 
     /// <summary>
-    /// 指定したワークフォルダとジャーナルでトランザクションを開始する
+    /// Initializes a new instance of the <see cref="Transaction"/> class on the given work folder and journal.
     /// </summary>
-    /// <param name="workFolder">対象のワークフォルダ</param>
-    /// <param name="transactionId">このトランザクションの ID</param>
-    /// <param name="journalPath">このトランザクションのジャーナルファイル</param>
-    /// <param name="liveness">トランザクションが終わるまで持つ生存ロック</param>
-    /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限</param>
-    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
-    /// <param name="faults">このトランザクションの失敗と途中停止</param>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="transactionId">The ID of this transaction.</param>
+    /// <param name="journalPath">The journal file of this transaction.</param>
+    /// <param name="liveness">The liveness lock held until the transaction ends.</param>
+    /// <param name="lockWait">How long each public method call waits when a lock cannot be taken.</param>
+    /// <param name="detectExternalChanges">When <see langword="true"/>, an Update whose file differs from the record after staging fails before commit.</param>
+    /// <param name="faults">The failures and partial stops of this transaction.</param>
     internal Transaction(
         string workFolder,
         Guid transactionId,
@@ -86,7 +86,7 @@ internal sealed partial class Transaction : ITransaction
             return;
         }
 
-        // Committing を書いたあとはロールバックしない（ジャーナルを残し、次の Recover が進める）
+        // After Committing is written, do not roll back (keep the journal; the next Recover rolls forward).
         if (_faults.ShouldSkipRollback || _committingWritten)
         {
             _locks.Release();
@@ -128,7 +128,7 @@ internal sealed partial class Transaction : ITransaction
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
-                    // ジャーナルは残し、Dispose からは投げない
+                    // Keep the journal, and do not throw from Dispose.
                 }
             }
         }
@@ -171,15 +171,15 @@ internal sealed partial class Transaction : ITransaction
         return true;
     }
 
-    // ロック待ちの期限は、公開呼び出しに入った時点から数え、呼び出しを出ると待たない既定値に戻す
+    // The lock wait deadline counts from entering a public call, and returns to the no-wait default when the call exits.
     private CallScope EnterCall(CancellationToken cancellationToken = default)
     {
         if (Interlocked.Increment(ref _callDepth) != 1)
         {
             Interlocked.Decrement(ref _callDepth);
 
-            // 入れなかった呼び出しは数えず、先に入った呼び出しを続ける
-            throw new InvalidOperationException("同じトランザクションへの呼び出しが重なっています");
+            // A call that could not enter is not counted, and the call that entered first continues.
+            throw new InvalidOperationException("Calls to the same transaction overlap");
         }
 
         _lockAttempt = LockAttempt.Start(_lockWait, cancellationToken);
@@ -197,7 +197,7 @@ internal sealed partial class Transaction : ITransaction
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_committed)
         {
-            throw new InvalidOperationException("このトランザクションは既にコミット済みです");
+            throw new InvalidOperationException("This transaction has already been committed");
         }
     }
 
@@ -216,7 +216,7 @@ internal sealed partial class Transaction : ITransaction
         return _paths.IsFileMoveOut(index);
     }
 
-    // ファイル Move の移動元のパスで、そのあとの中身を決める操作（移動元へ書き直した操作か、別の Move で入ってくる操作）
+    // For the source path of a file Move, the operation that decides the later content (a write back to the source, or a Move coming in from elsewhere).
     private int FindContentAfterMoveOut(string path, int moveOutIndex)
     {
         return _paths.FindContentAfterMoveOut(path, moveOutIndex);
@@ -232,14 +232,14 @@ internal sealed partial class Transaction : ITransaction
         return _paths.FindMoveToIndex(destPath);
     }
 
-    // ジャーナルを消したあとで呼ぶ（先に閉じると、Recover が生きているトランザクションを巻き戻しうる）
+    // Call this after the journal is deleted (closing it first could let Recover roll back a live transaction).
     private void ReleaseLiveness()
     {
         _liveness?.Dispose();
         _liveness = null;
     }
 
-    // 表の末尾に足しただけなら 1 行追記し、それ以外（途中が変わった、Committing）は全体を書き直す
+    // If rows were only added to the end of the table, append one line; otherwise (the middle changed, or Committing), rewrite the whole journal.
     private async Task PersistAsync(bool committing, CancellationToken cancellationToken)
     {
         JournalOperation[] rows = _paths.ToArray();
@@ -257,7 +257,7 @@ internal sealed partial class Transaction : ITransaction
                 return;
             }
 
-            // 追記の途中で失敗したら、書きかけの行が残りうるので次は全体を書き直す
+            // If an append fails partway, a half-written line may remain, so rewrite the whole journal next time.
             _persistedRows = null;
             _persistedDirectories = null;
             await JournalStore.AppendAsync(
@@ -285,16 +285,16 @@ internal sealed partial class Transaction : ITransaction
     }
 
     /// <summary>
-    /// 表を変えてジャーナルを先に書き、そのあと実体を作る（途中で失敗したら、作りかけの実体を消し、表を戻し、書いたジャーナルも戻してから例外を返す）
+    /// Changes the table, writes the journal first, then creates things on disk (on failure partway, deletes what was partly created, restores the table, restores the journal, then throws).
     /// </summary>
     /// <remarks>
-    /// 表を変えてから実体を作る変更はここを通す（ジャーナルが先、実体が後であり、付け替えと Move 先への Update の畳み込みと ZIP の作成は、落ちたあとの戻し方が違うので別にする）
+    /// Changes that create things on disk after changing the table go through here (journal first, disk after; moving staged content, folding an Update at a Move destination, and creating a ZIP are separate because they undo differently after a crash).
     /// </remarks>
-    /// <param name="record">表を変える</param>
-    /// <param name="materialize">ジャーナルを書いたあとで実体を作る（無ければ null）</param>
-    /// <param name="discard">失敗したとき作りかけの実体を消す（無ければ null、<see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> は伝えない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ジャーナルと実体の完了</returns>
+    /// <param name="record">Changes the table.</param>
+    /// <param name="materialize">Creates things on disk after the journal is written (<see langword="null"/> if none).</param>
+    /// <param name="discard">Deletes what was partly created on failure (<see langword="null"/> if none; does not propagate <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the journal and the disk changes are done.</returns>
     private async Task RecordThenMaterializeAsync(
         Action record,
         Func<Task>? materialize,
@@ -331,11 +331,11 @@ internal sealed partial class Transaction : ITransaction
     }
 
     /// <summary>
-    /// 表を変えてジャーナルを書く（書けなければ表を戻して例外を返す）
+    /// Changes the table and writes the journal (if it cannot be written, restores the table and throws).
     /// </summary>
-    /// <param name="record">表を変える</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ジャーナルの書き込みの完了</returns>
+    /// <param name="record">Changes the table.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the journal is written.</returns>
     private Task RecordAsync(Action record, CancellationToken cancellationToken)
     {
         return RecordThenMaterializeAsync(record, materialize: null, discard: null, cancellationToken);
@@ -349,28 +349,28 @@ internal sealed partial class Transaction : ITransaction
         }
         catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            // ジャーナルが残っていれば、次の Recover が消す
+            // If the journal remains, the next Recover deletes them.
         }
     }
 
     /// <summary>
-    /// 公開呼び出しの監視をメソッド終了時に閉じる
+    /// Closes the watch on a public call when the method ends.
     /// </summary>
     private readonly struct CallScope : IDisposable
     {
         private readonly Transaction _transaction;
 
         /// <summary>
-        /// 重なりの監視を始める
+        /// Initializes a new instance of the <see cref="CallScope"/> struct and starts watching for overlaps.
         /// </summary>
-        /// <param name="transaction">対象のトランザクション</param>
+        /// <param name="transaction">The transaction.</param>
         public CallScope(Transaction transaction)
         {
             _transaction = transaction;
         }
 
         /// <summary>
-        /// 公開呼び出しを 1 つ終える
+        /// Ends one public call.
         /// </summary>
         public void Dispose()
         {

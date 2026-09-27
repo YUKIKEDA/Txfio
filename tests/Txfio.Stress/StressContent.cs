@@ -3,12 +3,12 @@ using System.Globalization;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ランダム操作列が書くファイルの中身。長さは帯から選び、バイトは乱数から決まる
+/// The content of files that random sequences write. The length is chosen from bands, and the bytes come from the random source.
 /// </summary>
 internal static class StressContent
 {
     /// <summary>
-    /// 既定の長さの上限。数 MB の帯はここまで
+    /// The default length limit. The several-MB band goes up to here.
     /// </summary>
     public const int DefaultMaxBytes = 4 * 1024 * 1024;
 
@@ -21,11 +21,11 @@ internal static class StressContent
     private const int FewMegabytesMin = 1024 * 1024;
 
     /// <summary>
-    /// 上限までの帯から長さを選び、その長さのバイト列を作る
+    /// Chooses a length from the bands up to the limit, and makes bytes of that length.
     /// </summary>
-    /// <param name="random">長さと中身を決める乱数</param>
-    /// <param name="maxBytes">長さの上限。0 以上</param>
-    /// <returns>作った中身。空のときは長さ 0</returns>
+    /// <param name="random">The random source that decides the length and content.</param>
+    /// <param name="maxBytes">The length limit. 0 or more.</param>
+    /// <returns>The content. Length 0 when empty.</returns>
     public static byte[] Create(Random random, int maxBytes)
     {
         int length = Length(random, maxBytes);
@@ -40,11 +40,11 @@ internal static class StressContent
     }
 
     /// <summary>
-    /// 文字列の列が使うテキスト。既定の上限では空、数文字、数十 KB までで、数 MB は上限を既定より上げたときだけ使う
+    /// Text used by string sequences. With the default limit it is empty, a few characters, or up to tens of KB; several MB is used only when the limit is raised above the default.
     /// </summary>
-    /// <param name="random">長さと中身を決める乱数</param>
-    /// <param name="maxBytes">長さの上限。0 以上</param>
-    /// <returns>ASCII の文字列</returns>
+    /// <param name="random">The random source that decides the length and content.</param>
+    /// <param name="maxBytes">The length limit. 0 or more.</param>
+    /// <returns>An ASCII string.</returns>
     public static string CreateText(Random random, int maxBytes)
     {
         int limit = maxBytes > DefaultMaxBytes ? maxBytes : Math.Min(maxBytes, TensOfKilobytesMax);
@@ -60,13 +60,13 @@ internal static class StressContent
     }
 
     /// <summary>
-    /// 失敗メッセージに出す長さ
+    /// The length shown in failure messages.
     /// </summary>
-    /// <param name="content">中身</param>
-    /// <returns>バイト数</returns>
+    /// <param name="content">The content.</param>
+    /// <returns>The number of bytes.</returns>
     public static string Describe(byte[] content)
     {
-        return content.Length.ToString(CultureInfo.InvariantCulture) + " バイト";
+        return content.Length.ToString(CultureInfo.InvariantCulture) + " bytes";
     }
 
     private static int Length(Random random, int maxBytes)

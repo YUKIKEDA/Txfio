@@ -3,13 +3,13 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 1 トランザクション分の ZIP 操作列と、開始時の木
+/// A ZIP sequence for one transaction, and the tree at the start.
 /// </summary>
-/// <param name="Seed">この列を作ったシード</param>
-/// <param name="Initial">開始前にワークフォルダへ置く木</param>
-/// <param name="ImportContent">外の in.zip に入れる a.txt の中身</param>
-/// <param name="Operations">順に打つ操作</param>
-/// <param name="Commit">最後に Commit するなら true、Dispose だけなら false</param>
+/// <param name="Seed">The seed that made this sequence.</param>
+/// <param name="Initial">The tree placed in the work folder before the start.</param>
+/// <param name="ImportContent">The content of a.txt in the external in.zip.</param>
+/// <param name="Operations">The operations to run in order.</param>
+/// <param name="Commit">true to Commit at the end, false to only Dispose.</param>
 internal sealed record ArchiveScenario(
     int Seed,
     DirectoryTree Initial,
@@ -24,12 +24,12 @@ internal sealed record ArchiveScenario(
     private static readonly string[] _directories = new[] { "extracted", "imported", "copy", "more" };
 
     /// <summary>
-    /// シードから操作列を作る。作成、展開、取り込み、書き出しを、通る手として先に入れる
+    /// Makes a sequence from a seed. Create, extract, import, and export go first as steps that pass.
     /// </summary>
-    /// <param name="seed">シード</param>
-    /// <param name="maxOperations">操作数の上限</param>
-    /// <param name="maxBytes">1 ファイルの長さの上限</param>
-    /// <returns>作った操作列</returns>
+    /// <param name="seed">The seed.</param>
+    /// <param name="maxOperations">The maximum number of operations.</param>
+    /// <param name="maxBytes">The maximum length of one file.</param>
+    /// <returns>The sequence that was made.</returns>
     public static ArchiveScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);
@@ -61,9 +61,9 @@ internal sealed record ArchiveScenario(
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形の操作列
+    /// A readable form of the sequence for failure reports.
     /// </summary>
-    /// <returns>開始時の木、操作、終わり方を並べた文字列</returns>
+    /// <returns>A string with the starting tree, the operations, and how it ends.</returns>
     public string Describe()
     {
         StringBuilder text = new StringBuilder();

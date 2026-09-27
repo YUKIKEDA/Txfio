@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitDeleteTests
 {
     /// <summary>
-    /// Delete のコミットは対象ファイルを消し、ジャーナルを残さない
+    /// Committing a Delete deletes the target file and leaves no journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で対象も journal も無い</para>
+    /// <para>Given: an existing file is deleted.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and neither the target nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Deleteしたファイルが消えること()
+    public async Task CommitAsync_DeletedFileIsGone()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -28,15 +28,15 @@ public sealed class CommitDeleteTests
     }
 
     /// <summary>
-    /// Add を打ち消した Delete のコミットは何も作らない
+    /// Committing a Delete that canceled an Add creates nothing.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add のあと Delete して pending が空である</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で対象は無い</para>
+    /// <para>Given: an Add followed by a Delete, so the pending changes are empty.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and the target does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_打ち消したAddはファイルを作らないこと()
+    public async Task CommitAsync_CanceledAddCreatesNoFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -50,15 +50,15 @@ public sealed class CommitDeleteTests
     }
 
     /// <summary>
-    /// Delete のあと Add した Update のコミットは内容を置き換える
+    /// Committing an Update made by an Add after a Delete replaces the content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Delete のあと Add している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: 対象の内容が新しい方になる</para>
+    /// <para>Given: a Delete followed by an Add.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: the target content is the new one.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_DeleteのあとAddすると内容が置き換わること()
+    public async Task CommitAsync_AddAfterDeleteReplacesContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -74,15 +74,15 @@ public sealed class CommitDeleteTests
     }
 
     /// <summary>
-    /// コミット前に Delete 対象が消えていれば Failed で、ジャーナルは残る
+    /// If the Delete target is gone before commit, the result is Failed and the journal remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Delete したあと、対象ファイルを外部が消している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で、対象は無い</para>
+    /// <para>Given: after a Delete, the target file is deleted externally.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, and the target does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Delete対象が消えているとFailedになること()
+    public async Task CommitAsync_FailsWhenDeleteTargetIsGone()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");

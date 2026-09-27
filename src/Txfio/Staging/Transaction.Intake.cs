@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// ディレクトリの取り込み（木の計画と、ジャーナルを書いたあとの実体作成）
+/// Directory intake (planning the tree, and creating it after the journal is written).
 /// </content>
 internal sealed partial class Transaction
 {
@@ -18,7 +18,7 @@ internal sealed partial class Transaction
                 .Replace(System.IO.Path.DirectorySeparatorChar, '/');
     }
 
-    // 列挙で得た属性を使い、エントリごとにディスクへ問い合わせない
+    // Use the attributes from enumeration, instead of asking the disk for each entry.
     private bool SkipIntakeEntry(FileSystemInfo entry)
     {
         return (entry.Attributes & FileAttributes.ReparsePoint) != 0

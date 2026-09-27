@@ -1,10 +1,10 @@
 namespace Txfio;
 
 /// <summary>
-/// 1 回の公開呼び出しでロックを待つ期限と、待ちを取り消すトークン
+/// The deadline for waiting on locks in one public call, and the token that cancels the wait.
 /// </summary>
 /// <remarks>
-/// 既定値は待たない（最初の共有違反で諦める）
+/// The default does not wait (it gives up at the first sharing violation).
 /// </remarks>
 internal readonly struct LockAttempt
 {
@@ -27,12 +27,12 @@ internal readonly struct LockAttempt
     }
 
     /// <summary>
-    /// 今から数えた期限で、ロック待ちを始める
+    /// Starts waiting on locks, with a deadline counted from now.
     /// </summary>
-    /// <param name="lockWait">待つ上限（ゼロは待たない、<see cref="Timeout.InfiniteTimeSpan"/> は期限がない）</param>
-    /// <param name="cancellationToken">待ちを取り消すトークン</param>
-    /// <returns>この呼び出しのロック待ち</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
+    /// <param name="lockWait">How long to wait (zero does not wait; <see cref="Timeout.InfiniteTimeSpan"/> has no deadline).</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>The lock wait of this call.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
     internal static LockAttempt Start(TimeSpan lockWait, CancellationToken cancellationToken)
     {
         if (lockWait < TimeSpan.Zero && lockWait != Timeout.InfiniteTimeSpan)
@@ -57,10 +57,10 @@ internal readonly struct LockAttempt
     }
 
     /// <summary>
-    /// 期限の前なら少し待つ（呼び出し元のスレッドは止めない）
+    /// Waits a little if the deadline has not passed (without blocking the caller's thread).
     /// </summary>
-    /// <returns>待ったあと、もう一度試すなら <see langword="true"/>（期限を過ぎていれば待たずに <see langword="false"/>）</returns>
-    /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
+    /// <returns><see langword="true"/> to try again after waiting (<see langword="false"/> without waiting if the deadline has passed).</returns>
+    /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
     internal async Task<bool> WaitForRetryAsync()
     {
         if (!_armed || (!_waitForever && Environment.TickCount64 >= _deadlineTick))

@@ -6,15 +6,15 @@ namespace Txfio.Tests.Threading;
 public sealed class CallerContextTests
 {
     /// <summary>
-    /// UI スレッド相当から呼んでも、IO は呼び出し元のスレッドで行わず、await のあとは呼び出し元へ戻る
+    /// Even when called from the equivalent of a UI thread, IO does not run on the caller's thread, and after await it returns to the caller.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 1 本のスレッドで続きを動かす SynchronizationContext の上にいる</para>
-    /// <para>手順: そのスレッドから AddAsync し、ロックファイルを開いたスレッドを記録する</para>
-    /// <para>期待: ロックファイルを開いたのは呼び出し元のスレッドではなく、await のあとは呼び出し元のスレッドで続く</para>
+    /// <para>Given: running on a SynchronizationContext that runs continuations on one thread.</para>
+    /// <para>When: AddAsync is called from that thread, and the thread that opened the lock file is recorded.</para>
+    /// <para>Then: the lock file was not opened on the caller's thread, and after await execution continues on the caller's thread.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_UIスレッド相当から呼んでもそのスレッドでIOしないこと()
+    public async Task AddAsync_DoesNotDoIoOnUiLikeThread()
     {
         await using TempDirectory work = TempDirectory.Create();
         RecordingFaults faults = new RecordingFaults();
@@ -35,15 +35,15 @@ public sealed class CallerContextTests
     }
 
     /// <summary>
-    /// コンテキストが無いときは、スレッドプールへ移らずにそのまま続ける
+    /// Without a context, it continues without switching to the thread pool.
     /// </summary>
     /// <remarks>
-    /// <para>前提: SynchronizationContext が無く、既定の TaskScheduler の上にいる</para>
-    /// <para>手順: CallerContext.LeaveAsync の await 先を見る</para>
-    /// <para>期待: 既に完了しており、移らない</para>
+    /// <para>Given: no SynchronizationContext, on the default TaskScheduler.</para>
+    /// <para>When: the await target of CallerContext.LeaveAsync is checked.</para>
+    /// <para>Then: it is already completed and does not switch.</para>
     /// </remarks>
     [Fact]
-    public async Task LeaveAsync_コンテキストが無ければ移らないこと()
+    public async Task LeaveAsync_DoesNotSwitchWithoutContext()
     {
         await Task.Run(() =>
         {

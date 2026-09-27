@@ -10,6 +10,8 @@ alwaysApply: true
 - Canonical design: `docs/design.md`
 - Canonical roadmap: `docs/roadmap.md` (phases are provisional)
 - Conventions: `docs/conventions.md`
+- Language policy: `docs/language.md`
+- `docs/design.md`, `docs/roadmap.md`, and `docs/conventions.md` have Japanese translations (`*.ja.md`). English is the source of truth; update both in the same PR
 - `.dev/` is temporary (reviews, scratch). Do not leave permanent decisions only there
 
 ## Changing the design
@@ -21,7 +23,7 @@ alwaysApply: true
 ## Where a rule lives
 
 - `docs/design.md` is the single source for behavior. XML docs on the public surface state only what a caller needs (what it does, arguments, exception types with a short condition, return value) and point to the design section for details
-- Per-API sections in `docs/design.md` use the fixed headings in `docs/conventions.md` (設計書と XML ドキュメントの分担). Cross-cutting rules (lock order, journal order, commit steps) are written once in their own section and referenced from API sections
+- Per-API sections in `docs/design.md` use the fixed headings in `docs/conventions.md` ("How design docs and XML docs share the work"). Cross-cutting rules (lock order, journal order, commit steps) are written once in their own section and referenced from API sections
 
 When implementing, follow `docs/design.md`. If code and design conflict, stop and fix the design via the process above.
 

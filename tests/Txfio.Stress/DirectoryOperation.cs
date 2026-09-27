@@ -1,13 +1,13 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ディレクトリのランダム列の 1 手
+/// One step of a random directory sequence.
 /// </summary>
-/// <param name="Kind">操作の種類</param>
-/// <param name="Path">対象の相対パス</param>
-/// <param name="NewPath">Move の移動先。Move 以外は null</param>
-/// <param name="Content">Add と Update で書くバイト列。それ以外は null</param>
-/// <param name="Overwrite">Move が移動先を置き換えるなら true</param>
+/// <param name="Kind">The operation kind.</param>
+/// <param name="Path">The target relative path.</param>
+/// <param name="NewPath">The Move destination. <see langword="null"/> except for Move.</param>
+/// <param name="Content">The bytes written by Add and Update. <see langword="null"/> otherwise.</param>
+/// <param name="Overwrite">true when a Move replaces its destination.</param>
 internal sealed record DirectoryOperation(
     DirectoryOperationKind Kind,
     string Path,
@@ -16,11 +16,11 @@ internal sealed record DirectoryOperation(
     bool Overwrite = false)
 {
     /// <summary>
-    /// いまの木と、すでに通した手の上で、この手を打てるか
+    /// Returns whether this step can be made on the current tree and the steps already passed.
     /// </summary>
-    /// <param name="tree">コミット後の姿</param>
-    /// <param name="applied">すでに通した手</param>
-    /// <returns>打てるとき true</returns>
+    /// <param name="tree">The post-commit view.</param>
+    /// <param name="applied">The steps already passed.</param>
+    /// <returns>true when it can be made.</returns>
     public bool CanApply(DirectoryTree tree, IReadOnlyList<DirectoryOperation> applied)
     {
         if (IsFrozen(applied, Path) || (NewPath is not null && IsFrozen(applied, NewPath)))
@@ -49,9 +49,9 @@ internal sealed record DirectoryOperation(
     }
 
     /// <summary>
-    /// 通った手を木に反映する。Read は何も変えない
+    /// Applies a passed step to the tree. Read changes nothing.
     /// </summary>
-    /// <param name="tree">コミット後の姿</param>
+    /// <param name="tree">The post-commit view.</param>
     public void ApplyTo(DirectoryTree tree)
     {
         switch (Kind)

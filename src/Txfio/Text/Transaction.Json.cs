@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Txfio;
 
 /// <content>
-/// JSON の読み書き
+/// JSON reads and writes.
 /// </content>
 internal sealed partial class Transaction
 {

@@ -1,6 +1,6 @@
 ---
 name: Bug
-about: 契約違反・不具合修正
+about: Contract violation or bug fix
 labels: ["type:bug"]
 ---
 
@@ -27,4 +27,4 @@ labels: ["type:bug"]
 
 ## Grill
 
-- 実施済み / 不要（理由）:
+- Done / not needed (reason):

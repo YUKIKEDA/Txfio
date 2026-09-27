@@ -6,15 +6,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverBeforeAfterTests
 {
     /// <summary>
-    /// After と一致する Add は .txnew を消して RolledForward になる
+    /// An Add that matches After deletes the .txnew and is RolledForward.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Add があり、対象は After どおりで .txnew も残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で journal も .txnew も無く、対象は残る</para>
+    /// <para>Given: a Committing Add, whose target matches After while its .txnew still remains.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, there is no journal and no .txnew, and the target remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_After一致のAddはtxnewを消してRolledForwardになること()
+    public async Task RecoverAsync_AddMatchingAfterDeletesTxnewAndRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");

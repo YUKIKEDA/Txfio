@@ -1,6 +1,6 @@
 ---
 name: Task
-about: 基盤・CI・規約・リファクタ・ドキュメント整備
+about: Foundation, CI, conventions, refactoring, or documentation
 labels: ["type:task"]
 ---
 
@@ -31,4 +31,4 @@ labels: ["type:task"]
 
 ## Grill
 
-- 実施済み / 不要（理由）:
+- Done / not needed (reason):

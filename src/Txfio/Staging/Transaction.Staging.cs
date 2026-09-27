@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// ステージング（Add / Update / Delete / DeleteTree / Move）
+/// Staging (Add / Update / Delete / DeleteTree / Move).
 /// </content>
 internal sealed partial class Transaction
 {
@@ -65,7 +65,7 @@ internal sealed partial class Transaction
             int contentIndex = FindContentAfterMoveOut(targetPath, existingIndex);
             if (contentIndex >= 0 && _paths.Rows[contentIndex].Kind == PendingChangeKind.Move)
             {
-                // 別の Move で入ってくるファイルを消す
+                // Delete the file that comes in from another Move.
                 await PersistFoldedAsync(
                         operations => PathTable.FoldMoveOutToSourceDelete(operations, contentIndex, destination: null),
                         cancellationToken)
@@ -96,7 +96,7 @@ internal sealed partial class Transaction
 
             if (Directory.Exists(targetPath) || existing.IsDirectory)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
 
             if (existing.Kind == PendingChangeKind.Add)
@@ -188,22 +188,22 @@ internal sealed partial class Transaction
                 return;
             }
 
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (moveToIndex >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (File.Exists(targetPath))
         {
-            throw new UnsupportedOperationException("ファイルの全削除は未対応です: " + targetPath);
+            throw new UnsupportedOperationException("DeleteTree of a file is not supported: " + targetPath);
         }
 
         if (!Directory.Exists(targetPath))
         {
-            throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + targetPath, targetPath);
+            throw new ExternalConflictException("The directory to delete does not exist: " + targetPath, targetPath);
         }
 
         await StageDeleteTreeAsync(targetPath, cancellationToken).ConfigureAwait(false);
@@ -225,7 +225,7 @@ internal sealed partial class Transaction
         string destPath = WorkPath.ResolveInWorkFolder(_workFolder, newPath);
         if (string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("同じパスへは移動できません: " + sourcePath);
+            throw new InvalidOperationException("A path cannot be moved to itself: " + sourcePath);
         }
 
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
@@ -249,7 +249,7 @@ internal sealed partial class Transaction
         bool directoryMove = IsDirectoryMove(sourcePath, sourceIndex, moveToSource);
         bool replacesDirectory = overwrite && !destIsMoveSource && Directory.Exists(destPath);
 
-        // 置き換えの Move は、移動先のファイルの Delete を畳む。入れ替えは DeleteTree も畳む
+        // A replacing Move folds a file Delete at the destination. A swap folds a DeleteTree too.
         int destDeleteIndex = -1;
         if (overwrite
             && destIndex >= 0
@@ -262,12 +262,12 @@ internal sealed partial class Transaction
 
         if (destIndex >= 0 && (!destIsMoveSource || overwrite))
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (IsFileMoveOut(destIndex) && FindLaterOperationIndex(destPath, destIndex) >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         int moveToDest = FindMoveToIndex(destPath);
@@ -278,7 +278,7 @@ internal sealed partial class Transaction
                 return;
             }
 
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (directoryMove)
@@ -303,7 +303,7 @@ internal sealed partial class Transaction
 
         if (IsFileMoveOut(sourceIndex))
         {
-            // 移動済みの元から動かすのは、そのあと元のパスに来た中身である
+            // What moves out of a source that has already moved is the content that came to the source path afterwards.
             int laterIndex = FindLaterOperationIndex(sourcePath, sourceIndex);
             if (laterIndex >= 0)
             {
@@ -315,7 +315,7 @@ internal sealed partial class Transaction
             }
             else
             {
-                throw new ExternalConflictException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
+                throw new ExternalConflictException("The source file does not exist: " + sourcePath, sourcePath);
             }
         }
 
@@ -324,24 +324,24 @@ internal sealed partial class Transaction
             PendingChangeKind sourceKind = _paths.Rows[sourceIndex].Kind;
             if (sourceKind == PendingChangeKind.Delete || sourceKind == PendingChangeKind.DeleteTree)
             {
-                throw new InvalidOperationException("削除予約されたパスは移動できません");
+                throw new InvalidOperationException("A path scheduled for deletion cannot be moved");
             }
 
             if (sourceKind != PendingChangeKind.Move
                 && sourceKind != PendingChangeKind.Add
                 && sourceKind != PendingChangeKind.Update)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
 
-        // ファイルでディレクトリを入れ替えるときは、移動先の配下を排他の意図ロックで終わりまで予約する
+        // When a file swaps out a directory, reserve what is under the destination with an exclusive intent lock until the end.
         if (replacesDirectory)
         {
             StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, destPath);
             if (sourceIndex >= 0 || moveToSource >= 0)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
 
@@ -381,7 +381,7 @@ internal sealed partial class Transaction
             StagingRules.EnsureMoveSourceExists(sourcePath);
         }
 
-        // 畳んだ Delete は、この Move と同じジャーナルの書き込みで外す
+        // Remove the folded Delete in the same journal write as this Move.
         JournalOperation? foldedDelete = null;
         if (destDeleteIndex >= 0)
         {
@@ -470,7 +470,7 @@ internal sealed partial class Transaction
         StagingFile.TryDelete(existing.StagingPath);
     }
 
-    // ディレクトリの入れ替え（移動先の既存ディレクトリを、移動元で中身ごと入れ替える）
+    // Swapping a directory (the existing directory at the destination is swapped, with its contents, for the source).
     private async Task ReplaceDirectoryAsync(
         string sourcePath,
         string destPath,
@@ -481,7 +481,7 @@ internal sealed partial class Transaction
     {
         if (sourceIndex >= 0 || moveToSource >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         StagingRules.ThrowIfDirectoryReplaceConflicts(_paths.Rows, _createdDirectories, sourcePath, destPath);
@@ -490,10 +490,10 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!Directory.Exists(sourcePath))
         {
-            throw new ExternalConflictException("移動元のディレクトリが存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("The source directory does not exist: " + sourcePath, sourcePath);
         }
 
-        // 移動先がファイルでもディレクトリでも入れ替える。無ければ普通のディレクトリ Move と同じ
+        // Swap whether the destination is a file or a directory. If it is missing, this is a normal directory Move.
         bool replaces = Directory.Exists(destPath) || File.Exists(destPath);
 
         JournalOperation operation = new JournalOperation(
@@ -505,7 +505,7 @@ internal sealed partial class Transaction
             overwrite: replaces);
         ThrowIfMoveChainCloses(operation, replaceIndex: -1);
 
-        // 畳んだ DeleteTree は、この入れ替えと同じジャーナルの書き込みで外す
+        // Remove the folded DeleteTree in the same journal write as this swap.
         JournalOperation? foldedDelete = null;
         if (destDeleteTreeIndex >= 0)
         {
@@ -557,10 +557,10 @@ internal sealed partial class Transaction
             if (_paths.Rows[sourceIndex].Kind == PendingChangeKind.Delete
                 || _paths.Rows[sourceIndex].Kind == PendingChangeKind.DeleteTree)
             {
-                throw new InvalidOperationException("削除予約されたパスは移動できません");
+                throw new InvalidOperationException("A path scheduled for deletion cannot be moved");
             }
 
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         StagingRules.ThrowIfDirectoryMoveConflicts(_paths.Rows, root, destPath);
@@ -574,7 +574,7 @@ internal sealed partial class Transaction
 
         if (!Directory.Exists(root))
         {
-            throw new ExternalConflictException("移動元のディレクトリが存在しません: " + root, root);
+            throw new ExternalConflictException("The source directory does not exist: " + root, root);
         }
 
         if (replaceIndex >= 0)
@@ -646,7 +646,7 @@ internal sealed partial class Transaction
         await _locks.AcquireReservingAsync(_workFolder, new[] { directoryPath }, new[] { directoryPath }, _lockAttempt).ConfigureAwait(false);
         if (!Directory.Exists(directoryPath))
         {
-            throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + directoryPath, directoryPath);
+            throw new ExternalConflictException("The directory to delete does not exist: " + directoryPath, directoryPath);
         }
 
         JournalOperation operation = new JournalOperation(
@@ -671,7 +671,7 @@ internal sealed partial class Transaction
         JournalOperation existing = _paths.Rows[sourceIndex];
         if (existing.Kind == PendingChangeKind.Delete || existing.Kind == PendingChangeKind.DeleteTree)
         {
-            throw new InvalidOperationException("削除予約されたパスは移動できません");
+            throw new InvalidOperationException("A path scheduled for deletion cannot be moved");
         }
 
         if (existing.Kind == PendingChangeKind.Move)
@@ -689,10 +689,10 @@ internal sealed partial class Transaction
 
         if (existing.Kind != PendingChangeKind.Add && existing.Kind != PendingChangeKind.Update)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
-        // 置き換える先がファイルなら、書き直した中身はその Update になる
+        // If the destination being replaced is a file, the rewritten content becomes its Update.
         await RetargetStagedContentAsync(
                 sourceIndex,
                 destPath,
@@ -713,7 +713,7 @@ internal sealed partial class Transaction
         JournalOperation[] previous = _paths.ToArray();
         string sourcePath = existing.Path;
 
-        // .txnew は移動先の名前に付け替える（元の名前のままだと、移動元へ次に書いたときに同じ .txnew を上書きする）
+        // Move the .txnew to the destination's name (with the source's name, the next write to the source would overwrite the same .txnew).
         string? stagingPath = existing.StagingPath is null
             ? null
             : WorkPath.StagingFilePath(destPath, _transactionId);
@@ -724,7 +724,7 @@ internal sealed partial class Transaction
         {
             if (existing.StagingPath is not null)
             {
-                // 付け替えの前後どちらで落ちても、両方の .txnew がジャーナルに載っているようにする
+                // Whether it crashes before or after the move, keep both .txnew files in the journal.
                 _paths.Add(retargeted);
                 await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
                 journalUpdated = true;
@@ -753,7 +753,7 @@ internal sealed partial class Transaction
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
-                    // 戻せなくても、両方の .txnew が載ったジャーナルが残れば次の Recover が消す
+                    // Even if it cannot be undone, a journal that lists both .txnew files remains, and the next Recover deletes them.
                     journalUpdated = false;
                 }
             }
@@ -768,14 +768,14 @@ internal sealed partial class Transaction
     }
 
     /// <summary>
-    /// Move 先への Update を、移動先の Add と元の Delete に畳む
+    /// Folds an Update at a Move destination into an Add at the destination and a Delete of the source.
     /// </summary>
-    /// <param name="moveIndex">Move 操作のインデックス</param>
-    /// <param name="destPath">Update 対象（Move の移動先）</param>
-    /// <param name="content">新しい内容</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>畳み込みとジャーナル書き込みの完了</returns>
+    /// <param name="moveIndex">The index of the Move operation.</param>
+    /// <param name="destPath">The Update target (the Move destination).</param>
+    /// <param name="content">The new content.</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the folding and the journal write are done.</returns>
     private async Task FoldMoveDestinationUpdateAsync(
         int moveIndex,
         string destPath,
@@ -790,7 +790,7 @@ internal sealed partial class Transaction
             moveIndex,
             new JournalOperation(PendingChangeKind.Add, destPath, stagingPath));
 
-        // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
+        // Record it in the journal before writing, so that Recover can delete the .txnew after a crash.
         JournalOperation[] previous = _paths.ToArray();
         bool journalUpdated = false;
         try
@@ -814,11 +814,11 @@ internal sealed partial class Transaction
     }
 
     /// <summary>
-    /// 畳んだ操作一覧をジャーナルに書く（失敗したら元の一覧に戻す）
+    /// Writes the folded list of operations to the journal (restores the original list on failure).
     /// </summary>
-    /// <param name="fold">操作一覧の写しを畳む処理（使い方の誤りなら書く前に例外を投げる）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ジャーナル書き込みの完了</returns>
+    /// <param name="fold">Folds a copy of the list of operations (throws before writing on misuse).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the journal is written.</returns>
     private async Task PersistFoldedAsync(
         Action<List<JournalOperation>> fold,
         CancellationToken cancellationToken)
@@ -900,7 +900,7 @@ internal sealed partial class Transaction
                 },
                 async () =>
                 {
-                    // 同じ .txnew を書き直すときは、失敗したら戻せるよう退避しておく
+                    // When rewriting the same .txnew, back it up so it can be restored on failure.
                     if (restagesSameFile && File.Exists(stagingPath))
                     {
                         backupPath = WorkPath.StagingBackupPath(stagingPath);

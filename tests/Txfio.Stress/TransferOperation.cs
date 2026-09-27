@@ -1,36 +1,36 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// コピー、取り込み、書き出しの 1 手
+/// One copy, import, or export step.
 /// </summary>
-/// <param name="Kind">操作の種類</param>
-/// <param name="Source">コピー元。Copy と Export はワークフォルダ基準、Import は外の相対パス</param>
-/// <param name="Destination">コピー先。Copy と Import はワークフォルダ基準、Export は外の相対パス</param>
+/// <param name="Kind">The operation kind.</param>
+/// <param name="Source">The source. Relative to the work folder for Copy and Export, relative to outside for Import.</param>
+/// <param name="Destination">The destination. Relative to the work folder for Copy and Import, relative to outside for Export.</param>
 internal sealed record TransferOperation(TransferKind Kind, string Source, string Destination)
 {
     /// <summary>
-    /// いまの姿でこの手を打てるか
+    /// Returns whether this step can be made in the current view.
     /// </summary>
-    /// <param name="world">ワークフォルダと外の姿</param>
-    /// <returns>打てるとき true</returns>
+    /// <param name="world">The view of the work folder and outside.</param>
+    /// <returns>true when it can be made.</returns>
     public bool CanApply(TransferWorld world)
     {
         return world.CanApply(this);
     }
 
     /// <summary>
-    /// メモリ上の姿へこの手を反映する
+    /// Applies this step to the in-memory view.
     /// </summary>
-    /// <param name="world">ワークフォルダと外の姿</param>
+    /// <param name="world">The view of the work folder and outside.</param>
     public void ApplyTo(TransferWorld world)
     {
         world.Apply(this);
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形
+    /// A readable form for failure reports.
     /// </summary>
-    /// <returns>種類とパス</returns>
+    /// <returns>The kind and paths.</returns>
     public override string ToString()
     {
         return Kind + "(" + Source + " -> " + Destination + ")";

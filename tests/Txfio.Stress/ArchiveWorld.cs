@@ -1,7 +1,7 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ZIP の列が比べる、ワークフォルダの姿と、作った ZIP のエントリ
+/// The view of the work folder, and the entries of created ZIPs, that ZIP sequences compare against.
 /// </summary>
 internal sealed class ArchiveWorld
 {
@@ -14,10 +14,10 @@ internal sealed class ArchiveWorld
     private readonly Dictionary<string, Dictionary<string, byte[]?>> _exports;
 
     /// <summary>
-    /// 開始時の木と、外から取り込む ZIP の a.txt の中身から姿を作る
+    /// Initializes a new instance of the <see cref="ArchiveWorld"/> class from the starting tree and the content of a.txt in the ZIP imported from outside.
     /// </summary>
-    /// <param name="initial">ワークフォルダの開始時の木</param>
-    /// <param name="importContent">外の in.zip に入れる a.txt の中身</param>
+    /// <param name="initial">The starting tree of the work folder.</param>
+    /// <param name="importContent">The content of a.txt in the external in.zip.</param>
     public ArchiveWorld(DirectoryTree initial, byte[] importContent)
     {
         Commit = initial.Clone();
@@ -32,17 +32,17 @@ internal sealed class ArchiveWorld
     }
 
     /// <summary>
-    /// コミット後のワークフォルダ
+    /// Gets the work folder after commit.
     /// </summary>
     public DirectoryTree Commit { get; }
 
     /// <summary>
-    /// ディスクに見えるワークフォルダ。ステージングしたファイルの本名は含まない
+    /// Gets the work folder as seen on disk. The real names of staged files are not included.
     /// </summary>
     public DirectoryTree Disk { get; }
 
     /// <summary>
-    /// 外へ書いた ZIP の相対パス
+    /// Gets the relative paths of ZIPs written outside.
     /// </summary>
     public IEnumerable<string> ExportPaths
     {
@@ -53,10 +53,10 @@ internal sealed class ArchiveWorld
     }
 
     /// <summary>
-    /// この手がライブラリの規則で通るか
+    /// Returns whether this step passes by the library's rules.
     /// </summary>
-    /// <param name="operation">調べる手</param>
-    /// <returns>通るとき true</returns>
+    /// <param name="operation">The step to check.</param>
+    /// <returns>true when it passes.</returns>
     public bool CanApply(ArchiveOperation operation)
     {
         switch (operation.Kind)
@@ -73,9 +73,9 @@ internal sealed class ArchiveWorld
     }
 
     /// <summary>
-    /// 通る手を姿へ反映する。作った ZIP のバイト列は、読み戻したあとで置き換える
+    /// Applies a passing step to the view. The bytes of a created ZIP are replaced after it is read back.
     /// </summary>
-    /// <param name="operation">反映する手</param>
+    /// <param name="operation">The step to apply.</param>
     public void Apply(ArchiveOperation operation)
     {
         switch (operation.Kind)
@@ -99,29 +99,29 @@ internal sealed class ArchiveWorld
     }
 
     /// <summary>
-    /// ワークフォルダ内に作った ZIP の、期待するエントリ
+    /// The expected entries of a ZIP created inside the work folder.
     /// </summary>
-    /// <param name="path">ZIP の相対パス</param>
-    /// <returns>エントリ名と中身。ディレクトリは null</returns>
+    /// <param name="path">The relative path of the ZIP.</param>
+    /// <returns>Entry names and contents. <see langword="null"/> for directories.</returns>
     public Dictionary<string, byte[]?> ArchiveEntries(string path)
     {
         return _archives[path];
     }
 
     /// <summary>
-    /// 外へ書いた ZIP の、期待するエントリ
+    /// The expected entries of a ZIP written outside.
     /// </summary>
-    /// <param name="path">外の相対パス</param>
-    /// <returns>エントリ名と中身。ディレクトリは null</returns>
+    /// <param name="path">The relative path outside.</param>
+    /// <returns>Entry names and contents. <see langword="null"/> for directories.</returns>
     public Dictionary<string, byte[]?> ExportEntries(string path)
     {
         return _exports[path];
     }
 
     /// <summary>
-    /// 次に通る書き出しの、外の相対パス
+    /// The relative path outside for the next export that passes.
     /// </summary>
-    /// <returns>out の直下の新しい名前</returns>
+    /// <returns>A new name directly under out.</returns>
     public string NextExportPath()
     {
         return "out/" + _exports.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".zip";

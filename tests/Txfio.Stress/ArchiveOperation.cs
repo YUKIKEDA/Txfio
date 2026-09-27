@@ -1,37 +1,37 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ZIP の 1 手
+/// One ZIP step.
 /// </summary>
-/// <param name="Kind">操作の種類</param>
-/// <param name="Source">入力。Import は外の相対パス、それ以外はワークフォルダ基準</param>
-/// <param name="Destination">出力。Export は外の相対パス、それ以外はワークフォルダ基準</param>
-/// <param name="IncludeBase">ディレクトリを ZIP にするとき、その名前をエントリの先頭に含めるか</param>
+/// <param name="Kind">The operation kind.</param>
+/// <param name="Source">The input. A path relative to outside for Import, otherwise relative to the work folder.</param>
+/// <param name="Destination">The output. A path relative to outside for Export, otherwise relative to the work folder.</param>
+/// <param name="IncludeBase">When a directory becomes a ZIP, whether its name goes at the start of the entries.</param>
 internal sealed record ArchiveOperation(ArchiveKind Kind, string Source, string Destination, bool IncludeBase)
 {
     /// <summary>
-    /// いまの姿でこの手を打てるか
+    /// Returns whether this step can be made in the current view.
     /// </summary>
-    /// <param name="world">ワークフォルダと外の姿</param>
-    /// <returns>打てるとき true</returns>
+    /// <param name="world">The view of the work folder and outside.</param>
+    /// <returns>true when it can be made.</returns>
     public bool CanApply(ArchiveWorld world)
     {
         return world.CanApply(this);
     }
 
     /// <summary>
-    /// メモリ上の姿へこの手を反映する
+    /// Applies this step to the in-memory view.
     /// </summary>
-    /// <param name="world">ワークフォルダと外の姿</param>
+    /// <param name="world">The view of the work folder and outside.</param>
     public void ApplyTo(ArchiveWorld world)
     {
         world.Apply(this);
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形
+    /// A readable form for failure reports.
     /// </summary>
-    /// <returns>種類とパス</returns>
+    /// <returns>The kind and paths.</returns>
     public override string ToString()
     {
         return Kind + "(" + Source + " -> " + Destination + (IncludeBase ? ", base" : string.Empty) + ")";

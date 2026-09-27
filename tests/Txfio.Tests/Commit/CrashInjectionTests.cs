@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CrashInjectionTests
 {
     /// <summary>
-    /// AfterCommitting で止めても Recover が Add を確定する
+    /// Even when stopped at AfterCommitting, Recover finishes the Add.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add をステージングしている</para>
-    /// <para>手順: AfterCommitting で CommitAsync を止め、RecoverAsync する</para>
-    /// <para>期待: 止めた直後は対象は無く .txnew が残る。Recover のあと対象に内容があり、journal も .txnew も無い</para>
+    /// <para>Given: an Add is staged.</para>
+    /// <para>When: CommitAsync is stopped at AfterCommitting, then RecoverAsync runs.</para>
+    /// <para>Then: right after the stop the target does not exist and the .txnew remains. After Recover the target has the content, and there is no journal and no .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_AfterCommittingで止まってもRecoverがAddを確定すること()
+    public async Task CommitAsync_RecoverFinishesAddStoppedAtAfterCommitting()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -38,15 +38,15 @@ public sealed class CrashInjectionTests
     }
 
     /// <summary>
-    /// Add を AfterApply で止めても Recover で内容が残る
+    /// Even when an Add is stopped at AfterApply, the content remains after Recover.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add をステージングしている</para>
-    /// <para>手順: AfterApply で CommitAsync を止め、RecoverAsync する</para>
-    /// <para>期待: 止めた直後の対象は Add の内容で、Recover のあと journal が無い</para>
+    /// <para>Given: an Add is staged.</para>
+    /// <para>When: CommitAsync is stopped at AfterApply, then RecoverAsync runs.</para>
+    /// <para>Then: right after the stop the target has the Add content, and after Recover there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_AddをAfterApplyで止めてもRecoverで内容が残ること()
+    public async Task CommitAsync_AddStoppedAtAfterApplyKeepsContentAfterRecover()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -70,15 +70,15 @@ public sealed class CrashInjectionTests
     }
 
     /// <summary>
-    /// Update を AfterApply で止めても Recover で内容が残る
+    /// Even when an Update is stopped at AfterApply, the content remains after Recover.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Update している</para>
-    /// <para>手順: AfterApply で CommitAsync を止め、RecoverAsync する</para>
-    /// <para>期待: 止めた直後の対象は Update の内容で、Recover のあと journal が無い</para>
+    /// <para>Given: an existing file is updated.</para>
+    /// <para>When: CommitAsync is stopped at AfterApply, then RecoverAsync runs.</para>
+    /// <para>Then: right after the stop the target has the Update content, and after Recover there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_UpdateをAfterApplyで止めてもRecoverで内容が残ること()
+    public async Task CommitAsync_UpdateStoppedAtAfterApplyKeepsContentAfterRecover()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -103,15 +103,15 @@ public sealed class CrashInjectionTests
     }
 
     /// <summary>
-    /// ファイル Delete を AfterApply で止めても Recover 後も削除のまま
+    /// Even when a file Delete is stopped at AfterApply, it stays deleted after Recover.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Delete している</para>
-    /// <para>手順: AfterApply で CommitAsync を止め、RecoverAsync する</para>
-    /// <para>期待: 止めた直後も Recover のあとも対象は無い。Recover のあと journal も無い</para>
+    /// <para>Given: an existing file is deleted.</para>
+    /// <para>When: CommitAsync is stopped at AfterApply, then RecoverAsync runs.</para>
+    /// <para>Then: the target does not exist right after the stop or after Recover. After Recover there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_DeleteをAfterApplyで止めてもRecover後も削除のままであること()
+    public async Task CommitAsync_DeleteStoppedAtAfterApplyStaysDeletedAfterRecover()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -134,15 +134,15 @@ public sealed class CrashInjectionTests
     }
 
     /// <summary>
-    /// Move を AfterApply で止めても Recover 後も移動のまま
+    /// Even when a Move is stopped at AfterApply, it stays moved after Recover.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルを Move している</para>
-    /// <para>手順: AfterApply で CommitAsync を止め、RecoverAsync する</para>
-    /// <para>期待: 止めた直後は移動先に内容があり移動元は無い。Recover のあと journal が無い</para>
+    /// <para>Given: a file is moved.</para>
+    /// <para>When: CommitAsync is stopped at AfterApply, then RecoverAsync runs.</para>
+    /// <para>Then: right after the stop the destination has the content and the source does not exist. After Recover there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_MoveをAfterApplyで止めてもRecover後も移動のままであること()
+    public async Task CommitAsync_MoveStoppedAtAfterApplyStaysMovedAfterRecover()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -168,15 +168,15 @@ public sealed class CrashInjectionTests
     }
 
     /// <summary>
-    /// 1件目の AfterApply で止めても Recover が残りの操作を終える
+    /// Even when stopped at the first AfterApply, Recover finishes the remaining operations.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add と別ファイルの Delete をしている</para>
-    /// <para>手順: AfterApply で CommitAsync を止め、RecoverAsync する</para>
-    /// <para>期待: 止めた直後は Add だけ反映される。Recover のあとは Delete も反映され、journal が無い</para>
+    /// <para>Given: an Add and a Delete of another file.</para>
+    /// <para>When: CommitAsync is stopped at AfterApply, then RecoverAsync runs.</para>
+    /// <para>Then: right after the stop only the Add is applied. After Recover the Delete is applied too, and there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_1件目のAfterApplyで止めてもRecoverが残りを終えること()
+    public async Task CommitAsync_RecoverFinishesRemainingAfterFirstAfterApplyStop()
     {
         await using TempDirectory work = TempDirectory.Create();
         string added = System.IO.Path.Combine(work.Path, "a.txt");

@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// ジャーナルを読んだ結果（読めた文書、または読めない理由）
+/// The result of reading a journal (the document that was read, or why it could not be read).
 /// </summary>
 internal sealed class JournalReadResult
 {
@@ -12,38 +12,38 @@ internal sealed class JournalReadResult
     }
 
     /// <summary>
-    /// 読めた文書（読めないときは <see langword="null"/>）
+    /// Gets the document that was read (<see langword="null"/> when it could not be read).
     /// </summary>
     internal JournalDocument? Document { get; }
 
     /// <summary>
-    /// 版がこのライブラリの版と違うなら <see langword="true"/>（新しい版のライブラリが残したものかもしれないので、何にも触れない）
+    /// Gets a value indicating whether the version differs from this library's version (it may have been left by a newer version of the library, so nothing is touched).
     /// </summary>
     internal bool UnsupportedVersion { get; }
 
     /// <summary>
-    /// 読めた結果を作る
+    /// Creates a readable result.
     /// </summary>
-    /// <param name="document">読めた文書</param>
-    /// <returns>読めた結果</returns>
+    /// <param name="document">The document that was read.</param>
+    /// <returns>The readable result.</returns>
     internal static JournalReadResult Readable(JournalDocument document)
     {
         return new JournalReadResult(document, unsupportedVersion: false);
     }
 
     /// <summary>
-    /// 壊れていて読めない結果を作る
+    /// Creates a result for a corrupt journal that cannot be read.
     /// </summary>
-    /// <returns>壊れている結果</returns>
+    /// <returns>The corrupt result.</returns>
     internal static JournalReadResult Corrupt()
     {
         return new JournalReadResult(document: null, unsupportedVersion: false);
     }
 
     /// <summary>
-    /// 版が違って読めない結果を作る
+    /// Creates a result for a journal with a different version that cannot be read.
     /// </summary>
-    /// <returns>版が違う結果</returns>
+    /// <returns>The result for a different version.</returns>
     internal static JournalReadResult OtherVersion()
     {
         return new JournalReadResult(document: null, unsupportedVersion: true);

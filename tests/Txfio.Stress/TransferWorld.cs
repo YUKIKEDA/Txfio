@@ -1,7 +1,7 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// コピー列が比べる、ワークフォルダのコミット後の姿とディスク上の姿、および外に書き出した木
+/// The post-commit view and on-disk view of the work folder, and the trees exported outside, that copy sequences compare against.
 /// </summary>
 internal sealed class TransferWorld
 {
@@ -11,10 +11,10 @@ internal sealed class TransferWorld
     private readonly List<DirectoryTree> _exports;
 
     /// <summary>
-    /// 開始時の木から姿を作る
+    /// Initializes a new instance of the <see cref="TransferWorld"/> class from the starting trees.
     /// </summary>
-    /// <param name="initial">ワークフォルダの開始時の木</param>
-    /// <param name="outside">外に最初からある木</param>
+    /// <param name="initial">The starting tree of the work folder.</param>
+    /// <param name="outside">The tree that exists outside from the start.</param>
     public TransferWorld(DirectoryTree initial, DirectoryTree outside)
     {
         Commit = initial.Clone();
@@ -26,20 +26,20 @@ internal sealed class TransferWorld
     }
 
     /// <summary>
-    /// コミット後のワークフォルダ
+    /// Gets the work folder after commit.
     /// </summary>
     public DirectoryTree Commit { get; }
 
     /// <summary>
-    /// 呼び出しの途中でディスクに見えるワークフォルダ。ステージングしたファイルの本名は含まない
+    /// Gets the work folder as seen on disk during a call. The real names of staged files are not included.
     /// </summary>
     public DirectoryTree Disk { get; }
 
     /// <summary>
-    /// この手がライブラリの規則で通るか
+    /// Returns whether this step passes by the library's rules.
     /// </summary>
-    /// <param name="operation">調べる手</param>
-    /// <returns>通るとき true</returns>
+    /// <param name="operation">The step to check.</param>
+    /// <returns>true when it passes.</returns>
     public bool CanApply(TransferOperation operation)
     {
         switch (operation.Kind)
@@ -54,9 +54,9 @@ internal sealed class TransferWorld
     }
 
     /// <summary>
-    /// 通る手を姿へ反映する
+    /// Applies a passing step to the view.
     /// </summary>
-    /// <param name="operation">反映する手</param>
+    /// <param name="operation">The step to apply.</param>
     public void Apply(TransferOperation operation)
     {
         switch (operation.Kind)
@@ -74,9 +74,9 @@ internal sealed class TransferWorld
     }
 
     /// <summary>
-    /// 外に残るべき木。最初からあるものに、書き出しを重ねる
+    /// The tree that should remain outside. The exports are layered on what exists from the start.
     /// </summary>
-    /// <returns>外の期待</returns>
+    /// <returns>The expected outside.</returns>
     public DirectoryTree ExpectedOutside()
     {
         DirectoryTree expected = _outside.Clone();
@@ -97,9 +97,9 @@ internal sealed class TransferWorld
     }
 
     /// <summary>
-    /// 次に通る書き出しの、外の相対パス
+    /// The relative path outside for the next export that passes.
     /// </summary>
-    /// <returns>out の直下の新しい名前</returns>
+    /// <returns>A new name directly under out.</returns>
     public string NextExportPath()
     {
         return "out/" + _exports.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -3,18 +3,18 @@ using System.Text.Json.Serialization;
 namespace Txfio;
 
 /// <summary>
-/// ジャーナルファイルへ書き出す JSON の構造
+/// The JSON structure written to the journal file.
 /// </summary>
 internal sealed class JournalDocument
 {
     /// <summary>
-    /// ジャーナル文書を作成する
+    /// Initializes a new instance of the <see cref="JournalDocument"/> class.
     /// </summary>
-    /// <param name="version">文書形式の版</param>
-    /// <param name="transactionId">対象トランザクションの ID</param>
-    /// <param name="committing">コミットの適用中なら <see langword="true"/></param>
-    /// <param name="operations">未確定の操作一覧</param>
-    /// <param name="createdDirectories">このトランザクションが作るディレクトリ（操作には含めない）</param>
+    /// <param name="version">The version of the document format.</param>
+    /// <param name="transactionId">The ID of the transaction.</param>
+    /// <param name="committing"><see langword="true"/> while the commit is being applied.</param>
+    /// <param name="operations">The list of unfinished operations.</param>
+    /// <param name="createdDirectories">The directories this transaction creates (not included in the operations).</param>
     [JsonConstructor]
     public JournalDocument(
         int version,
@@ -31,27 +31,27 @@ internal sealed class JournalDocument
     }
 
     /// <summary>
-    /// 文書形式の版
+    /// Gets the version of the document format.
     /// </summary>
     public int Version { get; }
 
     /// <summary>
-    /// 対象トランザクションの ID
+    /// Gets the ID of the transaction.
     /// </summary>
     public Guid TransactionId { get; }
 
     /// <summary>
-    /// コミットの適用中かどうか
+    /// Gets a value indicating whether the commit is being applied.
     /// </summary>
     public bool Committing { get; }
 
     /// <summary>
-    /// 未確定の操作一覧
+    /// Gets the list of unfinished operations.
     /// </summary>
     public IReadOnlyList<JournalOperation> Operations { get; }
 
     /// <summary>
-    /// このトランザクションが作るディレクトリ（操作には含めない）
+    /// Gets the directories this transaction creates (not included in the operations).
     /// </summary>
     public IReadOnlyList<string> CreatedDirectories { get; }
 }

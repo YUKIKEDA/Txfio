@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class DeleteTests
 {
     /// <summary>
-    /// Delete はコミット前に対象を消さない
+    /// Delete does not delete the target before commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象ファイルがある</para>
-    /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: pending は Delete 1 件で、対象ファイルは残る</para>
+    /// <para>Given: the target file exists.</para>
+    /// <para>When: DeleteAsync is called.</para>
+    /// <para>Then: one pending Delete, and the target file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_コミット前は対象を消さないこと()
+    public async Task DeleteAsync_DoesNotDeleteTargetBeforeCommit()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -29,15 +29,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// 未コミット Dispose では対象ファイルが残る
+    /// Dispose without commit keeps the target file.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Delete した直後である</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: 対象ファイルが残る</para>
+    /// <para>Given: right after a Delete.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: the target file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_未コミットDisposeでは対象が残ること()
+    public async Task DeleteAsync_DisposeWithoutCommitKeepsTarget()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -51,15 +51,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// 無いファイルへの Delete はその場で失敗する
+    /// A Delete of a missing file fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスにファイルが無い</para>
-    /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は対象である</para>
+    /// <para>Given: no file exists at the target path.</para>
+    /// <para>When: DeleteAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is the target.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_無いファイルだとExternalConflictExceptionになること()
+    public async Task DeleteAsync_MissingFileThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -68,15 +68,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// 空ディレクトリへの Delete はコミット前に対象を消さない
+    /// A Delete of an empty directory does not delete the target before commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のディレクトリがある</para>
-    /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: pending は Delete 1 件で、ディレクトリは残る</para>
+    /// <para>Given: an empty directory exists.</para>
+    /// <para>When: DeleteAsync is called.</para>
+    /// <para>Then: one pending Delete, and the directory remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_空ディレクトリはコミット前に消えないこと()
+    public async Task DeleteAsync_EmptyDirectoryIsNotDeletedBeforeCommit()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
@@ -91,15 +91,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// Add のあと Delete は打ち消し合い、pending が空になる
+    /// An Add followed by a Delete cancel each other, and the pending changes become empty.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 同じパスを Add している</para>
-    /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: pending は空で、.txnew も対象も無い</para>
+    /// <para>Given: the same path is added.</para>
+    /// <para>When: DeleteAsync is called.</para>
+    /// <para>Then: no pending changes, and neither the .txnew nor the target exists.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_Addのあとだと打ち消して空になること()
+    public async Task DeleteAsync_CancelsPrecedingAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -113,15 +113,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// Update のあと Delete は Delete になり、.txnew を捨てる
+    /// A Delete after an Update becomes a Delete and discards the .txnew.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Update している</para>
-    /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: pending は Delete 1 件で、.txnew は無く対象は残る</para>
+    /// <para>Given: an existing file is updated.</para>
+    /// <para>When: DeleteAsync is called.</para>
+    /// <para>Then: one pending Delete, there is no .txnew, and the target remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_UpdateのあとだとDeleteになりtxnewが消えること()
+    public async Task DeleteAsync_AfterUpdateBecomesDeleteAndDeletesTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -137,15 +137,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// Delete のあと Add は Update になる
+    /// An Add after a Delete becomes an Update.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Delete している</para>
-    /// <para>手順: AddAsync する</para>
-    /// <para>期待: pending の種類は Update で、対象はまだ残る</para>
+    /// <para>Given: an existing file is deleted.</para>
+    /// <para>When: AddAsync is called.</para>
+    /// <para>Then: the pending kind is Update, and the target still remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_DeleteのあとだとUpdateになること()
+    public async Task AddAsync_AfterDeleteBecomesUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -163,15 +163,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// Add のあと Delete でジャーナル書き込みに失敗しても pending と .txnew は残る
+    /// Even if the journal write fails for a Delete after an Add, the pending change and .txnew remain.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 同じパスを Add したあと、journal を排他ロックしている</para>
-    /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: 例外になり、pending は Add のままで .txnew も残る</para>
+    /// <para>Given: after the same path is added, the journal is locked exclusively.</para>
+    /// <para>When: DeleteAsync is called.</para>
+    /// <para>Then: an exception, the pending change stays Add, and the .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_Addのあとでjournal書き込みに失敗するとAddのまま残ること()
+    public async Task DeleteAsync_JournalWriteFailureAfterAddKeepsAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -188,15 +188,15 @@ public sealed class DeleteTests
     }
 
     /// <summary>
-    /// Update のあと Delete でジャーナル書き込みに失敗しても pending と .txnew は残る
+    /// Even if the journal write fails for a Delete after an Update, the pending change and .txnew remain.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Update したあと、journal を排他ロックしている</para>
-    /// <para>手順: DeleteAsync する</para>
-    /// <para>期待: 例外になり、pending は Update のままで .txnew も残る</para>
+    /// <para>Given: after an existing file is updated, the journal is locked exclusively.</para>
+    /// <para>When: DeleteAsync is called.</para>
+    /// <para>Then: an exception, the pending change stays Update, and the .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_Updateのあとでjournal書き込みに失敗するとUpdateのまま残ること()
+    public async Task DeleteAsync_JournalWriteFailureAfterUpdateKeepsUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");

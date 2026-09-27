@@ -4,7 +4,7 @@ using System.Text;
 namespace Txfio;
 
 /// <summary>
-/// トランザクションが押さえたパスのロックを持つ
+/// Holds the locks on the paths a transaction has taken.
 /// </summary>
 internal sealed class PathLockSet
 {
@@ -12,7 +12,7 @@ internal sealed class PathLockSet
 
     private const int LockViolation = 33;
 
-    // Linux の EAGAIN（EWOULDBLOCK）では、.NET は Unix の errno をそのまま HResult に入れる
+    // For Linux EAGAIN (EWOULDBLOCK), .NET puts the Unix errno into HResult as is.
     private const int LinuxWouldBlock = 11;
 
     private readonly IFaultInjector _faults;
@@ -23,16 +23,16 @@ internal sealed class PathLockSet
 
     private readonly HashSet<string> _exclusiveIntents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-    // ワークフォルダ全体のロック（_workFolderState が Shared か Exclusive のあいだだけ開いている）
+    // The work-folder lock (open only while _workFolderState is Shared or Exclusive).
     private FileStream? _workFolderHandle;
 
     private WorkFolderState _workFolderState;
 
-    // パスロックか意図ロックを持ったまま、ワークフォルダ全体のロックを持っていないあいだ開く
+    // Open while a path lock or intent lock is held without the work-folder lock.
     private FileStream? _shareLost;
 
     /// <summary>
-    /// 失敗も途中停止もしないロックの集合を作る
+    /// Initializes a new instance of the <see cref="PathLockSet"/> class that neither fails nor stops partway.
     /// </summary>
     internal PathLockSet()
         : this(NoFaultInjector.Instance)
@@ -40,67 +40,67 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 渡した失敗と途中停止を使うロックの集合を作る
+    /// Initializes a new instance of the <see cref="PathLockSet"/> class that uses the given failures and partial stops.
     /// </summary>
-    /// <param name="faults">この集合の失敗と途中停止</param>
+    /// <param name="faults">The failures and partial stops of this set.</param>
     internal PathLockSet(IFaultInjector faults)
     {
         _faults = faults;
     }
 
     /// <summary>
-    /// ワークフォルダ全体のロックの状態
+    /// The state of the work-folder lock.
     /// </summary>
     private enum WorkFolderState
     {
         /// <summary>
-        /// 持っていない
+        /// Not held.
         /// </summary>
         None,
 
         /// <summary>
-        /// 共有で持っている
+        /// Held as shared.
         /// </summary>
         Shared,
 
         /// <summary>
-        /// 排他で持っている
+        /// Held exclusively.
         /// </summary>
         Exclusive,
 
         /// <summary>
-        /// 共有へ戻せなかった（次の取得で開き直す）
+        /// Could not go back to shared (reopen at the next acquisition).
         /// </summary>
         Lost,
     }
 
     /// <summary>
-    /// ロックファイルの絶対パスを返す
+    /// Returns the absolute path of a lock file.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="fullPath">正規化した絶対パス</param>
-    /// <returns>`.lock` ファイルのパス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="fullPath">The normalized absolute path.</param>
+    /// <returns>The path of the <c>.lock</c> file.</returns>
     internal static string FilePath(string workFolder, string fullPath)
     {
         return LockFile(workFolder, RelativeKey(workFolder, fullPath));
     }
 
     /// <summary>
-    /// 意図ロックの絶対パスを返す（相対パスの末尾に `\*` を足してからハッシュする）
+    /// Returns the absolute path of an intent lock (the relative path is hashed after appending <c>\*</c>).
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="fullPath">正規化した絶対パス</param>
-    /// <returns>意図ロックの `.lock` ファイルのパス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="fullPath">The normalized absolute path.</param>
+    /// <returns>The path of the intent lock's <c>.lock</c> file.</returns>
     internal static string IntentFilePath(string workFolder, string fullPath)
     {
         return LockFile(workFolder, RelativeKey(workFolder, fullPath) + @"\*");
     }
 
     /// <summary>
-    /// 他のハンドルが開いているために失敗したかを返す
+    /// Returns whether an open failed because another handle has the file open.
     /// </summary>
-    /// <param name="exception">オープンで起きた例外</param>
-    /// <returns>共有違反またはロック違反なら <see langword="true"/></returns>
+    /// <param name="exception">The exception from the open.</param>
+    /// <returns><see langword="true"/> for a sharing violation or a lock violation.</returns>
     internal static bool IsSharingViolation(IOException exception)
     {
         int code = exception.HResult & 0xFFFF;
@@ -109,18 +109,18 @@ internal sealed class PathLockSet
             return true;
         }
 
-        // Linux の判定は開発環境でテストを回すためのもので、実行時に保証するのは Windows だけである
+        // The Linux check is for running the tests in development; only Windows is guaranteed at run time.
         return OperatingSystem.IsLinux() && exception.HResult == LinuxWouldBlock;
     }
 
     /// <summary>
-    /// ワークフォルダ全体のロックを共有で開く（既に持っていれば開き直さず、失っていれば開き直す）
+    /// Opens the work-folder lock as shared (does not reopen if already held; reopens if lost).
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="attempt">この呼び出しのロック待ち</param>
-    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックを取れない</exception>
-    /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
-    /// <returns>取れたこと（取れなければ例外）</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="attempt">The lock wait of this call.</param>
+    /// <exception cref="LockContentionException">The work-folder lock cannot be taken by the deadline.</exception>
+    /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
+    /// <returns><see langword="true"/> when taken (otherwise an exception is thrown).</returns>
     internal async Task AcquireSharedAsync(string workFolder, LockAttempt attempt)
     {
         if (_workFolderState == WorkFolderState.Lost)
@@ -147,14 +147,14 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// ワークフォルダ全体のロックを排他で開く（共有を持っていれば閉じて取り直す）
+    /// Opens the work-folder lock exclusively (if shared is held, closes it and takes it again).
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="attempt">この呼び出しのロック待ち</param>
-    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックを取れない</exception>
-    /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
-    /// <exception cref="IOException">共有へ戻すときの、共有違反以外の失敗</exception>
-    /// <returns>取れたこと（取れなければ例外）</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="attempt">The lock wait of this call.</param>
+    /// <exception cref="LockContentionException">The work-folder lock cannot be taken by the deadline.</exception>
+    /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
+    /// <exception cref="IOException">A failure other than a sharing violation while going back to shared.</exception>
+    /// <returns><see langword="true"/> when taken (otherwise an exception is thrown).</returns>
     internal async Task AcquireExclusiveAsync(string workFolder, LockAttempt attempt)
     {
         if (_workFolderState == WorkFolderState.Lost)
@@ -211,13 +211,13 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// しるし（`.txfio/share-lost.lock`）が使用中なら空くまで待つ（空かなければ排他をやめて共有に戻す）
+    /// Waits until the share-lost marker (<c>.txfio/share-lost.lock</c>) is free if it is in use (if it does not become free, gives up the exclusive lock and goes back to shared).
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="attempt">この呼び出しのロック待ち</param>
-    /// <exception cref="LockContentionException">期限までにしるしが空かない</exception>
-    /// <exception cref="OperationCanceledException">待ちのあいだに取り消された</exception>
-    /// <returns>しるしが空いていること（空かなければ例外）</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="attempt">The lock wait of this call.</param>
+    /// <exception cref="LockContentionException">The marker does not become free by the deadline.</exception>
+    /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
+    /// <returns>A task that completes when the marker is free (otherwise an exception is thrown).</returns>
     internal async Task RejectForeignLocksAsync(string workFolder, LockAttempt attempt)
     {
         try
@@ -243,18 +243,18 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// パスをロックし、読んでいるあいだ守るディレクトリの意図ロックを排他で取る（破棄すると、この呼び出しで取った排他の意図ロックを閉じる）
+    /// Locks the paths, and takes exclusive intent locks on the directories to protect while reading (disposing closes the exclusive intent locks taken by this call).
     /// </summary>
     /// <remarks>
-    /// ディレクトリのコピー元と ZIP の入力を読むあいだ、他のトランザクションが配下をステージしたりコミットしたりしないようにする
-    /// 既に排他で持っていた意図ロックは閉じない
+    /// Keeps other transactions from staging or committing under a directory copy source or a ZIP input while it is read.
+    /// Intent locks that were already held exclusively are not closed.
     /// </remarks>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="fullPaths">ロックする正規化した絶対パス</param>
-    /// <param name="reservedPaths">トランザクションの終わりまで意図ロックを排他で持つディレクトリ</param>
-    /// <param name="readDirectories">呼び出しのあいだだけ意図ロックを排他で持つディレクトリ</param>
-    /// <param name="attempt">この呼び出しのロック待ち</param>
-    /// <returns>読み終えたら破棄する範囲</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="fullPaths">The normalized absolute paths to lock.</param>
+    /// <param name="reservedPaths">The directories whose intent locks are held exclusively until the transaction ends.</param>
+    /// <param name="readDirectories">The directories whose intent locks are held exclusively only during the call.</param>
+    /// <param name="attempt">The lock wait of this call.</param>
+    /// <returns>The scope to dispose after reading.</returns>
     internal async Task<ReadingScope> AcquireForReadingAsync(
         string workFolder,
         string[] fullPaths,
@@ -286,25 +286,25 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 絶対パスを大文字化して辞書順に並べ、祖先の意図ロックを取ってからその順でロックし、同じパスは開き直さない
+    /// Sorts the upper-cased absolute paths lexically, takes the ancestors' intent locks, then locks the paths in that order, without reopening the same path.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="fullPaths">正規化した絶対パス</param>
-    /// <param name="attempt">この呼び出しのロック待ち</param>
-    /// <returns>取れたこと（取れなければ例外）</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="fullPaths">The normalized absolute paths.</param>
+    /// <param name="attempt">The lock wait of this call.</param>
+    /// <returns><see langword="true"/> when taken (otherwise an exception is thrown).</returns>
     internal Task AcquireAsync(string workFolder, string[] fullPaths, LockAttempt attempt)
     {
         return AcquireCoreAsync(workFolder, fullPaths, exclusiveIntentPaths: null, attempt);
     }
 
     /// <summary>
-    /// パスロックに加え、予約するディレクトリの意図ロックを排他で取る
+    /// In addition to the path locks, takes exclusive intent locks on the directories being reserved.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="fullPaths">正規化した絶対パス</param>
-    /// <param name="exclusiveIntentPaths">排他の意図ロックを取るディレクトリ</param>
-    /// <param name="attempt">この呼び出しのロック待ち</param>
-    /// <returns>取れたこと（取れなければ例外）</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="fullPaths">The normalized absolute paths.</param>
+    /// <param name="exclusiveIntentPaths">The directories to take exclusive intent locks on.</param>
+    /// <param name="attempt">The lock wait of this call.</param>
+    /// <returns><see langword="true"/> when taken (otherwise an exception is thrown).</returns>
     internal Task AcquireReservingAsync(
         string workFolder,
         string[] fullPaths,
@@ -315,7 +315,7 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 持っているハンドルを閉じる（ロックファイルは残す）
+    /// Closes the handles held (the lock files stay).
     /// </summary>
     internal void Release()
     {
@@ -408,7 +408,7 @@ internal sealed class PathLockSet
 
     private static LockContentionException Contention(string workFolder)
     {
-        return new LockContentionException("他のトランザクションがこのパスを使用中です: " + workFolder, workFolder);
+        return new LockContentionException("Another transaction is using this path: " + workFolder, workFolder);
     }
 
     private FileStream OpenLockFile(string lockPath, FileShare share)
@@ -442,7 +442,7 @@ internal sealed class PathLockSet
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
-            throw new LockContentionException("他のトランザクションがこのパスを使用中です: " + fullPath, fullPath);
+            throw new LockContentionException("Another transaction is using this path: " + fullPath, fullPath);
         }
     }
 
@@ -642,12 +642,12 @@ internal sealed class PathLockSet
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
-            throw new LockContentionException("他のトランザクションがこのパスを使用中です: " + directory, directory);
+            throw new LockContentionException("Another transaction is using this path: " + directory, directory);
         }
     }
 
-    // 排他の意図ロックを待っているあいだはワークフォルダ全体のロックを持たない
-    // 持ったままだと、待っている側が排他に上げるのを塞ぐ
+    // Do not hold the work-folder lock while waiting for an exclusive intent lock.
+    // Holding it would block the other side from raising to exclusive.
     private async Task AcquireExclusiveIntentAsync(string workFolder, string directory, LockAttempt attempt)
     {
         bool closedOwnShared = false;
@@ -681,7 +681,7 @@ internal sealed class PathLockSet
                     if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
                     {
                         throw new LockContentionException(
-                            "他のトランザクションがこのパスを使用中です: " + directory,
+                            "Another transaction is using this path: " + directory,
                             directory);
                     }
                 }
@@ -743,7 +743,7 @@ internal sealed class PathLockSet
         }
         catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            // 共有へ戻せなくても、呼び出し側が元の例外を返す
+            // Even if it cannot go back to shared, the caller returns the original exception.
         }
     }
 
@@ -761,7 +761,7 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// 読んでいるあいだだけ排他で持つ意図ロックを、破棄するときに閉じる
+    /// Closes, on dispose, the intent locks held exclusively only while reading.
     /// </summary>
     internal readonly struct ReadingScope : IDisposable
     {
@@ -770,10 +770,10 @@ internal sealed class PathLockSet
         private readonly IReadOnlyList<string> _directories;
 
         /// <summary>
-        /// 閉じる対象を覚える
+        /// Initializes a new instance of the <see cref="ReadingScope"/> struct with what to close.
         /// </summary>
-        /// <param name="locks">ロックの集合</param>
-        /// <param name="directories">この呼び出しで排他にした意図ロックのディレクトリ</param>
+        /// <param name="locks">The set of locks.</param>
+        /// <param name="directories">The directories whose intent locks this call made exclusive.</param>
         internal ReadingScope(PathLockSet locks, IReadOnlyList<string> directories)
         {
             _locks = locks;
@@ -781,7 +781,7 @@ internal sealed class PathLockSet
         }
 
         /// <summary>
-        /// この呼び出しで排他にした意図ロックを閉じる
+        /// Closes the intent locks this call made exclusive.
         /// </summary>
         public void Dispose()
         {

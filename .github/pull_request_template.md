@@ -10,10 +10,10 @@ Closes #<issue-number>
 - Phase:
 
 <!--
-GitHub に Issue を関連付けるには Closing キーワードが必須。
-- 有効: 本文中の単独行 `Closes #12`（推奨）/ `Fixes #12` / `Resolves #12`
-- 無効になりやすい: 箇条書きだけ（`- Closes #12`）や URL のみ
-PR 作成後、GitHub UI で Development / Linked issues に Issue が出ていることを確認すること。
+A closing keyword is required to link the Issue on GitHub.
+- Works: `Closes #12` on its own line in the body (recommended) / `Fixes #12` / `Resolves #12`
+- Often fails: only a bullet (`- Closes #12`) or only a URL
+After opening the PR, check that the Issue appears under Development / Linked issues in the GitHub UI.
 -->
 
 ## Test plan
@@ -22,7 +22,7 @@ PR 作成後、GitHub UI で Development / Linked issues に Issue が出てい�
 
 ## Verification
 
-- [ ] Windows で `./build.ps1` を実行した（GHA が使えない場合はこれが必須ゲート）
+- [ ] Ran `./build.ps1` on Windows (the required gate while GitHub Actions cannot run)
 
 ## Risk / Rollback
 
@@ -31,10 +31,10 @@ PR 作成後、GitHub UI で Development / Linked issues に Issue が出てい�
 
 ## Checklist
 
-- [ ] Conventional Commits 形式のタイトル
-- [ ] Related に単独行の `Closes #N`（または Fixes / Resolves）があり、GitHub 上で Issue が Linked になっている
-- [ ] 設計契約を変える場合は設計 PR が先行、または本 PR がドキュメントのみの例外に該当
-- [ ] 1 Issue ≈ 1 PR（基盤バッチ例外を除く）
-- [ ] 公開 API を足したら XML ドキュメントがある（または N/A）
-- [ ] 新しいテストに前提・手順・期待がある（または N/A）
-- [ ] `src/` の日本語 XML コメントを足す・変えた場合、Gemini レビューを反映した（または N/A）
+- [ ] Title follows Conventional Commits
+- [ ] `## Related` has `Closes #N` (or Fixes / Resolves) on its own line, and GitHub shows the Issue as linked
+- [ ] A design PR came first if this changes a design contract, or this PR is the docs-only exception
+- [ ] 1 Issue ≈ 1 PR (except the foundation batch exception)
+- [ ] New public API has XML documentation (or N/A)
+- [ ] New tests have Given / When / Then (or N/A)
+- [ ] Title, body, comments, and docs are in English; changed bilingual documents have their `*.ja.md` updated in this PR (or a follow-up Issue is linked) (or N/A)

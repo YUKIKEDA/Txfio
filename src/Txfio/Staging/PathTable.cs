@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// トランザクション内のパス操作を表す行の表
+/// The table of rows that represent path operations in a transaction.
 /// </summary>
 internal sealed class PathTable
 {
@@ -10,31 +10,31 @@ internal sealed class PathTable
     private readonly Dictionary<string, int> _moveDestination = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 表の行（ジャーナルに書く順、変えるときは表のメソッドを通す（位置を合わせるため））
+    /// Gets the rows of the table (in journal order; change them only through the table methods, to keep positions aligned).
     /// </summary>
     internal IReadOnlyList<JournalOperation> Rows => _rows;
 
     /// <summary>
-    /// 行の数
+    /// Gets the number of rows.
     /// </summary>
     internal int Count => _rows.Count;
 
     /// <summary>
-    /// 指定した位置の行
+    /// Gets the row at the given position.
     /// </summary>
-    /// <param name="index">0 から始まる位置</param>
+    /// <param name="index">The zero-based position.</param>
     internal JournalOperation this[int index] => _rows[index];
 
     /// <summary>
-    /// ファイル Move を外し、移動元を消す行に畳む
+    /// Removes a file Move and folds it into a row that deletes the source.
     /// </summary>
     /// <remarks>
-    /// 移動元へ Add し直していれば、消してから書くのと同じなので、その Add を Update にする
-    /// 移動元へ別の Move で入ってくる予定があるときは、適用順（Move が先、Delete が後）で表せないので受け付けない
+    /// If the source was added again, that is the same as deleting and writing, so that Add becomes an Update.
+    /// If another Move is going to come into the source, the apply order (Move first, Delete after) cannot express it, so it is not accepted.
     /// </remarks>
-    /// <param name="operations">畳む操作一覧（書き換える）</param>
-    /// <param name="moveIndex">外すファイル Move の位置</param>
-    /// <param name="destination">Move の代わりに足す操作（無ければ元の Delete を Move の位置に置く）</param>
+    /// <param name="operations">The operations to fold (changed in place).</param>
+    /// <param name="moveIndex">The position of the file Move to remove.</param>
+    /// <param name="destination">The operation to add in place of the Move (if <see langword="null"/>, the source's Delete is placed at the Move's position).</param>
     internal static void FoldMoveOutToSourceDelete(
         List<JournalOperation> operations,
         int moveIndex,
@@ -54,7 +54,7 @@ internal sealed class PathTable
             JournalOperation readded = operations[readdedIndex];
             if (readded.Kind != PendingChangeKind.Add)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
 
             operations[readdedIndex] = new JournalOperation(PendingChangeKind.Update, sourcePath, readded.StagingPath);
@@ -66,7 +66,7 @@ internal sealed class PathTable
                 && string.Equals(operation.NewPath, sourcePath, StringComparison.OrdinalIgnoreCase));
         if (movedInto)
         {
-            throw new InvalidOperationException("移動元へ別のファイルを移す予定があるので、元を消す形に畳めません: " + sourcePath);
+            throw new InvalidOperationException("Another file is scheduled to move into the source, so this cannot fold into deleting the original: " + sourcePath);
         }
 
         JournalOperation delete = new JournalOperation(PendingChangeKind.Delete, sourcePath);
@@ -81,18 +81,18 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 行をジャーナル用の配列にする
+    /// Returns the rows as an array for the journal.
     /// </summary>
-    /// <returns>表の行を並べた配列</returns>
+    /// <returns>An array of the rows of the table.</returns>
     internal JournalOperation[] ToArray()
     {
         return _rows.ToArray();
     }
 
     /// <summary>
-    /// 行を末尾に足す
+    /// Adds a row to the end.
     /// </summary>
-    /// <param name="operation">足す操作</param>
+    /// <param name="operation">The operation to add.</param>
     internal void Add(JournalOperation operation)
     {
         _rows.Add(operation);
@@ -100,9 +100,9 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 同じインスタンスの行を外す
+    /// Removes the row that is the same instance.
     /// </summary>
-    /// <param name="operation">外す操作</param>
+    /// <param name="operation">The operation to remove.</param>
     internal void Remove(JournalOperation operation)
     {
         _rows.Remove(operation);
@@ -110,9 +110,9 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 指定した位置の行を外す
+    /// Removes the row at the given position.
     /// </summary>
-    /// <param name="index">外す位置</param>
+    /// <param name="index">The position to remove.</param>
     internal void RemoveAt(int index)
     {
         _rows.RemoveAt(index);
@@ -120,10 +120,10 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 指定した位置に行を入れる
+    /// Inserts a row at the given position.
     /// </summary>
-    /// <param name="index">入れる位置</param>
-    /// <param name="operation">入れる操作</param>
+    /// <param name="index">The position to insert at.</param>
+    /// <param name="operation">The operation to insert.</param>
     internal void Insert(int index, JournalOperation operation)
     {
         _rows.Insert(index, operation);
@@ -131,10 +131,10 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 指定した位置の行を置き換える
+    /// Replaces the row at the given position.
     /// </summary>
-    /// <param name="index">置き換える位置</param>
-    /// <param name="operation">新しい操作</param>
+    /// <param name="index">The position to replace.</param>
+    /// <param name="operation">The new operation.</param>
     internal void Set(int index, JournalOperation operation)
     {
         _rows[index] = operation;
@@ -142,17 +142,17 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 同じインスタンスの行の位置を返す
+    /// Returns the position of the row that is the same instance.
     /// </summary>
-    /// <param name="operation">探す操作</param>
-    /// <returns>無ければ -1</returns>
+    /// <param name="operation">The operation to find.</param>
+    /// <returns>-1 if not found.</returns>
     internal int IndexOf(JournalOperation operation)
     {
         return _rows.IndexOf(operation);
     }
 
     /// <summary>
-    /// 行をすべて外す
+    /// Removes all rows.
     /// </summary>
     internal void Clear()
     {
@@ -162,9 +162,9 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 行をすべて入れ替える
+    /// Replaces all rows.
     /// </summary>
-    /// <param name="operations">新しい行</param>
+    /// <param name="operations">The new rows.</param>
     internal void Load(IEnumerable<JournalOperation> operations)
     {
         _rows.Clear();
@@ -173,21 +173,21 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// そのパスについて最初の行の位置を返す
+    /// Returns the position of the first row for the path.
     /// </summary>
-    /// <param name="path">対象パス</param>
-    /// <returns>無ければ -1</returns>
+    /// <param name="path">The target path.</param>
+    /// <returns>-1 if not found.</returns>
     internal int FindOperationIndex(string path)
     {
         return _firstByPath.TryGetValue(path, out int index) ? index : -1;
     }
 
     /// <summary>
-    /// 指定した位置より後ろで、同じパスの行を探す
+    /// Finds a row for the same path after the given position.
     /// </summary>
-    /// <param name="path">対象パス</param>
-    /// <param name="afterIndex">この位置より後ろから探す</param>
-    /// <returns>無ければ -1</returns>
+    /// <param name="path">The target path.</param>
+    /// <param name="afterIndex">Search after this position.</param>
+    /// <returns>-1 if not found.</returns>
     internal int FindLaterOperationIndex(string path, int afterIndex)
     {
         for (int i = afterIndex + 1; i < _rows.Count; i++)
@@ -202,20 +202,20 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 移動先がこのパスである Move の位置を返す
+    /// Returns the position of the Move whose destination is this path.
     /// </summary>
-    /// <param name="destPath">移動先</param>
-    /// <returns>無ければ -1</returns>
+    /// <param name="destPath">The destination.</param>
+    /// <returns>-1 if not found.</returns>
     internal int FindMoveToIndex(string destPath)
     {
         return _moveDestination.TryGetValue(destPath, out int index) ? index : -1;
     }
 
     /// <summary>
-    /// ファイル Move の移動元の行なら <see langword="true"/>
+    /// Returns <see langword="true"/> if the row is the source of a file Move.
     /// </summary>
-    /// <param name="index">行の位置</param>
-    /// <returns>ファイル Move なら <see langword="true"/></returns>
+    /// <param name="index">The position of the row.</param>
+    /// <returns><see langword="true"/> for a file Move.</returns>
     internal bool IsFileMoveOut(int index)
     {
         return index >= 0
@@ -224,11 +224,11 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// ファイル Move の移動元について、そのあとの中身を決める行の位置を返す
+    /// For the source of a file Move, returns the position of the row that decides the later content.
     /// </summary>
-    /// <param name="path">移動元</param>
-    /// <param name="moveOutIndex">ファイル Move の位置</param>
-    /// <returns>移動元へ書き直した行か、別の Move で入ってくる行の位置（無ければ -1）</returns>
+    /// <param name="path">The source.</param>
+    /// <param name="moveOutIndex">The position of the file Move.</param>
+    /// <returns>The position of a row rewritten to the source, or of a Move coming in from elsewhere (-1 if none).</returns>
     internal int FindContentAfterMoveOut(string path, int moveOutIndex)
     {
         int later = FindLaterOperationIndex(path, moveOutIndex);
@@ -236,14 +236,14 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// ファイルの Add または Update が、表のどの行になるかを決める
+    /// Decides which row of the table a file Add or Update becomes.
     /// </summary>
-    /// <param name="targetPath">対象パス</param>
-    /// <param name="kind">呼び出しが要求した種類</param>
-    /// <param name="existingIndex">置き換える行の位置（追加なら -1）</param>
-    /// <param name="moveToIndex">移動先への Update として畳む Move の位置（無ければ -1）</param>
-    /// <param name="addOntoFileMove">ファイル Move の移動元へ Add するなら <see langword="true"/></param>
-    /// <param name="recordedKind">表に残す種類</param>
+    /// <param name="targetPath">The target path.</param>
+    /// <param name="kind">The kind the call requested.</param>
+    /// <param name="existingIndex">The position of the row to replace (-1 to add).</param>
+    /// <param name="moveToIndex">The position of the Move to fold as an Update at its destination (-1 if none).</param>
+    /// <param name="addOntoFileMove"><see langword="true"/> when adding to the source of a file Move.</param>
+    /// <param name="recordedKind">The kind to keep in the table.</param>
     internal void PlanStageFile(
         string targetPath,
         PendingChangeKind kind,
@@ -273,7 +273,7 @@ internal sealed class PathTable
                 }
                 else if (FindMoveToIndex(targetPath) >= 0)
                 {
-                    // 別の Move で入ってくるファイルがあるので、Update ならその Move の移動先への Update と同じ
+                    // Another Move brings a file in, so an Update is the same as an Update at that Move's destination.
                     if (kind != PendingChangeKind.Update)
                     {
                         throw AlreadyStaged();
@@ -309,10 +309,10 @@ internal sealed class PathTable
     }
 
     /// <summary>
-    /// 入れる Move で、空いている端の無い輪になるなら拒否する
+    /// Rejects a Move that would close a cycle with no free end.
     /// </summary>
-    /// <param name="replacement">入れる Move</param>
-    /// <param name="replaceIndex">置き換える位置（追加なら -1）</param>
+    /// <param name="replacement">The Move to put in.</param>
+    /// <param name="replaceIndex">The position to replace (-1 to add).</param>
     internal void ThrowIfMoveChainCloses(JournalOperation replacement, int replaceIndex)
     {
         List<JournalOperation> prospective = new List<JournalOperation>(_rows);
@@ -327,16 +327,16 @@ internal sealed class PathTable
 
         if (!StagingApplier.MovesReachFreeEnd(prospective))
         {
-            throw new InvalidOperationException("空いている端が無い移動は受け付けられません");
+            throw new InvalidOperationException("A move without a free end is not accepted");
         }
     }
 
     /// <summary>
-    /// 同じパスへファイルを書き直すとき、表に残す種類を決める
+    /// Decides the kind to keep in the table when a file is rewritten at the same path.
     /// </summary>
-    /// <param name="existingKind">既に記録されている種類</param>
-    /// <param name="requestedKind">今回の操作の種類</param>
-    /// <returns>表に残す種類</returns>
+    /// <param name="existingKind">The kind already recorded.</param>
+    /// <param name="requestedKind">The kind of this operation.</param>
+    /// <returns>The kind to keep in the table.</returns>
     private static PendingChangeKind RestageKind(PendingChangeKind existingKind, PendingChangeKind requestedKind)
     {
         if (existingKind == requestedKind)
@@ -360,7 +360,7 @@ internal sealed class PathTable
 
     private static InvalidOperationException AlreadyStaged()
     {
-        return new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        return new InvalidOperationException("This path is already staged by another operation");
     }
 
     private void Note(JournalOperation operation, int index)

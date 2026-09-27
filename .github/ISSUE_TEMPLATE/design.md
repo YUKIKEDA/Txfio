@@ -1,31 +1,32 @@
 ---
 name: Design
-about: 設計ドキュメントだけの変更（実装しない）
+about: Design document change only (no implementation)
 labels: ["type:design"]
 ---
 
-## 変更する節
+## Sections to change
 
 - docs/design.md:
 
-## なぜ変えるか
+## Why
 
 -
 
 ## Acceptance
 
-- [ ] `docs/design.md` の該当節が更新されている
-- [ ] 実装コードはこの PR / Issue に含めない
+- [ ] The sections of `docs/design.md` are updated
+- [ ] `docs/design.ja.md` is updated to match (or a follow-up Issue is linked)
+- [ ] No implementation code in this PR / Issue
 
 ## Out of scope
 
-- 本番向け実装
+- Production implementation
 
 ## Related
 
 - Phase:
-- Follow-up implementation Issue（予定）:
+- Follow-up implementation Issue (planned):
 
 ## Grill
 
-- 実施済み / 不要（理由）:
+- Done / not needed (reason):

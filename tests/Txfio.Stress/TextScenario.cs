@@ -3,12 +3,12 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 1 トランザクション分の文字列と JSON の操作列と、開始時のテキスト
+/// A text and JSON sequence for one transaction, and the text at the start.
 /// </summary>
-/// <param name="Seed">この列を作ったシード</param>
-/// <param name="Initial">開始前にディスクへ置くテキスト</param>
-/// <param name="Operations">順に打つ操作</param>
-/// <param name="Commit">最後に Commit するなら true、Dispose だけなら false</param>
+/// <param name="Seed">The seed that made this sequence.</param>
+/// <param name="Initial">The text placed on disk before the start.</param>
+/// <param name="Operations">The operations to run in order.</param>
+/// <param name="Commit">true to Commit at the end, false to only Dispose.</param>
 internal sealed record TextScenario(
     int Seed,
     TextModel Initial,
@@ -18,12 +18,12 @@ internal sealed record TextScenario(
     private static readonly string[] _paths = new[] { "a.txt", "b.txt", "c.txt", "d/a.txt", "e/b.txt", "j.txt" };
 
     /// <summary>
-    /// シードから操作列を作る。各 API を、通る手として先に入れる
+    /// Makes a sequence from a seed. Every API goes first as steps that pass.
     /// </summary>
-    /// <param name="seed">シード</param>
-    /// <param name="maxOperations">操作数の上限</param>
-    /// <param name="maxBytes">1 ファイルの長さの上限。テキストは既定では数十 KB まで</param>
-    /// <returns>作った操作列</returns>
+    /// <param name="seed">The seed.</param>
+    /// <param name="maxOperations">The maximum number of operations.</param>
+    /// <param name="maxBytes">The maximum length of one file. Text is at most tens of KB by default.</param>
+    /// <returns>The sequence that was made.</returns>
     public static TextScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);
@@ -57,14 +57,14 @@ internal sealed record TextScenario(
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形の操作列
+    /// A readable form of the sequence for failure reports.
     /// </summary>
-    /// <returns>開始時のファイル、操作、終わり方を並べた文字列</returns>
+    /// <returns>A string with the starting files, the operations, and how it ends.</returns>
     public string Describe()
     {
         StringBuilder text = new StringBuilder();
         text.Append("seed=").Append(Seed).AppendLine();
-        text.Append("initial files=[").Append(string.Join(", ", Initial.Files.OrderBy(path => path, StringComparer.Ordinal).Select(path => path + " " + Initial.Text(path).Length + " 文字"))).AppendLine("]");
+        text.Append("initial files=[").Append(string.Join(", ", Initial.Files.OrderBy(path => path, StringComparer.Ordinal).Select(path => path + " " + Initial.Text(path).Length + " characters"))).AppendLine("]");
         for (int i = 0; i < Operations.Count; i++)
         {
             text.Append("  ").Append(i).Append(": ").Append(Operations[i]).AppendLine();

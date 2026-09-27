@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverReportTests
 {
     /// <summary>
-    /// ConflictDetected は飛ばした操作を載せ、次の Recover はそのジャーナルを含めない
+    /// ConflictDetected lists the skipped operations, and the next Recover does not include that journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Add 残骸があり、対象パスは外部で既に作られている</para>
-    /// <para>手順: RecoverAsync を 2 回呼ぶ</para>
-    /// <para>期待: 1 回目は ConflictDetected でそのジャーナルの操作は BeforeAfterMismatch、2 回目は NoPendingTransactions でジャーナル一覧は空</para>
+    /// <para>Given: leftovers of a Committing Add, and the target path has already been created externally.</para>
+    /// <para>When: RecoverAsync is called twice.</para>
+    /// <para>Then: the first is ConflictDetected with the journal's operation as BeforeAfterMismatch, and the second is NoPendingTransactions with an empty journal list.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_競合した操作を結果に載せること()
+    public async Task RecoverAsync_ListsConflictedOperations()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -43,15 +43,15 @@ public sealed class RecoverReportTests
     }
 
     /// <summary>
-    /// 複数ジャーナルは全体の優先順位と、ジャーナルごとの結果を両方返す
+    /// With several journals, it returns both the overall priority and the result of each journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 壊れたジャーナルと、未コミットの Add 残骸がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: 全体は JournalUnreadable、壊れた方の操作一覧は空で、未コミットの方は RolledBack</para>
+    /// <para>Given: a broken journal and leftovers of an uncommitted Add.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: the overall result is JournalUnreadable, the broken one has an empty operation list, and the uncommitted one is RolledBack.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_複数ジャーナルは優先順位と内訳を返すこと()
+    public async Task RecoverAsync_ReturnsPriorityAndBreakdownForSeveralJournals()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles broken = await LeftoverAddFiles.WriteAddAsync(
@@ -81,15 +81,15 @@ public sealed class RecoverReportTests
     }
 
     /// <summary>
-    /// 生きているジャーナルは一覧に入れない
+    /// Live journals are not listed.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 操作していない生きているトランザクションと、AfterCommitting で止めて Dispose したトランザクションがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: 一覧は落ちた方だけで、生きているトランザクション ID は無い</para>
+    /// <para>Given: a live transaction with no operations, and a transaction stopped at AfterCommitting and disposed.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: the list has only the crashed one, and not the live transaction's ID.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_生きているジャーナルは一覧に入れないこと()
+    public async Task RecoverAsync_DoesNotListLiveJournals()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -115,15 +115,15 @@ public sealed class RecoverReportTests
     }
 
     /// <summary>
-    /// 複数の残骸ジャーナルはパスの大文字小文字を無視した辞書順で載る
+    /// Several orphaned journals are listed in lexical order of the path, ignoring case.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きているトランザクションがあり、未コミットの Add 残骸を辞書順の逆に 2 件書いてある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: Journals はパスの大文字小文字を無視した辞書順であり、どちらも RolledBack であり、生きているトランザクションは一覧に無い</para>
+    /// <para>Given: a live transaction exists, and two sets of leftovers of uncommitted Adds are written in reverse lexical order.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: Journals are in lexical order of the path ignoring case, both are RolledBack, and the live transaction is not in the list.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_複数ジャーナルはパスの大文字小文字を無視した辞書順で載ること()
+    public async Task RecoverAsync_ListsSeveralJournalsInLexicalOrderIgnoringCase()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -150,15 +150,15 @@ public sealed class RecoverReportTests
     }
 
     /// <summary>
-    /// ファイル名から ID を取れない、読めないジャーナルは、空の ID で一覧に入れない
+    /// An unreadable journal whose ID cannot be taken from its file name is not listed with an empty ID.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイル名が tx-*.journal に合うが GUID ではない、壊れたジャーナルがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: 全体は JournalUnreadable、一覧は空、ジャーナルは残る</para>
+    /// <para>Given: a broken journal whose file name matches tx-*.journal but is not a GUID.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: the overall result is JournalUnreadable, the list is empty, and the journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_IDを取れない読めないジャーナルは一覧に入れないこと()
+    public async Task RecoverAsync_DoesNotListUnreadableJournalWithoutId()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");

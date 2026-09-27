@@ -1,32 +1,32 @@
 namespace Txfio;
 
 /// <summary>
-/// <see cref="RecoverReport.Result"/> の値
+/// The value of <see cref="RecoverReport.Result"/>.
 /// </summary>
 public enum RecoverResult
 {
     /// <summary>
-    /// 未確定のトランザクションは無かった
+    /// There were no unfinished transactions.
     /// </summary>
     NoPendingTransactions = 0,
 
     /// <summary>
-    /// 未コミットのジャーナルを破棄してロールバックした
+    /// An uncommitted journal was discarded and rolled back.
     /// </summary>
     RolledBack = 1,
 
     /// <summary>
-    /// Committing 中の操作をロールフォワードした
+    /// The operations of a Committing journal were rolled forward.
     /// </summary>
     RolledForward = 2,
 
     /// <summary>
-    /// Before / After のどちらとも一致しない操作があった
+    /// An operation matched neither Before nor After.
     /// </summary>
     ConflictDetected = 3,
 
     /// <summary>
-    /// JSON として読めないジャーナルがあった
+    /// A journal could not be read as JSON.
     /// </summary>
     JournalUnreadable = 4,
 }

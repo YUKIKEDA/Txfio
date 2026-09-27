@@ -1,15 +1,15 @@
 namespace Txfio.Tests;
 
 /// <summary>
-/// 別プロセスのロック確認の入口
+/// The entry point for lock checks in another process.
 /// </summary>
 public static class Program
 {
     /// <summary>
-    /// 引数があるときだけ、子プロセスとしてロックを持ち続ける
+    /// Only when there are arguments, keeps holding locks as a child process.
     /// </summary>
-    /// <param name="args"><c>dotnet test</c> からは呼ばれない起動引数</param>
-    /// <returns>終了コード</returns>
+    /// <param name="args">Start-up arguments (not passed from <c>dotnet test</c>).</param>
+    /// <returns>The exit code.</returns>
     public static Task<int> Main(string[] args)
     {
         if (args.Length == 0)

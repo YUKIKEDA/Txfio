@@ -1,50 +1,50 @@
 namespace Txfio;
 
 /// <summary>
-/// 正規化済みの絶対パスどうしの比較と書き換え（ディスクには触れない）
+/// Compares and rewrites normalized absolute paths (without touching the disk).
 /// </summary>
 internal static class PathMath
 {
     /// <summary>
-    /// 大文字と小文字を区別せずに、同じパスかどうかを判定する
+    /// Returns whether two paths are the same, ignoring case.
     /// </summary>
-    /// <param name="left">比べるパス</param>
-    /// <param name="right">比べるもう一方のパス</param>
-    /// <returns>同じなら <see langword="true"/></returns>
+    /// <param name="left">A path to compare.</param>
+    /// <param name="right">The other path to compare.</param>
+    /// <returns><see langword="true"/> if they are the same.</returns>
     internal static bool SamePath(string left, string right)
     {
         return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// パスがディレクトリの配下かどうかを判定する（ディレクトリ自身は含めない）
+    /// Returns whether a path is under a directory (the directory itself is not included).
     /// </summary>
-    /// <param name="directoryPath">ディレクトリ</param>
-    /// <param name="path">調べるパス</param>
-    /// <returns>配下なら <see langword="true"/></returns>
+    /// <param name="directoryPath">The directory.</param>
+    /// <param name="path">The path to check.</param>
+    /// <returns><see langword="true"/> if it is under the directory.</returns>
     internal static bool IsUnder(string directoryPath, string path)
     {
         return path.StartsWith(AsDirectoryPrefix(directoryPath), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// パスがディレクトリそのもの、またはその配下かどうかを判定する
+    /// Returns whether a path is the directory itself or under it.
     /// </summary>
-    /// <param name="directoryPath">ディレクトリ</param>
-    /// <param name="path">調べるパス</param>
-    /// <returns>そのもの、または配下なら <see langword="true"/></returns>
+    /// <param name="directoryPath">The directory.</param>
+    /// <param name="path">The path to check.</param>
+    /// <returns><see langword="true"/> if it is the directory itself or under it.</returns>
     internal static bool IsEqualOrUnder(string directoryPath, string path)
     {
         return SamePath(directoryPath, path) || IsUnder(directoryPath, path);
     }
 
     /// <summary>
-    /// ディレクトリ <paramref name="from"/> そのもの、またはその配下のパスを、<paramref name="to"/> の下の同じ位置へ置き換える
+    /// Moves a path that is the directory <paramref name="from"/> itself or under it to the same position under <paramref name="to"/>.
     /// </summary>
-    /// <param name="from">置き換え前のディレクトリ</param>
-    /// <param name="to">置き換え後のディレクトリ</param>
-    /// <param name="path"><paramref name="from"/> そのもの、または配下のパス</param>
-    /// <returns>置き換えたパス</returns>
+    /// <param name="from">The directory before the move.</param>
+    /// <param name="to">The directory after the move.</param>
+    /// <param name="path">A path that is <paramref name="from"/> itself or under it.</param>
+    /// <returns>The moved path.</returns>
     internal static string Rebase(string from, string to, string path)
     {
         if (SamePath(from, path))
@@ -57,10 +57,10 @@ internal static class PathMath
     }
 
     /// <summary>
-    /// 区切り文字の数（深さ）を返す
+    /// Returns the number of separators (the depth).
     /// </summary>
-    /// <param name="path">数えるパス</param>
-    /// <returns>区切り文字の数</returns>
+    /// <param name="path">The path to count.</param>
+    /// <returns>The number of separators.</returns>
     internal static int Depth(string path)
     {
         int depth = 0;
@@ -77,12 +77,12 @@ internal static class PathMath
     }
 
     /// <summary>
-    /// 深い順に並べる（同じ深さなら名前の逆順）
+    /// Sorts deepest first (at the same depth, by name in reverse order).
     /// </summary>
     /// <remarks>
-    /// 子を親より先に消すための順番
+    /// The order that deletes children before their parents.
     /// </remarks>
-    /// <param name="paths">並べ替えるパス（書き換える）</param>
+    /// <param name="paths">The paths to sort (sorted in place).</param>
     internal static void SortDeepestFirst(List<string> paths)
     {
         paths.Sort(static (left, right) =>

@@ -5,29 +5,29 @@ namespace Txfio.Tests;
 public sealed class TxfioTests
 {
     /// <summary>
-    /// ライブラリアセンブリの名前は Txfio である
+    /// The library assembly is named Txfio.
     /// </summary>
     /// <remarks>
-    /// <para>前提: テストが Txfio を参照している</para>
-    /// <para>手順: 公開型 Txfio のアセンブリ名を読む</para>
-    /// <para>期待: 名前が Txfio である</para>
+    /// <para>Given: the tests reference Txfio.</para>
+    /// <para>When: the assembly name of the public type Txfio is read.</para>
+    /// <para>Then: the name is Txfio.</para>
     /// </remarks>
     [Fact]
-    public void アセンブリ名がTxfioであること()
+    public void Assembly_IsNamedTxfio()
     {
         Assert.Equal("Txfio", typeof(global::Txfio.Txfio).Assembly.GetName().Name);
     }
 
     /// <summary>
-    /// 存在しないワークフォルダではトランザクションを開始できない
+    /// A transaction cannot begin on a work folder that does not exist.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 指定パスにディレクトリが無い</para>
-    /// <para>手順: BeginAsync を呼ぶ</para>
-    /// <para>期待: ExternalConflictException になり、Path はそのフォルダである</para>
+    /// <para>Given: there is no directory at the given path.</para>
+    /// <para>When: BeginAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is that folder.</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_存在しないフォルダだとExternalConflictExceptionになること()
+    public async Task BeginAsync_MissingFolderThrowsExternalConflictException()
     {
         string missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-" + Guid.NewGuid().ToString("N"));
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => global::Txfio.Txfio.BeginAsync(missing));
@@ -35,15 +35,15 @@ public sealed class TxfioTests
     }
 
     /// <summary>
-    /// 存在しないワークフォルダでは復旧できない
+    /// A work folder that does not exist cannot be recovered.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 指定パスにディレクトリが無い</para>
-    /// <para>手順: RecoverAsync を呼ぶ</para>
-    /// <para>期待: ExternalConflictException になり、Path はそのフォルダである</para>
+    /// <para>Given: there is no directory at the given path.</para>
+    /// <para>When: RecoverAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is that folder.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_存在しないフォルダだとExternalConflictExceptionになること()
+    public async Task RecoverAsync_MissingFolderThrowsExternalConflictException()
     {
         string missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-" + Guid.NewGuid().ToString("N"));
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => global::Txfio.Txfio.RecoverAsync(missing));
@@ -51,15 +51,15 @@ public sealed class TxfioTests
     }
 
     /// <summary>
-    /// 開始するとジャーナルができ、未コミット Dispose で消える
+    /// Beginning creates a journal, and Dispose without commit deletes it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダがある</para>
-    /// <para>手順: BeginAsync したあと Commit せず Dispose する</para>
-    /// <para>期待: 開始直後は tx-*.journal があり、Dispose 後は無い</para>
+    /// <para>Given: an empty work folder.</para>
+    /// <para>When: BeginAsync, then Dispose without Commit.</para>
+    /// <para>Then: right after begin there is a tx-*.journal, and after Dispose there is none.</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_未コミットDisposeでジャーナルが消えること()
+    public async Task BeginAsync_DisposeWithoutCommitDeletesJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         string journal;
@@ -78,15 +78,15 @@ public sealed class TxfioTests
     }
 
     /// <summary>
-    /// 空のコミットは成功し、ジャーナルを削除する
+    /// An empty commit succeeds and deletes the journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダでトランザクションを開始している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で、ジャーナルが残らない</para>
+    /// <para>Given: a transaction has begun on an empty work folder.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and no journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_空のトランザクションはSucceededでジャーナルが消えること()
+    public async Task CommitAsync_EmptyTransactionSucceedsAndDeletesJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -98,15 +98,15 @@ public sealed class TxfioTests
     }
 
     /// <summary>
-    /// 未完了ジャーナルが無ければ Recover は何もしない
+    /// Without unfinished journals, Recover does nothing.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: NoPendingTransactions</para>
+    /// <para>Given: an empty work folder.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: NoPendingTransactions.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ジャーナルが無いとNoPendingTransactionsになること()
+    public async Task RecoverAsync_NoJournalReturnsNoPendingTransactions()
     {
         await using TempDirectory work = TempDirectory.Create();
         RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
@@ -114,15 +114,15 @@ public sealed class TxfioTests
     }
 
     /// <summary>
-    /// Committing 以外の残骸ジャーナルは Recover が削除する
+    /// Recover deletes an orphaned journal that is not Committing.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、未コミットの journal だけが残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack でファイルが消える</para>
+    /// <para>Given: no live transaction, and only an uncommitted journal remains.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, and the file is deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_未コミットジャーナルを削除してRolledBackになること()
+    public async Task RecoverAsync_DeletesUncommittedJournalAndRollsBack()
     {
         await using TempDirectory work = TempDirectory.Create();
         string journal = await WriteLeftoverJournalAsync(work.Path, committing: false);
@@ -133,15 +133,15 @@ public sealed class TxfioTests
     }
 
     /// <summary>
-    /// Committing の残骸ジャーナルは Recover がロールフォワードする
+    /// Recover rolls forward an orphaned Committing journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、Committing の journal だけが残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward でファイルが消える</para>
+    /// <para>Given: no live transaction, and only a Committing journal remains.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, and the file is deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_CommittingジャーナルをロールフォワードしてRolledForwardになること()
+    public async Task RecoverAsync_RollsForwardCommittingJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         string journal = await WriteLeftoverJournalAsync(work.Path, committing: true);

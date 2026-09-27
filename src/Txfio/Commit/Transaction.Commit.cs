@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// コミット時の検証と適用
+/// Checks and apply at commit.
 /// </content>
 internal sealed partial class Transaction
 {
@@ -22,7 +22,7 @@ internal sealed partial class Transaction
             return new CommitReport(CommitResult.Succeeded, Array.Empty<OperationReport>());
         }
 
-        // 開始後に落ちたトランザクションの残骸でも、確定したデータは消さない
+        // Even for leftovers of a transaction that crashed after it began, committed data is not deleted.
         StaleJournals.ThrowIfAny(_workFolder);
 
         Func<JournalOperation, bool>? isExternalChange = _externalChanges is null
@@ -43,10 +43,10 @@ internal sealed partial class Transaction
         _committingWritten = true;
         _faults.CheckPoint(IFaultInjector.AfterCommitting);
 
-        // 適用中の例外は再送出する（Dispose はロールバックしない）
+        // An exception during apply is rethrown (Dispose does not roll back).
         bool conflict = !StagingApplier.TryApplyAll(_paths.Rows, _faults, out OperationReport[] skipped);
 
-        // 衝突しても残さない（残すと、あとの Recover が他のトランザクションの確定したパスを対象にやり直す）
+        // Do not keep the journal even on conflict (if it stayed, a later Recover would redo paths that other transactions have committed).
         if (conflict)
         {
             StagingApplier.DeleteStagingFiles(_paths.Rows);

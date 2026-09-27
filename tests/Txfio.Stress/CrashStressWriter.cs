@@ -4,26 +4,26 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 親に殺される子プロセスで、大きい Add / Update と ZIP の作成・展開を繰り返す
+/// In a child process that the parent kills, repeats large Add / Update and ZIP create and extract.
 /// </summary>
 public static class CrashStressWriter
 {
     /// <summary>
-    /// 起動コマンド
+    /// The start-up command.
     /// </summary>
     public const string Command = "stress-crash-writer";
 
     private static readonly DateTime _archiveTime = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     /// <summary>
-    /// 開始ファイルができたら、番号順に大きいトランザクションをコミットし、成功した番号だけを記録する
+    /// Once the start file appears, commits large transactions in numbered order, and logs only the numbers that succeeded.
     /// </summary>
     /// <remarks>
-    /// 始める直前に意図ファイルへ番号を書く。コミットが成功したあとで記録へ同じ番号を書く。
-    /// 殺された時刻によっては、意図ファイルの番号が記録より 1 つ先になる
+    /// Just before starting, writes the number to the intent file. After the commit succeeds, writes the same number to the log.
+    /// Depending on when it is killed, the intent file's number can be one past the log.
     /// </remarks>
-    /// <param name="args">コマンド、ワークフォルダ、トランザクション数、長さの上限、記録ファイル、意図ファイル、開始ファイル</param>
-    /// <returns>最後まで回れば 0、引数が足りなければ 2、想定外の例外なら 1</returns>
+    /// <param name="args">The command, work folder, transaction count, length limit, log file, intent file, and start file.</param>
+    /// <returns>0 if it runs to the end, 2 if arguments are missing, 1 on an unexpected exception.</returns>
     public static async Task<int> RunAsync(string[] args)
     {
         if (args.Length != 7)
@@ -66,13 +66,13 @@ public static class CrashStressWriter
     }
 
     /// <summary>
-    /// 番号のトランザクションを 1 つステージする。0 から Add、Update、ZIP の作成、展開を繰り返す
+    /// Stages the transaction for a number. From 0 it cycles through Add, Update, ZIP create, and extract.
     /// </summary>
-    /// <param name="tx">開いているトランザクション</param>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="index">0 から始まる番号</param>
-    /// <param name="maxBytes">ファイルの長さ。1 MiB 以上ならその長さ、それ未満ならその上限</param>
-    /// <returns>ステージングの完了</returns>
+    /// <param name="tx">The open transaction.</param>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="index">The zero-based number.</param>
+    /// <param name="maxBytes">The file length. At least 1 MiB means that length; less means the limit.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
     public static async Task ApplyAsync(ITransaction tx, string workFolder, int index, int maxBytes)
     {
         int generation = index / 4;
@@ -105,10 +105,10 @@ public static class CrashStressWriter
     }
 
     /// <summary>
-    /// クラッシュ耐久が書くファイルの長さ
+    /// The length of the files the crash stress test writes.
     /// </summary>
-    /// <param name="maxBytes">上限</param>
-    /// <returns>バイト数</returns>
+    /// <param name="maxBytes">The limit.</param>
+    /// <returns>The number of bytes.</returns>
     public static int PayloadLength(int maxBytes)
     {
         const int OneMegabyte = 1024 * 1024;

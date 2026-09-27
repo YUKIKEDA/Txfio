@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// <see cref="Txfio.RecoverAsync(string, CancellationToken)"/> の結果
+/// The result of <see cref="Txfio.RecoverAsync(string, CancellationToken)"/>.
 /// </summary>
 public sealed class RecoverReport
 {
     /// <summary>
-    /// 全体の結果と、処理したジャーナルを指定する
+    /// Initializes a new instance of the <see cref="RecoverReport"/> class with the overall result and the journals processed.
     /// </summary>
-    /// <param name="result">優先順位に従った全体の結果</param>
-    /// <param name="journals">処理したジャーナル（生きているジャーナルは含めず、パスの大文字小文字を無視した辞書順）</param>
+    /// <param name="result">The overall result, by priority.</param>
+    /// <param name="journals">The journals processed (live journals are not included; in lexical order of the path, ignoring case).</param>
     public RecoverReport(RecoverResult result, IReadOnlyList<JournalReport> journals)
     {
         ArgumentNullException.ThrowIfNull(journals);
@@ -18,12 +18,12 @@ public sealed class RecoverReport
     }
 
     /// <summary>
-    /// 優先順位に従った全体の結果
+    /// Gets the overall result, by priority.
     /// </summary>
     public RecoverResult Result { get; }
 
     /// <summary>
-    /// 処理したジャーナル（生きているジャーナルは含めず、パスの大文字小文字を無視した辞書順）
+    /// Gets the journals processed (live journals are not included; in lexical order of the path, ignoring case).
     /// </summary>
     public IReadOnlyList<JournalReport> Journals { get; }
 }

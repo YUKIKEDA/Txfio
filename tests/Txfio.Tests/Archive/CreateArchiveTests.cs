@@ -6,15 +6,15 @@ namespace Txfio.Tests.Archive;
 public sealed class CreateArchiveTests
 {
     /// <summary>
-    /// ディレクトリを ZIP にして Add し、コミットで本物のパスに現れる
+    /// A directory becomes a ZIP that is added, and it appears at the real path at commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree に a.txt、sub/b.txt、空の empty がある</para>
-    /// <para>手順: tree を out.zip へ CreateArchiveAsync してコミットする</para>
-    /// <para>期待: コミット前は Add が 1 件で out.zip は無く、コミット後の ZIP には a.txt、sub/b.txt、empty/ のエントリが元の内容で入っている</para>
+    /// <para>Given: tree contains a.txt, sub/b.txt, and an empty directory empty.</para>
+    /// <para>When: tree is passed to CreateArchiveAsync as out.zip, then committed.</para>
+    /// <para>Then: before commit there is one Add and no out.zip; after commit the ZIP has entries a.txt, sub/b.txt, and empty/ with the original content.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_ディレクトリをZIPにしてAddすること()
+    public async Task CreateArchiveAsync_AddsDirectoryAsZip()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
@@ -38,15 +38,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// includeBaseDirectory ではディレクトリ名がエントリのルートになる
+    /// With includeBaseDirectory, the directory name becomes the root of the entries.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree に a.txt があり、空の blank ディレクトリもある</para>
-    /// <para>手順: tree と blank を includeBaseDirectory で CreateArchiveAsync してコミットする</para>
-    /// <para>期待: tree の ZIP は tree/a.txt、blank の ZIP は blank/ のエントリ 1 つになる</para>
+    /// <para>Given: tree contains a.txt, and an empty directory blank exists.</para>
+    /// <para>When: tree and blank are passed to CreateArchiveAsync with includeBaseDirectory, then committed.</para>
+    /// <para>Then: the tree ZIP has tree/a.txt, and the blank ZIP has one entry, blank/.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_includeBaseDirectoryでディレクトリ名を含めること()
+    public async Task CreateArchiveAsync_IncludeBaseDirectoryIncludesDirectoryName()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -65,15 +65,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// ファイルはファイル名のエントリ 1 つになり、日時と進み具合が付く
+    /// A file becomes one entry with the file name, with its time and progress.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 内容が hello で、最終更新日時が 2020-05-06 07:08:10 の a.txt がある</para>
-    /// <para>手順: includeBaseDirectory を付けて a.zip へ CreateArchiveAsync してコミットする</para>
-    /// <para>期待: エントリは a.txt だけで日時は元のファイルと同じ、通知は 5 バイトで全体は null である</para>
+    /// <para>Given: a.txt with content hello and last write time 2020-05-06 07:08:10.</para>
+    /// <para>When: it is passed to CreateArchiveAsync as a.zip with includeBaseDirectory, then committed.</para>
+    /// <para>Then: the only entry is a.txt with the same time as the source file, and progress reports 5 bytes with a null total.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_ファイルはファイル名のエントリ1つになること()
+    public async Task CreateArchiveAsync_FileBecomesOneEntryWithFileName()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -94,15 +94,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// 空のディレクトリは空の ZIP になり、最後に 0 バイトを 1 回通知する
+    /// An empty directory becomes an empty ZIP, and 0 bytes is reported once at the end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空の blank ディレクトリがある</para>
-    /// <para>手順: blank を CreateArchiveAsync してコミットする</para>
-    /// <para>期待: ZIP にエントリは無く、通知は 0 バイトの 1 回である</para>
+    /// <para>Given: an empty directory blank exists.</para>
+    /// <para>When: blank is passed to CreateArchiveAsync, then committed.</para>
+    /// <para>Then: the ZIP has no entries, and progress reports 0 bytes once.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_空のディレクトリは空のZIPになること()
+    public async Task CreateArchiveAsync_EmptyDirectoryBecomesEmptyZip()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "blank"));
@@ -117,15 +117,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// 出力先と入力の関係が不正なら拒否する
+    /// Rejects an invalid relation between the output and the input.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree に a.txt があり、ワークフォルダに exists.zip がある</para>
-    /// <para>手順: tree の配下、既存の ZIP、親の無いパス、入力と同じパスへ CreateArchiveAsync する。無い入力も試す</para>
-    /// <para>期待: 配下と同じパスは InvalidOperationException、それ以外は ExternalConflictException で、未確定操作は無い</para>
+    /// <para>Given: tree contains a.txt, and the work folder has exists.zip.</para>
+    /// <para>When: CreateArchiveAsync targets under tree, the existing ZIP, a path without a parent, and the same path as the input. A missing input is tried too.</para>
+    /// <para>Then: under the input and the same path throw InvalidOperationException, the others throw ExternalConflictException, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_出力先が不正なら拒否すること()
+    public async Task CreateArchiveAsync_RejectsInvalidOutput()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -150,15 +150,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// 入力の配下や出力先にこのトランザクションの操作があれば拒否する
+    /// Rejects when this transaction has an operation under the input or at the output.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree/new.txt を Add し、out.zip も Add している</para>
-    /// <para>手順: tree を別の ZIP へ、別のディレクトリを out.zip へ CreateArchiveAsync する</para>
-    /// <para>期待: どちらも InvalidOperationException で、未確定操作は Add の 2 件のままである</para>
+    /// <para>Given: tree/new.txt is added, and out.zip is added too.</para>
+    /// <para>When: CreateArchiveAsync puts tree into another ZIP, and another directory into out.zip.</para>
+    /// <para>Then: both throw InvalidOperationException, and the pending changes stay two Adds.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_配下や出力先に操作があれば拒否すること()
+    public async Task CreateArchiveAsync_RejectsOperationUnderInputOrAtOutput()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -181,15 +181,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// 取り消しと破棄では ZIP を残さない
+    /// Cancellation and discard leave no ZIP.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree に a.txt がある</para>
-    /// <para>手順: 最初の通知で取り消す CreateArchiveAsync のあと、別の ZIP を作ってコミットせずに Dispose する</para>
-    /// <para>期待: 取り消しでは未確定操作が増えず、Dispose のあとはどちらの ZIP も .txnew も残らない</para>
+    /// <para>Given: tree contains a.txt.</para>
+    /// <para>When: a CreateArchiveAsync is canceled at the first progress report, then another ZIP is created and the transaction is disposed without commit.</para>
+    /// <para>Then: cancellation adds no pending change, and after Dispose neither ZIP nor any .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_取り消しと破棄ではZIPを残さないこと()
+    public async Task CreateArchiveAsync_CancelAndDiscardLeaveNoZip()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -209,15 +209,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// 外への ZIP は ReadAsync と同じバイトを入れ、ジャーナルにもロックにも残さない
+    /// A ZIP outside contains the same bytes as ReadAsync, and leaves nothing in the journal or locks.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree/a.txt を Update し、b.txt は Add しただけで本物は無い</para>
-    /// <para>手順: tree と b.txt をワークフォルダの外へ ExportArchiveAsync する</para>
-    /// <para>期待: ZIP には Update と Add の内容が入り、未確定操作は 2 件のまま、ロックファイルは増えない</para>
+    /// <para>Given: tree/a.txt is updated, and b.txt is only added with no real file.</para>
+    /// <para>When: tree and b.txt are passed to ExportArchiveAsync outside the work folder.</para>
+    /// <para>Then: the ZIP has the Update and Add content, the pending changes stay two, and no lock files are added.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportArchiveAsync_ステージング済みの内容を外のZIPに入れること()
+    public async Task ExportArchiveAsync_PutsStagedContentInExternalZip()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -249,15 +249,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// 外の ZIP のパスが塞がっている、親が無い、ワークフォルダの中なら拒否する
+    /// Rejects an external ZIP path that is occupied, has no parent, or is inside the work folder.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダに a.txt があり、外に exists.zip とディレクトリ sub がある</para>
-    /// <para>手順: 既存ファイル、ディレクトリ、親の無いパス、ワークフォルダの中へ ExportArchiveAsync する。無い入力も試す</para>
-    /// <para>期待: ワークフォルダの中は ArgumentException、それ以外は ExternalConflictException で、既存ファイルは変わらない</para>
+    /// <para>Given: the work folder has a.txt, and outside there are exists.zip and a directory sub.</para>
+    /// <para>When: ExportArchiveAsync targets the existing file, the directory, a path without a parent, and a path inside the work folder. A missing input is tried too.</para>
+    /// <para>Then: inside the work folder throws ArgumentException, the others throw ExternalConflictException, and the existing file does not change.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportArchiveAsync_ZIPのパスが不正なら拒否すること()
+    public async Task ExportArchiveAsync_RejectsInvalidZipPath()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -288,15 +288,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// 成功した外の ZIP は Dispose 後も残り、取り消しでは消える
+    /// An external ZIP that succeeded stays after Dispose, and a canceled one is deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダに a.txt がある</para>
-    /// <para>手順: ExportArchiveAsync して Dispose し、別のトランザクションでは最初の通知で取り消す</para>
-    /// <para>期待: 成功した ZIP は残り、取り消した ZIP は残らない</para>
+    /// <para>Given: the work folder has a.txt.</para>
+    /// <para>When: ExportArchiveAsync runs and the transaction is disposed; in another transaction the export is canceled at the first progress report.</para>
+    /// <para>Then: the ZIP that succeeded remains, and the canceled ZIP does not.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportArchiveAsync_成功したZIPは残り取り消しでは消えること()
+    public async Task ExportArchiveAsync_KeepsSucceededZipAndDeletesCanceledZip()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -320,15 +320,15 @@ public sealed class CreateArchiveTests
     }
 
     /// <summary>
-    /// ZIP の .txnew は、書く前にジャーナルへ載せる
+    /// The ZIP's .txnew is recorded in the journal before it is written.
     /// </summary>
     /// <remarks>
-    /// <para>前提: tree/a.txt がある</para>
-    /// <para>手順: tree を CreateArchiveAsync し、書き込み中の進捗でジャーナルを読む</para>
-    /// <para>期待: 進捗が届いたどの時点でも、ジャーナルに out.zip の .txnew が書いてある</para>
+    /// <para>Given: tree/a.txt exists.</para>
+    /// <para>When: tree is passed to CreateArchiveAsync, and the journal is read on progress while writing.</para>
+    /// <para>Then: at every progress report, the journal contains the .txnew of out.zip.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_txnewより先にジャーナルへ載せること()
+    public async Task CreateArchiveAsync_RecordsJournalBeforeTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));

@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// 読み取り（Read）
+/// Reads (Read).
 /// </content>
 internal sealed partial class Transaction
 {
@@ -40,15 +40,15 @@ internal sealed partial class Transaction
         CommitAppearance appearance = CommitView.Resolve(_paths.Rows, target);
         if (!appearance.Exists)
         {
-            throw new ExternalConflictException("ディレクトリが存在しません: " + target, target);
+            throw new ExternalConflictException("The directory does not exist: " + target, target);
         }
 
         if (!appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
         {
-            throw new UnsupportedOperationException("ファイルの直下は一覧できません: " + target);
+            throw new UnsupportedOperationException("A file has no entries to list: " + target);
         }
 
-        // 候補はディスク上の直下と、親がこのディレクトリである操作であり、姿は 1 件ずつ確かめる
+        // Candidates are the direct children on disk and the operations whose parent is this directory; the view is checked one by one.
         string real = appearance.ContentPath;
         HashSet<string> candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string entry in Directory.EnumerateFileSystemEntries(real))
@@ -97,7 +97,7 @@ internal sealed partial class Transaction
             return;
         }
 
-        // ディレクトリ Move の移動先を一覧するとき、移動元の直下の操作も移動先の名前で候補に入れる
+        // When listing the destination of a directory Move, the operations directly under the source are also candidates, under the destination's name.
         if (string.Equals(parent, real, StringComparison.OrdinalIgnoreCase))
         {
             candidates.Add(System.IO.Path.Combine(target, System.IO.Path.GetFileName(path)));
@@ -118,8 +118,8 @@ internal sealed partial class Transaction
         }
         catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
-            // 開く時点で無ければ、対象が無い契約として返す
-            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + reportedPath, reportedPath);
+            // If it is gone when opened, report it as the "target does not exist" contract.
+            throw new ExternalConflictException("The file to read does not exist: " + reportedPath, reportedPath);
         }
     }
 
@@ -132,12 +132,12 @@ internal sealed partial class Transaction
         CommitAppearance appearance = CommitView.Resolve(_paths.Rows, targetPath);
         if (!appearance.Exists)
         {
-            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + targetPath, targetPath);
+            throw new ExternalConflictException("The file to read does not exist: " + targetPath, targetPath);
         }
 
         if (appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
         {
-            throw new UnsupportedOperationException("ディレクトリの読み取りは未対応です: " + targetPath);
+            throw new UnsupportedOperationException("Reading a directory is not supported: " + targetPath);
         }
 
         Stream stream = OpenRead(appearance.ContentPath, targetPath);
@@ -161,7 +161,7 @@ internal sealed partial class Transaction
             StringComparison.OrdinalIgnoreCase);
     }
 
-    // このトランザクションのステージングファイル、再ステージの退避、入れ替えの退避
+    // This transaction's staging files, restage backups, and swap backups.
     private bool IsThisTransactionSidecar(string name)
     {
         string id = "." + _transactionId.ToString("D") + ".";

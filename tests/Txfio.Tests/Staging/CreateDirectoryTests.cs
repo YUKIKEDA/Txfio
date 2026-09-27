@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class CreateDirectoryTests
 {
     /// <summary>
-    /// 呼び出した時点で空ディレクトリができ、pending は 1 件である
+    /// An empty directory is created when called, and there is one pending change.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダだけがある</para>
-    /// <para>手順: CreateDirectoryAsync する</para>
-    /// <para>期待: 空ディレクトリがあり、pending は CreateDirectory の 1 件である</para>
+    /// <para>Given: only the work folder exists.</para>
+    /// <para>When: CreateDirectoryAsync is called.</para>
+    /// <para>Then: the empty directory exists, and the pending change is one CreateDirectory.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_呼び出した時点で空ディレクトリができること()
+    public async Task CreateDirectoryAsync_CreatesEmptyDirectoryWhenCalled()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
@@ -29,15 +29,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 未コミットの破棄は、素のファイル API で書いた中身ごと消す
+    /// Discard without commit deletes it with the contents written by the plain file API.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、素のファイル API で子ファイルを書いている</para>
-    /// <para>手順: Commit せず破棄する</para>
-    /// <para>期待: ディレクトリと子ファイルが無い</para>
+    /// <para>Given: after CreateDirectory, a child file is written with the plain file API.</para>
+    /// <para>When: the transaction is discarded without Commit.</para>
+    /// <para>Then: neither the directory nor the child file exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_未コミットDisposeでは中身ごと消えること()
+    public async Task CreateDirectoryAsync_DisposeWithoutCommitDeletesWithContents()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
@@ -53,15 +53,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 既にあるパスは作らない
+    /// A path that already exists is not created.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop ディレクトリがある</para>
-    /// <para>手順: CreateDirectoryAsync する</para>
-    /// <para>期待: ExternalConflictException になり、pending は空である</para>
+    /// <para>Given: a directory drop exists.</para>
+    /// <para>When: CreateDirectoryAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_既にあるとExternalConflictExceptionになること()
+    public async Task CreateDirectoryAsync_ExistingPathThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "drop"));
@@ -70,20 +70,20 @@ public sealed class CreateDirectoryTests
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.CreateDirectoryAsync("drop"));
 
-        Assert.Contains("作成対象のパスが既に存在します", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("The path to create already exists", ex.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
     }
 
     /// <summary>
-    /// 親が無いパスは作らない
+    /// A path without a parent is not created.
     /// </summary>
     /// <remarks>
-    /// <para>前提: missing ディレクトリが無い</para>
-    /// <para>手順: missing/drop を CreateDirectoryAsync する</para>
-    /// <para>期待: ExternalConflictException になり、ディレクトリは無い</para>
+    /// <para>Given: the directory missing does not exist.</para>
+    /// <para>When: CreateDirectoryAsync is called on missing/drop.</para>
+    /// <para>Then: ExternalConflictException, and no directory exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_親が無いとExternalConflictExceptionになること()
+    public async Task CreateDirectoryAsync_MissingParentThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -91,20 +91,20 @@ public sealed class CreateDirectoryTests
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.CreateDirectoryAsync("missing/drop"));
 
-        Assert.Contains("親ディレクトリが存在しません", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("The parent directory does not exist", ex.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "missing")));
     }
 
     /// <summary>
-    /// 入れ子の CreateDirectory は親と同じ規則で作れる
+    /// A nested CreateDirectory works by the same rules as its parent.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory している</para>
-    /// <para>手順: drop/child を CreateDirectoryAsync する</para>
-    /// <para>期待: 両方のディレクトリがあり、pending は CreateDirectory の 2 件である</para>
+    /// <para>Given: drop is created with CreateDirectory.</para>
+    /// <para>When: CreateDirectoryAsync is called on drop/child.</para>
+    /// <para>Then: both directories exist, and there are two pending CreateDirectory changes.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_配下も作れること()
+    public async Task CreateDirectoryAsync_CreatesNestedDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -118,15 +118,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 兄弟ディレクトリは同じトランザクションで作れる
+    /// Sibling directories can be created in the same transaction.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダだけがある</para>
-    /// <para>手順: drop と other を CreateDirectoryAsync する</para>
-    /// <para>期待: 両方のディレクトリがあり、pending は 2 件である</para>
+    /// <para>Given: only the work folder exists.</para>
+    /// <para>When: CreateDirectoryAsync is called on drop and other.</para>
+    /// <para>Then: both directories exist, and there are two pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_兄弟は続けて作れること()
+    public async Task CreateDirectoryAsync_CreatesSiblingsInSequence()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -140,15 +140,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 配下への Add は pending に出る。素のファイル API で書いたファイルは出ない
+    /// An Add under it appears in the pending changes; a file written with the plain file API does not.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory している</para>
-    /// <para>手順: drop/a.txt を AddAsync し、drop/raw.txt を素のファイル API で書く</para>
-    /// <para>期待: pending は CreateDirectory と Add の 2 件である</para>
+    /// <para>Given: drop is created with CreateDirectory.</para>
+    /// <para>When: drop/a.txt is added with AddAsync, and drop/raw.txt is written with the plain file API.</para>
+    /// <para>Then: two pending changes, CreateDirectory and Add.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_配下は予約として見えること()
+    public async Task AddAsync_UnderDirectoryIsVisibleAsScheduled()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -169,15 +169,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 作ったディレクトリ自身への変更系は畳まない
+    /// Changes to the created directory itself are not folded.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory している</para>
-    /// <para>手順: そのパスへ Delete、DeleteTree、Move の元と先、Update、もう一度 CreateDirectory を呼ぶ</para>
-    /// <para>期待: どれも InvalidOperationException で、pending は 1 件のまま</para>
+    /// <para>Given: drop is created with CreateDirectory.</para>
+    /// <para>When: Delete, DeleteTree, Move from and to, Update, and another CreateDirectory are called on that path.</para>
+    /// <para>Then: each throws InvalidOperationException, and the pending changes stay one.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_そのパス自身の変更系はInvalidOperationExceptionになること()
+    public async Task CreateDirectoryAsync_ChangesToPathItselfThrowInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string drop = System.IO.Path.Combine(work.Path, "drop");
@@ -194,22 +194,22 @@ public sealed class CreateDirectoryTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.UpdateAsync("drop", content));
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CreateDirectoryAsync("drop"));
 
-        Assert.Contains("このパスは既に別の操作でステージングされています", delete.Message, StringComparison.Ordinal);
+        Assert.Contains("This path is already staged by another operation", delete.Message, StringComparison.Ordinal);
         Assert.Equal(PendingChangeKind.CreateDirectory, Assert.Single(tx.GetPendingChanges()).Kind);
         Assert.True(Directory.Exists(drop));
         Assert.True(File.Exists(System.IO.Path.Combine(work.Path, "src.txt")));
     }
 
     /// <summary>
-    /// 配下に操作が無いディレクトリはコピー元にできる
+    /// A directory with no operation under it can be a copy source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory し、素のファイル API で drop/a.txt を書いている</para>
-    /// <para>手順: drop を copy へ CopyAsync する</para>
-    /// <para>期待: copy/a.txt が Add になり、drop は残る</para>
+    /// <para>Given: drop is created with CreateDirectory, and drop/a.txt is written with the plain file API.</para>
+    /// <para>When: drop is copied to copy with CopyAsync.</para>
+    /// <para>Then: copy/a.txt becomes an Add, and drop remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_配下に操作が無ければコピー元にできること()
+    public async Task CopyAsync_CanCopyWhenNoOperationUnderDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -226,15 +226,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 配下に操作があると、そのディレクトリはコピー元にできない
+    /// With an operation under it, the directory cannot be a copy source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory し、drop/a.txt を Add している</para>
-    /// <para>手順: drop を copy へ CopyAsync する</para>
-    /// <para>期待: InvalidOperationException で、copy は無い</para>
+    /// <para>Given: drop is created with CreateDirectory, and drop/a.txt is added.</para>
+    /// <para>When: drop is copied to copy with CopyAsync.</para>
+    /// <para>Then: InvalidOperationException, and copy does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_配下に操作があるとInvalidOperationExceptionになること()
+    public async Task CopyAsync_OperationUnderDirectoryThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -248,15 +248,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 外のディレクトリは、作ったディレクトリの配下へ Import できる
+    /// An external directory can be imported under the created directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory し、ワークフォルダの外に src/a.txt がある</para>
-    /// <para>手順: src を drop/in へ ImportAsync する</para>
-    /// <para>期待: drop/in/a.txt が Add になり、外の src は残る</para>
+    /// <para>Given: drop is created with CreateDirectory, and src/a.txt exists outside the work folder.</para>
+    /// <para>When: src is imported to drop/in with ImportAsync.</para>
+    /// <para>Then: drop/in/a.txt becomes an Add, and the external src remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ImportAsync_配下へディレクトリを取り込めること()
+    public async Task ImportAsync_ImportsDirectoryUnderIt()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -276,15 +276,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 破棄は、配下へ Add したサイドカーと、素のファイル API で置いたファイルも消す
+    /// Discard also deletes the staging files of Adds under it, and files placed with the plain file API.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 開始前のファイルを drop へ動かし、drop/new.txt を Add している</para>
-    /// <para>手順: Commit せず破棄する</para>
-    /// <para>期待: drop も、動かしたファイルも、Add したファイルも無い</para>
+    /// <para>Given: a file that existed before the transaction is moved into drop, and drop/new.txt is added.</para>
+    /// <para>When: the transaction is discarded without Commit.</para>
+    /// <para>Then: neither drop, the moved file, nor the added file exists.</para>
     /// </remarks>
     [Fact]
-    public async Task DisposeAsync_配下のAddと素のファイルも消えること()
+    public async Task DisposeAsync_DeletesAddsAndPlainFilesUnderIt()
     {
         await using TempDirectory work = TempDirectory.Create();
         string moved = System.IO.Path.Combine(work.Path, "drop", "keep.txt");
@@ -305,15 +305,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 木の外への Add は続けられる
+    /// Adds outside the tree can continue.
     /// </summary>
     /// <remarks>
-    /// <para>前提: drop を CreateDirectory している</para>
-    /// <para>手順: a.txt を AddAsync する</para>
-    /// <para>期待: pending は CreateDirectory と Add の 2 件である</para>
+    /// <para>Given: drop is created with CreateDirectory.</para>
+    /// <para>When: a.txt is added with AddAsync.</para>
+    /// <para>Then: two pending changes, CreateDirectory and Add.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_木の外は続けられること()
+    public async Task AddAsync_ContinuesOutsideTree()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -327,15 +327,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 素のファイル API で書いたファイルは ReadAsync で読める
+    /// A file written with the plain file API can be read with ReadAsync.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、素のファイル API で a.txt を書いている</para>
-    /// <para>手順: ReadAllTextAsync する</para>
-    /// <para>期待: 書いた内容が返り、pending は CreateDirectory の 1 件のまま</para>
+    /// <para>Given: after CreateDirectory, a.txt is written with the plain file API.</para>
+    /// <para>When: ReadAllTextAsync is called.</para>
+    /// <para>Then: the written content is returned, and the pending changes stay one CreateDirectory.</para>
     /// </remarks>
     [Fact]
-    public async Task ReadAllTextAsync_配下のファイルを読めること()
+    public async Task ReadAllTextAsync_ReadsFileUnderDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -349,15 +349,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 配下のファイルは外へ Export できる
+    /// A file under it can be exported outside.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory のあと、素のファイル API で a.txt を書いている</para>
-    /// <para>手順: ワークフォルダの外へ ExportAsync する</para>
-    /// <para>期待: 外に同じ内容があり、pending は CreateDirectory の 1 件のまま</para>
+    /// <para>Given: after CreateDirectory, a.txt is written with the plain file API.</para>
+    /// <para>When: it is exported outside the work folder with ExportAsync.</para>
+    /// <para>Then: the same content exists outside, and the pending changes stay one CreateDirectory.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportAsync_配下のファイルを外へ出せること()
+    public async Task ExportAsync_ExportsFileUnderDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -373,15 +373,15 @@ public sealed class CreateDirectoryTests
     }
 
     /// <summary>
-    /// 祖先の全削除は拒否する
+    /// A DeleteTree of an ancestor is rejected.
     /// </summary>
     /// <remarks>
-    /// <para>前提: parent があり、その中の drop を CreateDirectory している</para>
-    /// <para>手順: parent を DeleteTreeAsync する</para>
-    /// <para>期待: InvalidOperationException で、drop は残る</para>
+    /// <para>Given: parent exists, and drop inside it is created with CreateDirectory.</para>
+    /// <para>When: DeleteTreeAsync is called on parent.</para>
+    /// <para>Then: InvalidOperationException, and drop remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_祖先はInvalidOperationExceptionになること()
+    public async Task DeleteTreeAsync_AncestorThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "parent"));

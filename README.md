@@ -1,14 +1,16 @@
 # Txfio
 
-Windows の共有フォルダ（NTFS / SMB）で、コミットするまで本物のファイルを変えず、落ちたら復旧できるファイル IO ライブラリです。
+English | [日本語](README.ja.md)
 
-nuget.org にはまだありません。このリポジトリを参照してビルドします。TFM は `net8.0` です。SMB サーバー自身のキャッシュがいつディスクへ落ちるかは保証しません。
+A file IO library for Windows shared folders (NTFS / SMB) that leaves the real files unchanged until you commit, and can recover after a crash.
 
-契約の正本は [`docs/design.md`](docs/design.md) です。使う手順はこの README に書いてあります。
+It is not on nuget.org yet. Reference this repository and build it. The TFM is `net8.0`. When the SMB server's own cache reaches the disk is not guaranteed.
 
-## はじめ方
+The source of truth for the contract is [`docs/design.md`](docs/design.md). How to use it is in this README.
 
-ワークフォルダは既存のディレクトリです。アプリはフォルダを開くときに、先に `RecoverAsync` を呼びます。
+## Getting started
+
+The work folder is an existing directory. When the application opens the folder, it calls `RecoverAsync` first.
 
 ```csharp
 using Txfio;
@@ -20,92 +22,92 @@ await tx.WriteAllTextAsync("a.txt", "hello");
 CommitReport report = await tx.CommitAsync();
 ```
 
-`CommitAsync` を呼ぶまでは、新しい内容を同じディレクトリの `.txnew` に置きます。本物のパスは変えません。確定は rename です。`CommitAsync` を呼ばずに破棄すると、その `.txnew` とジャーナルは消えます。
+Until you call `CommitAsync`, the new content is kept in a `.txnew` file in the same directory. The real path does not change. The commit is a rename. If you dispose without calling `CommitAsync`, the `.txnew` and the journal are deleted.
 
-`CommitReport.Result` は例外ではありません。成功のとき `Operations` は空です。`Failed` は検証で拒んだ操作、`PartialConflict` は適用で飛ばした操作を、パスと理由つきで載せます。
+`CommitReport.Result` is not an exception. On success, `Operations` is empty. `Failed` lists the operations rejected by the check, and `PartialConflict` lists the operations skipped during apply, with paths and reasons.
 
-| 値                | 意味                                                 |
-| ----------------- | ---------------------------------------------------- |
-| `Succeeded`       | 予定どおり適用した                                   |
-| `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
-| `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
+| Value             | Meaning                                                              |
+| ----------------- | -------------------------------------------------------------------- |
+| `Succeeded`       | Applied as planned                                                   |
+| `PartialConflict` | External interference during apply. The commit still went through    |
+| `Failed`          | The check before apply failed. The real paths have not changed yet   |
 
-落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。処理したジャーナルは `Journals` に、パスの大文字小文字を無視した辞書順で載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。JSON として読めないジャーナルは消さないので、直すか消すまで同じ例外のままです。
+The next `RecoverAsync` rolls a crashed journal back or forward. `RecoverReport.Result` is `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable`. The journals it processed are in `Journals`, in lexical order of the path ignoring case. For `ConflictDetected`, the skipped operations are listed there too. Journals of transactions that are still alive, in another process or in this one, are not touched and are not in `Journals`. While a crashed journal remains, `BeginAsync` and `CommitAsync` throw `RecoveryRequiredException`. A journal that cannot be read as JSON is not deleted, so the same exception stays until you fix or delete it.
 
-## できないこと
+## What it cannot do
 
-- ディレクトリの `ReadAsync`。渡すと `UnsupportedOperationException` です
-- ZIP 以外のアーカイブ（tar、GZip 単体など）。ZIP の作成と展開では、既存のファイルへの上書きや、既存のディレクトリへの展開もしません
-- ボリュームをまたぐ `MoveAsync`。コピーと削除には切り替えません。ファイルなら `ImportAsync` と `ExportAsync` を明示的に使います
-- 複数ファイルが、外から見て一時点で揃うこと。コミット中は、一部だけ新しい状態が見えます
-- コミット開始後の取り消し。適用が始まったら最後まで進め、落ちた分は `RecoverAsync` の対象です
-- SQL や DTC と同じトランザクションへの参加
-- 素のファイル API やエクスプローラーからの変更を防ぐこと。コミット前の `.txnew` も見えます
-- Linux での動作保証
+- `ReadAsync` of a directory. It throws `UnsupportedOperationException`
+- Archives other than ZIP (tar, bare GZip, and so on). Creating and extracting a ZIP never overwrites an existing file or extracts into an existing directory
+- `MoveAsync` across volumes. It does not switch to copy and delete. For files, use `ImportAsync` and `ExportAsync` explicitly
+- Several files becoming consistent at one instant as seen from outside. During a commit, some files may already be new while others are still old
+- Cancelling after the commit has started. Once apply starts it runs to the end, and anything interrupted is for `RecoverAsync`
+- Joining the same transaction as SQL or DTC
+- Preventing changes from the plain file API or Explorer. The `.txnew` files are visible before commit too
+- Guaranteed behavior on Linux
 
-## 操作
+## Operations
 
-呼んだ操作だけを追跡します。フォルダ全体の差分スキャンはしません。同期版はありません。
+Only the operations you call are tracked. There is no diff scan of the whole folder. There are no synchronous versions.
 
-| API                                        | できること                                                                                                                                         |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AddAsync` / `UpdateAsync`                 | ファイルの新規作成と置き換え。内容は `.txnew` へ書く。進捗は `TransferProgress`                                                                    |
-| `DeleteAsync`                              | ファイル、または直下だけのディレクトリの削除予約。実削除はコミット時                                                                               |
-| `DeleteTreeAsync`                          | ディレクトリとその配下すべての削除予約。ステージでは木を走査せず、コミット時に再帰削除する                                                         |
-| `MoveAsync`                                | 同一ボリューム内のファイルまたはディレクトリの移動予約。ディレクトリはコミット時に 1 回 rename し、中身は付いていく                                |
-| `CreateDirectoryAsync`                     | 空ディレクトリを呼んだ時点で作る。配下は通常の操作ができる。破棄ではそのディレクトリを中身ごと消す                                                 |
-| `CopyAsync`                                | ワークフォルダ内のファイルまたはディレクトリをコピーする。コピー元は残す。ディレクトリはファイルごとの Add と空ディレクトリ                        |
-| `ImportAsync`                              | ワークフォルダの外のファイルまたはディレクトリを `.txnew` へコピーし、Add として残す。コピー元は消さない                                           |
-| `ExportAsync`                              | 読み取りと同じバイトを、ワークフォルダの外へコピーする。ディレクトリは配下の各ファイル。ジャーナルには残さず、ロックもしない                       |
-| `CreateArchiveAsync`                       | ワークフォルダ内のファイルかディレクトリ、または元と名前の組の列から ZIP を作り、Add として残す               |
-| `ExportArchiveAsync`                       | 読み取りと同じバイトで、ワークフォルダの外に ZIP を作る。ジャーナルには残さず、ロックもしない                                                      |
-| `ExtractArchiveAsync`                      | ワークフォルダ内の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す                                                                   |
-| `ImportArchiveAsync`                       | ワークフォルダの外の ZIP を新しいディレクトリへ展開し、各ファイルを Add として残す。ZIP は消さない                                                 |
-| `ReadAsync`                                | コミット後の姿のファイルを開く。ロックは取らない                                                                                                   |
-| `ExistsAsync`                              | コミット後の姿で、ファイルかディレクトリがあるかを返す。ロックは取らない                                                                           |
-| `GetEntriesAsync`                          | コミット後の姿で、ディレクトリの直下のファイルとディレクトリを返す（再帰しない）、ロックは取らない                                                 |
-| `ReadAllTextAsync` / `ReadAllLinesAsync`   | 読み取りと同じバイトを文字列、または行の配列にする                                                                                                 |
-| `WriteAllTextAsync` / `WriteAllLinesAsync` | コミット後の姿でファイルが無ければ Add、あれば Update。エンコーディングを省略した書き込みは BOM なし UTF-8                                        |
-| `AppendAllTextAsync` / `AppendAllLinesAsync` | コミット後の姿で、末尾に足す（無ければ Add、あれば中身に足した Update、既存の中身もメモリに読む）                                                 |
-| `ReadFromJsonAsync` / `WriteAsJsonAsync`   | `System.Text.Json`。書き込みは上と同じ Add / Update。オプション省略時は既定の設定                                                                  |
-| `GetPendingChanges`                        | 未確定の操作一覧                                                                                                                                   |
-| `CommitAsync`                              | 検証してから rename と削除を適用する。結果は `CommitReport`                                                                                        |
-| `RecoverAsync`                             | 落ちたジャーナルを、マーカーの有無で戻すか進める。結果は `RecoverReport`                                                                          |
+| API                                          | What it does                                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `AddAsync` / `UpdateAsync`                   | Create or replace a file. The content is written to `.txnew`. Progress is `TransferProgress`                                   |
+| `DeleteAsync`                                | Schedule deleting a file, or a directory by its direct children only. The actual delete happens at commit                     |
+| `DeleteTreeAsync`                            | Schedule deleting a directory and everything under it. Staging does not walk the tree; the recursive delete happens at commit |
+| `MoveAsync`                                  | Schedule moving a file or directory within one volume. A directory is renamed once at commit, and its contents go with it      |
+| `CreateDirectoryAsync`                       | Create an empty directory when called. Normal operations work under it. Discard deletes the directory with its contents        |
+| `CopyAsync`                                  | Copy a file or directory inside the work folder. The source stays. A directory becomes an Add per file plus empty directories  |
+| `ImportAsync`                                | Copy a file or directory from outside the work folder into `.txnew` and keep it as an Add. The source is not deleted          |
+| `ExportAsync`                                | Copy the same bytes as a read to outside the work folder. A directory copies each file under it. No journal, no locks          |
+| `CreateArchiveAsync`                         | Create a ZIP from a file or directory inside the work folder, or from a list of source and name pairs, and keep it as an Add   |
+| `ExportArchiveAsync`                         | Create a ZIP outside the work folder with the same bytes as a read. No journal, no locks                                       |
+| `ExtractArchiveAsync`                        | Extract a ZIP inside the work folder into a new directory, and keep each file as an Add                                        |
+| `ImportArchiveAsync`                         | Extract a ZIP outside the work folder into a new directory, and keep each file as an Add. The ZIP is not deleted               |
+| `ReadAsync`                                  | Open the file in the post-commit view. No locks                                                                                |
+| `ExistsAsync`                                | Return whether a file or directory exists in the post-commit view. No locks                                                    |
+| `GetEntriesAsync`                            | Return the files and directories directly under a directory in the post-commit view (not recursive). No locks                 |
+| `ReadAllTextAsync` / `ReadAllLinesAsync`     | Turn the same bytes as a read into a string or an array of lines                                                               |
+| `WriteAllTextAsync` / `WriteAllLinesAsync`   | Add if the post-commit view has no file, Update if it has one. Without an encoding, UTF-8 without a BOM                        |
+| `AppendAllTextAsync` / `AppendAllLinesAsync` | Append to the end in the post-commit view (Add if missing, otherwise an Update with the appended content; reads the existing content into memory) |
+| `ReadFromJsonAsync` / `WriteAsJsonAsync`     | `System.Text.Json`. Writes are Add / Update as above. Without options, the default settings                                    |
+| `GetPendingChanges`                          | The list of operations not committed yet                                                                                       |
+| `CommitAsync`                                | Check, then apply the renames and deletes. The result is `CommitReport`                                                        |
+| `RecoverAsync`                               | Roll a crashed journal back or forward, depending on the marker. The result is `RecoverReport`                                |
 
-親ディレクトリの自動作成はしません。`CopyAsync` と、ディレクトリの `ImportAsync` / `ExportAsync` だけ、コピー先のディレクトリ自身とその空のサブディレクトリを作ります。`ExtractArchiveAsync` / `ImportArchiveAsync` も、展開先のディレクトリ自身とエントリにあるディレクトリを作ります。`CreateDirectoryAsync` は、対象の空ディレクトリだけを作り、親は作りません。メタデータフォルダ `.txfio` とその配下は操作できません。
+Parent directories are not created automatically. Only `CopyAsync` and directory `ImportAsync` / `ExportAsync` create the destination directory itself and its empty subdirectories. `ExtractArchiveAsync` / `ImportArchiveAsync` also create the destination directory itself and the directories in the entries. `CreateDirectoryAsync` creates only the target empty directory, not its parent. The metadata folder `.txfio` and everything under it cannot be used.
 
-## トランザクションの流れ
+## How a transaction flows
 
-1 回のトランザクションは、復旧、開始、予約、終わり、の 4 段です。終わりはコミット、破棄、プロセスが落ちる、のどれかです。
+A transaction has four stages: recover, begin, schedule, and end. It ends with a commit, a discard, or a process crash.
 
 ```mermaid
 flowchart TD
-  open["フォルダを開く"] --> recover["RecoverAsync"]
+  open["Open the folder"] --> recover["RecoverAsync"]
   recover --> begin["BeginAsync"]
-  begin --> stage["書く、消す、移す、コピーする"]
+  begin --> stage["Write, delete, move, copy"]
   stage --> stage
   stage --> commit["CommitAsync"]
-  stage --> dispose["Commit せず破棄"]
-  stage --> crash["プロセスが落ちる"]
+  stage --> dispose["Dispose without Commit"]
+  stage --> crash["The process crashes"]
   commit --> succeeded["Succeeded"]
   commit --> partial["PartialConflict"]
   commit --> failed["Failed"]
-  dispose --> rolled[".txnew とジャーナルを消す"]
-  crash --> next["次回の RecoverAsync"]
+  dispose --> rolled["Delete .txnew and the journal"]
+  crash --> next["The next RecoverAsync"]
 ```
 
-`a.txt` を `old` から `new` に置き換える途中のディスクは、こうなっています。`{guid}` はそのトランザクションの ID です。
+While `a.txt` is being replaced from `old` to `new`, the disk looks like this. `{guid}` is the transaction ID.
 
 ```text
 D:\share\work\
-  a.txt                          本物。まだ old
-  a.txt.{guid}.txnew             新しい内容
+  a.txt                          the real file, still old
+  a.txt.{guid}.txnew             the new content
   .txfio\
-    tx-{guid}.journal            予約の一覧
-    locks\                       Txfio 同士の協調ロック
+    tx-{guid}.journal            the scheduled operations
+    locks\                       cooperative locks between Txfio users
 ```
 
-エクスプローラーには `.txnew` が見えます。`File.ReadAllText` は本物の `old` を読みます。同じトランザクションの `ReadAllTextAsync` は `new` を読みます。
+Explorer shows the `.txnew`. `File.ReadAllText` reads the real `old`. `ReadAllTextAsync` in the same transaction reads `new`.
 
 ```csharp
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
@@ -113,72 +115,72 @@ await tx.WriteAllTextAsync("a.txt", "new");
 string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 ```
 
-`GetPendingChanges` は、まだコミットしていない操作の一覧です。ディレクトリのコピーは、ファイルごとの Add として見えます。`CreateDirectoryAsync` の配下で予約した操作は出ます。素のファイル API で書いたファイルは出ません。
+`GetPendingChanges` is the list of operations not committed yet. A directory copy appears as an Add per file. Operations scheduled under a `CreateDirectoryAsync` directory appear. Files written with the plain file API do not.
 
-### コミットすると
+### When you commit
 
-`CommitAsync` は、先に全部の前提を調べます。ここで失敗すると `Failed` で、本物のファイルはまだ変わっていません。
+`CommitAsync` checks every precondition first. If this fails, the result is `Failed`, and the real files have not changed yet.
 
-調べたあとに「適用開始」の印をジャーナルへ書き、そのあと本物を変えます。適用が始まったら、`CancellationToken` は無視して最後まで進めます。ここから先の中断は、落ちたあとの `RecoverAsync` の仕事です。
+After the check, it writes an "apply started" marker to the journal, then changes the real files. Once apply starts, it ignores the `CancellationToken` and runs to the end. Any interruption from here on is the job of `RecoverAsync` after the crash.
 
-適用の順は、呼んだ順ではありません。
+The apply order is not the order of your calls.
 
-1. Add、Move、CreateDirectory
+1. Add, Move, CreateDirectory
 2. Update
-3. Delete と DeleteTree。Delete はパスが深い方から
+3. Delete and DeleteTree. Delete goes from the deepest path
 
-全部終わるとジャーナルを消します。`.txnew` は本物の名前へ rename されているので、残りません。
+When everything is done, the journal is deleted. The `.txnew` files have been renamed to the real names, so none remain.
 
-適用の途中で、ほかのプロセスがファイルを変えていたときや、ファイルを開けなかったときは `PartialConflict` です。戻り値は例外ではありません。確定は進んでいます。適用しなかった操作の `.txnew` とジャーナルは消えます。飛ばした操作は `Operations` に載ります。理由は、Before と After のどちらとも一致しない、対象が無い、移動先が既にある、ファイルかディレクトリにすり替わった、共有違反、それ以外の IO 失敗、です。共有違反は自動では再試行しません。同じインスタンスではやり直せません。`Succeeded` と見比べて扱ってください。
+If another process changed a file during apply, or a file could not be opened, the result is `PartialConflict`. The return value is not an exception, and the commit went through. The `.txnew` of operations that were not applied, and the journal, are deleted. The skipped operations are in `Operations`. The reasons are: matches neither Before nor After, the target is missing, the destination already exists, it was swapped for a file or directory, a sharing violation, or another IO failure. Sharing violations are not retried automatically. The same instance cannot retry. Handle it differently from `Succeeded`.
 
-検証で失敗したときは `Failed` です。拒んだ操作は `Operations` に載ります。理由は、対象が無い、既にある、ファイルかディレクトリにすり替わった、ディレクトリの直下条件を満たさない、Update かファイルの Delete の対象が読み取り専用（`ReadOnly`）、です。`detectExternalChanges` が true のときは、記録したファイルのサイズか最終更新日時が違う、も入ります。本物のパスはまだ変えていません。状態を直したあと、同じトランザクションでもう一度 `CommitAsync` できます。
+When the check fails, the result is `Failed`. The rejected operations are in `Operations`. The reasons are: the target is missing, it already exists, it was swapped for a file or directory, the direct-children conditions of a directory are not met, or the target of an Update or a file Delete is read-only (`ReadOnly`). When `detectExternalChanges` is true, a recorded file whose size or last write time differs is included too. The real paths have not changed yet. After fixing the state, you can call `CommitAsync` again on the same transaction.
 
-### コミットせず破棄すると
+### When you discard without committing
 
-`await using` を抜ける、または `DisposeAsync` すると、印を書く前なら、未コミットの `.txnew`、コピーが作ったディレクトリ、`CreateDirectoryAsync` のディレクトリ、ジャーナルが消えます。`CreateDirectoryAsync` の中へ素のファイル API で書いたものも、そのディレクトリごと消えます。それ以外の、このトランザクションが触れていないファイルは残ります。
+When you leave `await using` or call `DisposeAsync` before the marker is written, the uncommitted `.txnew` files, the directories a copy created, the `CreateDirectoryAsync` directories, and the journal are deleted. Whatever was written with the plain file API inside a `CreateDirectoryAsync` directory is deleted together with that directory. Other files this transaction did not touch stay.
 
-コミット開始前にキャンセルしたときも、破棄のときに同じ片付けをします。印を書いたあとに適用で例外が出たら、破棄はそれらを消さず、ロックだけ閉じます。例外はそのまま届きます。ジャーナルと `.txnew` は残り、次の `RecoverAsync` が進めます。
+Cancelling before the commit starts does the same cleanup on discard. If apply throws after the marker is written, discard does not delete them; it only closes the locks. The exception reaches you as is. The journal and `.txnew` files stay, and the next `RecoverAsync` rolls forward.
 
-### 落ちると
+### When the process crashes
 
-印を書く前に落ちたジャーナルは、次回 `RecoverAsync` がロールバックします。`.txnew` に加え、コピー、Import、展開が作ったディレクトリも消します。印を書いたあとに落ちたジャーナルは、ロールフォワードします。そのとき、作ったディレクトリは残します。判断はライブラリがします。アプリはフォルダを開くときに `RecoverAsync` を 1 回呼びます。
+A journal that crashed before the marker was written is rolled back by the next `RecoverAsync`. Besides the `.txnew` files, it deletes the directories that copy, Import, and extract created. A journal that crashed after the marker is rolled forward, and the created directories stay. The library decides. The application calls `RecoverAsync` once when it opens the folder.
 
 ```mermaid
 flowchart TD
-  call["RecoverAsync"] --> has{"ジャーナルがある?"}
-  has -->|ない| none["NoPendingTransactions"]
-  has -->|JSON として読めない| unreadable["JournalUnreadable"]
-  has -->|適用開始の印が無い| back["RolledBack"]
-  has -->|印がある| match{"Before / After と一致する?"}
-  match -->|適用済み、または再実行できた| forward["RolledForward"]
-  match -->|どちらでもない| conflict["ConflictDetected"]
+  call["RecoverAsync"] --> has{"Is there a journal?"}
+  has -->|No| none["NoPendingTransactions"]
+  has -->|Not readable as JSON| unreadable["JournalUnreadable"]
+  has -->|No apply-started marker| back["RolledBack"]
+  has -->|Marker present| match{"Matches Before / After?"}
+  match -->|Applied, or re-run succeeded| forward["RolledForward"]
+  match -->|Neither| conflict["ConflictDetected"]
 ```
 
-`ConflictDetected` は、落ちたあとにだれかがファイルを変えていて、戻すことも進めることも安全にできないときです。その操作は飛ばし、ほかの操作は進めて、`.txnew` とジャーナルを消します。飛ばした操作は、そのときの `Journals` に載ります。次の `RecoverAsync` はやり直しません。
+`ConflictDetected` means someone changed a file after the crash, and it can be neither rolled back nor forward safely. That operation is skipped, the others go forward, and the `.txnew` files and journal are deleted. The skipped operations are in `Journals` of that call. The next `RecoverAsync` does not retry.
 
-`JournalUnreadable` は、ジャーナルが JSON として読めないときです。ジャーナルは残し、ファイル名から分かる `.txnew` だけ消します。`CreateDirectoryAsync` で作ったディレクトリは特定できないので残します。直すか消すまで、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` のままです。1 件でも読めなければ、ほかを処理したあともこの結果を返します。
+`JournalUnreadable` means the journal cannot be read as JSON. The journal stays, and only the `.txnew` files identified by the file name are deleted. Directories made with `CreateDirectoryAsync` cannot be identified, so they stay. Until you fix or delete it, `BeginAsync` and `CommitAsync` stay `RecoveryRequiredException`. If even one journal is unreadable, this result is returned even after the others are processed.
 
-落ちたジャーナルが残っているあいだ、新しいトランザクションは `BeginAsync` でも `CommitAsync` でも `RecoveryRequiredException` です。落ちたあとに配下へ確定したデータを、復旧が消さないようにするためです。`CommitAsync` で断られたときは本物に触れていません。破棄してから `RecoverAsync` を呼びます。
+While a crashed journal remains, a new transaction gets `RecoveryRequiredException` from both `BeginAsync` and `CommitAsync`. This keeps recovery from deleting data committed under a directory after the crash. When `CommitAsync` refuses, it has not touched the real files. Dispose the transaction, then call `RecoverAsync`.
 
-`RecoverAsync` は自動では走りません。開くたびに先に呼んでください。ディレクトリの全削除やディレクトリの移動のあと、残骸の `.txnew` が残っているかもしれないときも、先に呼びます。
+`RecoverAsync` does not run automatically. Call it first every time you open the folder. Also call it first when leftover `.txnew` files may remain after deleting a whole directory or moving a directory.
 
-## 同時に使う
+## Concurrent use
 
-このロックは、Txfio の利用者同士の協調です。素の `File` API やエクスプローラーは止めません。
+These locks are cooperation among Txfio users. They do not stop the plain `File` API or Explorer.
 
-同じトランザクションの公開メンバーは、重なって呼べません。先に入った呼び出しは最後まで行い、後から重なった呼び出しは状態を変える前に `InvalidOperationException` です。進行中の progress から同じインスタンスを呼ぶのも同じです。呼び出しが終わったあとは、また 1 つずつ呼べます。別のトランザクションは、別のパスなら今までどおり並行できます。
+The public members of one transaction cannot be called concurrently. The call that entered first runs to the end, and a later overlapping call throws `InvalidOperationException` before it changes any state. Calling the same instance from a progress callback in progress is the same. After a call finishes, calls can be made one at a time again. Other transactions can run in parallel on other paths, as before.
 
-変更系は、対象のパスをロックする前にワークフォルダ全体もロックし、トランザクションが終わるまで共有で持ちます。別のパスを触るトランザクションは並行できます。パスの親ディレクトリ（ワークフォルダ自身は除く）には、共有の意図ロックを終わりまで取ります。ワークフォルダ全体を排他にするのは `RecoverAsync` だけで、ディレクトリの操作も共有のまま、別のパスを触るトランザクションと並行できます。配下を予約するのは、`DeleteTreeAsync`（そのディレクトリ）、ディレクトリの Move（元と先）、ディレクトリの `CopyAsync` とディレクトリの `ImportAsync`（先だけ）、`ExtractArchiveAsync` と `ImportArchiveAsync`（展開先）、ディレクトリの `DeleteAsync`（そのディレクトリ）です。予約は排他の意図ロックで、トランザクションが終わるまで残ります。配下をステージしようとすると `LockContentionException` で、`Path` はそのディレクトリです。`CreateDirectoryAsync` と `CreateArchiveAsync` は配下を予約しません。ディレクトリの `CopyAsync` のコピー元と、`CreateArchiveAsync` の入力ディレクトリは、呼び出しのあいだだけ排他の意図ロックで押さえ、呼び出しが終わると閉じます（読んでいるあいだに配下が変わらないようにするため）。`BeginAsync` か `RecoverAsync` に待ち時間を渡すと、その呼び出しの開始からその時間まで、共有違反のときだけ 100ms 間隔で開き直します。時間切れは同じ例外で、待ちの取り消しは `OperationCanceledException` です。`Path` には押さえられていたパスが 1 つ入り、ワークフォルダ全体を押さえているときはそのパスがワークフォルダです。プロセスが落ちると OS がロックのハンドルを閉じ、`.lock` ファイルは残します。`RecoverAsync` は処理のあいだワークフォルダ全体を排他で押さえます。変更中のトランザクションがあれば、待ち時間を渡さないときは何もせず `LockContentionException` です。しるしが空いていることを確かめたあと、ジャーナルを処理する前に `.txfio/locks/` の `.lock` を消します。消せないものは残します。生存ロックとしるしは消しません。
+Write operations also lock the whole work folder before locking the target path, and hold it as shared until the transaction ends. Transactions that touch other paths can run in parallel. The parent directories of a path (except the work folder itself) get shared intent locks until the end. Only `RecoverAsync` makes the work-folder lock exclusive; directory operations keep it shared too and can run in parallel with transactions that touch other paths. The operations that reserve what is under a directory are `DeleteTreeAsync` (that directory), directory Move (source and destination), directory `CopyAsync` and directory `ImportAsync` (destination only), `ExtractArchiveAsync` and `ImportArchiveAsync` (destination), and directory `DeleteAsync` (that directory). The reservation is an exclusive intent lock that remains until the transaction ends. Trying to stage under it throws `LockContentionException`, with `Path` set to that directory. `CreateDirectoryAsync` and `CreateArchiveAsync` do not reserve what is under them. The source of a directory `CopyAsync` and the input directory of `CreateArchiveAsync` are held with an exclusive intent lock only during the call, and closed when the call ends (so that nothing under them changes while they are read). If you pass a wait time to `BeginAsync` or `RecoverAsync`, it retries every 100 ms, only on sharing violations, until that time has passed since the start of the call. Timing out is the same exception, and cancelling the wait is `OperationCanceledException`. `Path` holds one path that was held; when the whole work folder was held, that path is the work folder. When a process crashes, the OS closes the lock handles, and the `.lock` files stay. `RecoverAsync` holds the whole work folder exclusively while it works. If a transaction is changing things, it does nothing and throws `LockContentionException` when no wait time is passed. After confirming that the share-lost marker is free, it deletes the `.lock` files in `.txfio/locks/` before processing journals. Files it cannot delete stay. The liveness locks and the marker are not deleted.
 
-UI スレッドから `await` しても、画面は止まりません。公開の非同期メソッドは、UI スレッドなどから呼ばれたとき、最初の IO の前にスレッドプールへ移ります。rename やロックファイルのオープンなど、非同期 API が無い IO もそこで行います。`await` のあとは呼び出し元のスレッドへ戻ります。サーバーやコンソールでは移りません。
+Awaiting from a UI thread does not freeze the screen. When the public async methods are called from a UI thread or similar, they switch to the thread pool before the first IO. IO without an async API, such as rename and opening lock files, also happens there. After `await`, execution returns to the caller's thread. On servers and consoles they do not switch.
 
-ワークフォルダの外は `ArgumentException`、`.txfio` 配下は `InvalidOperationException` です。`ReadAsync`、`ExistsAsync`、`ExportAsync`、`ExportArchiveAsync` はロックしません。ワークフォルダ自身を `CreateDirectoryAsync`、`DeleteAsync`、`DeleteTreeAsync` の対象にすると `ArgumentException` で、メッセージは「パスはワークフォルダの内側である必要があります」です。
+Outside the work folder is `ArgumentException`, and under `.txfio` is `InvalidOperationException`. `ReadAsync`, `ExistsAsync`, `ExportAsync`, and `ExportArchiveAsync` do not lock. Passing the work folder itself to `CreateDirectoryAsync`, `DeleteAsync`, or `DeleteTreeAsync` throws `ArgumentException` with the message "The path must be inside the work folder".
 
 ## AddAsync
 
-`AddAsync` は、ディスク上にまだ無いファイルの内容を、同じディレクトリの `.txnew` へ書きます。本物のパスはコミットまで存在せず、コミットするとそのパスへ rename します。破棄すると `.txnew` だけ消えます。印を書く前に落ちると `.txnew` を消し、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。ファイル Move の移動元なら、ディスク上にファイルがまだあっても Add できます。ディレクトリ Move の移動元への Add は失敗します。
+`AddAsync` writes the content of a file that does not exist on disk yet to a `.txnew` in the same directory. The real path does not exist until commit, and the commit renames to that path. Discard deletes only the `.txnew`. After a crash before the marker, the `.txnew` is deleted; after the marker, it is skipped if it matches After and re-run if it matches Before. If neither, `ConflictDetected`. At the source of a file Move, you can Add even though the file is still on disk. An Add to the source of a directory Move fails.
 
-ワークフォルダ全体は共有で押さえ、そのファイルもロックします。81920 バイト書くたびに `TransferProgress` を通知し、空の内容は最後に 1 回、0 バイトです。null の progress は通知しません。渡したストリームは閉じません。
+It holds the whole work folder as shared, and locks the file. It reports `TransferProgress` every 81920 bytes written, and empty content reports 0 bytes once at the end. A null progress reports nothing. The stream you pass is not closed.
 
 ```csharp
 await using FileStream content = File.OpenRead(@"D:\incoming\big.bin");
@@ -187,35 +189,35 @@ await tx.AddAsync("big.bin", content);
 
 ```mermaid
 flowchart TD
-  add["AddAsync"] --> exists{"ディスク上にファイルがある?"}
-  exists -->|ある| moved{"ファイル Move の移動元?"}
-  moved -->|いいえ| ext["ExternalConflictException"]
-  moved -->|はい| parent{"親ディレクトリがある?"}
-  exists -->|無い| parent
-  parent -->|無い| ext
-  parent -->|ある| ok[".txnew に書く"]
+  add["AddAsync"] --> exists{"Is there a file on disk?"}
+  exists -->|Yes| moved{"Source of a file Move?"}
+  moved -->|No| ext["ExternalConflictException"]
+  moved -->|Yes| parent{"Does the parent directory exist?"}
+  exists -->|No| parent
+  parent -->|No| ext
+  parent -->|Yes| ok["Write to .txnew"]
 ```
 
 ## UpdateAsync
 
-`UpdateAsync` は、既にあるファイルの新しい内容を `.txnew` へ書きます。本物はコミットまで旧内容のままです。コミットすると本物を置換し、破棄すると `.txnew` だけ消えて本物は旧のまま残ります。印が無ければ `.txnew` を消し、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
+`UpdateAsync` writes the new content of an existing file to `.txnew`. The real file keeps the old content until commit. The commit replaces the real file; discard deletes only the `.txnew`, and the real file keeps the old content. Without the marker, the `.txnew` is deleted; after the marker, it is skipped if it matches After and re-run if it matches Before. If neither, `ConflictDetected`.
 
-`BeginAsync` の `detectExternalChanges` を true にすると、ファイルの Update、ファイルの Delete、ファイルの Move の移動元について、ステージした時点（またはその前に `ReadAsync` した時点）のサイズと最終更新日時（UTC）を覚えます。コミット前にその実ファイルがまだファイルであり、どちらかが違えば `Failed` になり、本物は変えません。理由は `ExternalChange` です。既定の false は、中身だけ変わった Update を失敗にせず、Before をコミット時点のディスクにします。同じサイズで同じ最終更新日時の書き換えは見逃します（FAT は 2 秒、SMB サーバーによっては秒単位に日時を丸めます）。ディレクトリの配下の変更は見ません。記録はメモリだけで、ジャーナルには書きません。`ReadAsync` は実ファイルを読むたびに記録を更新します。このトランザクションの `.txnew` を読んだときは更新しません。Read の記録があるパスは、もう一度ステージしても記録を更新しません。
+When `detectExternalChanges` of `BeginAsync` is true, for file Update, file Delete, and the source of a file Move, it remembers the size and last write time (UTC) at staging (or at an earlier `ReadAsync`). Before commit, if that real file is still a file and either value differs, the result is `Failed`, and the real file does not change. The reason is `ExternalChange`. The default, false, does not fail an Update whose contents alone changed, and Before is the disk at commit time. A rewrite with the same size and the same last write time is missed (FAT rounds times to 2 seconds, and some SMB servers to seconds). Changes under a directory are not checked. The record is only in memory and is not written to the journal. `ReadAsync` updates the record each time it reads a real file. Reading this transaction's `.txnew` does not update it. A path with a Read record does not update the record when staged again.
 
-ワークフォルダ全体は共有で押さえ、そのファイルもロックします。81920 バイトごとに通知します。
+It holds the whole work folder as shared, and locks the file. It reports every 81920 bytes.
 
 ```mermaid
 flowchart TD
-  upd["UpdateAsync"] --> exists{"ディスク上にファイルがある?"}
-  exists -->|無い| ext["ExternalConflictException"]
-  exists -->|ある| parent{"親ディレクトリがある?"}
-  parent -->|無い| ext
-  parent -->|ある| ok[".txnew に書く。本物は旧のまま"]
+  upd["UpdateAsync"] --> exists{"Is there a file on disk?"}
+  exists -->|No| ext["ExternalConflictException"]
+  exists -->|Yes| parent{"Does the parent directory exist?"}
+  parent -->|No| ext
+  parent -->|Yes| ok["Write to .txnew. The real file stays old"]
 ```
 
-## 文字列と JSON
+## Text and JSON
 
-小さい文字列は `WriteAllTextAsync` です。コミット後の姿でファイルが無ければ Add、あれば Update です。ファイル `Move` の移動先は Update で、ファイルなら移動先の Add と元の Delete に畳みます。ファイル `Move` の移動元は Add です。ディレクトリ `Move` の移動先も移動元も失敗します。`Delete` のあとは、選ぶ時点では Add でも、記録は Update です。同じパスへ続けて書くと、予約は 1 件のまま内容だけ置き換わります。
+For a small string, use `WriteAllTextAsync`. Add if the post-commit view has no file, Update if it has one. The destination of a file `Move` gets Update; for a file, it folds into an Add at the destination and a Delete of the original. The source of a file `Move` gets Add. Both the destination and the source of a directory `Move` fail. After `Delete`, Add is chosen at that moment, but the record is Update. Writing to the same path again keeps one scheduled operation and replaces only the content.
 
 ```csharp
 await tx.WriteAllTextAsync("new.txt", "hello");
@@ -223,9 +225,9 @@ await tx.WriteAllTextAsync("a.txt", "replaced");
 await tx.WriteAllLinesAsync("lines.txt", new[] { "a", "b" });
 ```
 
-`WriteAllLinesAsync` は各行のあとに `Environment.NewLine` を付けます。読み出した配列の要素に改行は含まれません。`contents` が null の `WriteAllLinesAsync` は `ArgumentNullException` です。`WriteAllTextAsync` の null は空のファイルとして書きます。エンコーディングを省略した書きは BOM なし UTF-8、読みは BOM があればそれを使います。
+`WriteAllLinesAsync` adds `Environment.NewLine` after each line. The elements of the array read back contain no line breaks. `WriteAllLinesAsync` with null `contents` throws `ArgumentNullException`. `WriteAllTextAsync` with null writes an empty file. A write without an encoding uses UTF-8 without a BOM, and a read uses the BOM if there is one.
 
-JSON も、書くときは同じ Add と Update です。オプションを省略すると `System.Text.Json` の既定なので、プロパティ名はそのままです。壊れた JSON は `JsonException` のままです。
+JSON writes are the same Add and Update. Without options, `System.Text.Json` defaults apply, so property names stay as they are. Broken JSON stays `JsonException`.
 
 ```csharp
 sealed record Note(string Title);
@@ -236,33 +238,33 @@ Note? note = await tx.ReadFromJsonAsync<Note>("note.json");
 
 ```mermaid
 flowchart TD
-  write["文字列または JSON を書く"] --> exists{"コミット後の姿でファイルがある?"}
-  exists -->|無い| add["Add"]
-  exists -->|ある| upd["Update"]
+  write["Write text or JSON"] --> exists{"Is there a file in the post-commit view?"}
+  exists -->|No| add["Add"]
+  exists -->|Yes| upd["Update"]
 ```
 
 ## ReadAsync
 
-`ReadAsync` は、位置 0 の読み取りストリームを返します。破棄は呼び出し側です。このトランザクションの予約は、コミット後の姿で読みます。`Add` と `Update` は `.txnew`、ファイル `Move` の移動先は移動元のバイト、移動元と `Delete` の対象は無いです。`DeleteTree` の配下と、ディレクトリ `Move` の移動元の配下も無いです。移動先の配下は、移動元の対応するファイルです。ロックは取りません。ジャーナルにも残りません。
+`ReadAsync` returns a read stream at position 0. The caller disposes it. This transaction's scheduled changes are read in the post-commit view: `Add` and `Update` read the `.txnew`, the destination of a file `Move` reads the source's bytes, and the source and the target of a `Delete` are missing. Everything under a `DeleteTree` and under the source of a directory `Move` is missing too. Under the destination, it is the corresponding file under the source. No locks are taken, and nothing goes into the journal.
 
-`ExistsAsync` は、同じ姿でファイルかディレクトリがあるかを bool で返します。無いパスは false で、ディレクトリだから失敗することはありません。
+`ExistsAsync` returns as a bool whether a file or directory exists in the same view. A missing path is false, and a directory never makes it fail.
 
-ストリームを閉じる前でも、コミットの rename は進みます。同じパスを、ストリームを開いたまま書き直すと失敗することがあります。`ReadAllTextAsync` と `ReadAllLinesAsync` は、この読み取りと同じバイトを文字列、または行の配列にします。
+The commit's rename proceeds even before the stream is closed. Rewriting the same path while the stream is open may fail. `ReadAllTextAsync` and `ReadAllLinesAsync` turn the same bytes as this read into a string or an array of lines.
 
 ```mermaid
 flowchart TD
-  read["ReadAsync"] --> dir{"コミット後の姿がディレクトリ?"}
-  dir -->|はい| uns["UnsupportedOperationException"]
-  dir -->|いいえ| bytes{"コミット後の姿にファイルが無い?"}
-  bytes -->|はい| ext["ExternalConflictException"]
-  bytes -->|いいえ| ok["そのファイルを開く"]
+  read["ReadAsync"] --> dir{"Is it a directory in the post-commit view?"}
+  dir -->|Yes| uns["UnsupportedOperationException"]
+  dir -->|No| bytes{"No file in the post-commit view?"}
+  bytes -->|Yes| ext["ExternalConflictException"]
+  bytes -->|No| ok["Open that file"]
 ```
 
 ## DeleteAsync
 
-`DeleteAsync` は削除を予約するだけで、ディスクが変わるのはコミットのときです。ファイルならそのファイルを消し、ディレクトリなら直下だけを消します。空のディレクトリは 1 回で予約できます。破棄しても、予約した対象は消えません。印が無ければディスクは変えず、印のあとでは残っていれば消し、消えていれば適用済み、ファイルにすり替わっていれば `ConflictDetected` です。
+`DeleteAsync` only schedules the delete; the disk changes at commit. For a file it deletes that file, and for a directory it deletes only the direct children. An empty directory can be scheduled in one call. Discard does not delete the scheduled target. Without the marker, the disk does not change; after the marker, it is deleted if still there, applied if already gone, and `ConflictDetected` if it was swapped for a file.
 
-ファイルでは、ワークフォルダ全体を共有で押さえ、そのファイルをロックします。ディレクトリでは、ワークフォルダ全体を共有で押さえ、そのディレクトリをロックし、その意図ロックを排他で終わりまで持ちます。子のパスはロックしません。別のトランザクションが配下をステージすると `LockContentionException` で、`Path` はそのディレクトリです。直下に未予約の子があるときのメッセージは「ディレクトリの直下に未予約の子があります」です。次の木を直下だけで消すときは、深い方から予約します。
+For a file, it holds the whole work folder as shared and locks that file. For a directory, it holds the whole work folder as shared, locks that directory, and holds its intent lock exclusively until the end. Child paths are not locked. If another transaction stages under it, that transaction gets `LockContentionException` with `Path` set to that directory. When a direct child is not scheduled, the message is "The directory has a child that is not scheduled". To delete the following tree by direct children only, schedule from the deepest part.
 
 ```text
 tree/
@@ -278,25 +280,25 @@ await tx.DeleteAsync("tree");
 
 ```mermaid
 flowchart TD
-  del["DeleteAsync"] --> self{"ワークフォルダ自身?"}
-  self -->|はい| arg["ArgumentException"]
-  self -->|いいえ| kind{"ファイル?"}
-  kind -->|はい| file{"ファイルがある?"}
-  file -->|無い| ext["ExternalConflictException"]
-  file -->|ある| reserve["削除を予約する"]
-  kind -->|いいえ| child{"直下に未予約の子がある?"}
-  child -->|ある| ext
-  child -->|無い| dreserve["直下の削除を予約する"]
-  dreserve --> swap{"コミット時にファイルへすり替わった?"}
-  swap -->|はい| failed["Failed"]
-  swap -->|いいえ| gone["直下だけを消す"]
+  del["DeleteAsync"] --> self{"The work folder itself?"}
+  self -->|Yes| arg["ArgumentException"]
+  self -->|No| kind{"A file?"}
+  kind -->|Yes| file{"Does the file exist?"}
+  file -->|No| ext["ExternalConflictException"]
+  file -->|Yes| reserve["Schedule the delete"]
+  kind -->|No| child{"A direct child that is not scheduled?"}
+  child -->|Yes| ext
+  child -->|No| dreserve["Schedule deleting the direct children"]
+  dreserve --> swap{"Swapped for a file at commit?"}
+  swap -->|Yes| failed["Failed"]
+  swap -->|No| gone["Delete only the direct children"]
 ```
 
 ## DeleteTreeAsync
 
-`DeleteTreeAsync` は、ディレクトリとその配下すべての削除を 1 件で予約します。ステージでは木を歩かず、コミット時に再帰削除します。破棄しても木は残ります。印が無ければディスクは変えず、印のあとではディレクトリが残っていれば消し、消えていれば適用済み、ファイルにすり替わっていれば `ConflictDetected` です。中の残骸も消すので、呼び側は先に `RecoverAsync` します。
+`DeleteTreeAsync` schedules deleting a directory and everything under it as one entry. Staging does not walk the tree; the recursive delete happens at commit. Discard leaves the tree. Without the marker, the disk does not change; after the marker, the directory is deleted if still there, applied if already gone, and `ConflictDetected` if it was swapped for a file. Leftovers inside are deleted too, so the caller runs `RecoverAsync` first.
 
-ワークフォルダ全体は共有で押さえます。そのディレクトリの意図ロックは排他で終わりまで持ち、子のパスはロックしません。
+It holds the whole work folder as shared. It holds that directory's intent lock exclusively until the end, and does not lock child paths.
 
 ```csharp
 await tx.DeleteTreeAsync("tree");
@@ -304,20 +306,20 @@ await tx.DeleteTreeAsync("tree");
 
 ```mermaid
 flowchart TD
-  tree["DeleteTreeAsync"] --> self{"ワークフォルダ自身?"}
-  self -->|はい| arg["ArgumentException"]
-  self -->|いいえ| file{"ファイル?"}
-  file -->|はい| uns["UnsupportedOperationException"]
-  file -->|いいえ| under{"配下にこのトランザクションの操作がある?"}
-  under -->|ある| inv["InvalidOperationException"]
-  under -->|無い| ok["全削除を予約する"]
+  tree["DeleteTreeAsync"] --> self{"The work folder itself?"}
+  self -->|Yes| arg["ArgumentException"]
+  self -->|No| file{"A file?"}
+  file -->|Yes| uns["UnsupportedOperationException"]
+  file -->|No| under{"An operation of this transaction under it?"}
+  under -->|Yes| inv["InvalidOperationException"]
+  under -->|No| ok["Schedule the delete of the tree"]
 ```
 
 ## MoveAsync
 
-`MoveAsync` は、同一ボリューム内のファイルまたはディレクトリの移動を予約します。対象はコミットまで元の場所に残り、コミット時に 1 回 rename します。ディレクトリの中身はジャーナルに書かず、rename に付いていきます。破棄しても何も消えません。印が無ければディスクは変えず、印のあとでは After と一致すればスキップし、Before と一致すればやり直します。どちらでもなければ `ConflictDetected` です。
+`MoveAsync` schedules moving a file or directory within one volume. The target stays in its original place until commit, and is renamed once at commit. The contents of a directory are not written to the journal; they go with the rename. Discard deletes nothing. Without the marker, the disk does not change; after the marker, it is skipped if it matches After and re-run if it matches Before. If neither, `ConflictDetected`.
 
-ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリでも、ワークフォルダ全体は共有で押さえます。元と先をロックし、その意図ロックは排他で終わりまで持ちます。別ボリュームはコピーと削除には切り替えません。大文字小文字だけが違うパス、または完全に同じパスは `InvalidOperationException` です。そのときはジャーナルに載せず、ロックも取りません。移動先は、空いているか、既にこのトランザクションの別の Move の移動元であるときだけ受け付けます。呼び出しは空いている端からで、空いている端が無い循環は受け付けません。適用もその端からで、ファイルの移動元への Add はその Move のあとです。存在するファイルを上書きする Move は、`MoveAsync(oldPath, newPath, overwrite: true)` と明示したときだけです。コミットで 1 回の rename で置き換え、バイトはコピーしません（移動先の ACL は移動元のものになります）。移動先にこのトランザクションの Delete があれば、その Delete を置き換えの Move に畳みます。置き換えの Move の元と先へは、そのあと続けて操作できません。移動元か移動先がディレクトリで `overwrite: true` にすると、移動先の既存のファイルかディレクトリを入れ替えます。コミットでは、既存を `{名前}.{txid}.txold` へ退避してから rename し、`.txold` を消します。ファイルでディレクトリを入れ替えると、コミット後の姿ではその配下は無くなります。移動元は、同じトランザクションの `ImportAsync` や `CopyAsync` が作ったディレクトリでも構いません（`ImportAsync(外, "site.new")` のあと `MoveAsync("site.new", "site", overwrite: true)`）。移動先の `DeleteTreeAsync` は入れ替えに畳みます。同じパスの種類を変えるときは、新しい方を別の名前で用意してからこの入れ替えを使います。`Delete` のあとの `CreateDirectoryAsync` と、空ディレクトリの `Delete` のあとの Add は受け付けません。
+For a file, it holds the whole work folder as shared and locks the source and destination. For a directory too, it holds the whole work folder as shared. It locks the source and destination, and holds their intent locks exclusively until the end. Another volume is not turned into copy and delete. Paths that differ only in case, or are exactly the same, throw `InvalidOperationException`; then nothing goes into the journal and no lock is taken. The destination is accepted only when it is free, or is already the source of another Move in this transaction. Calls go from the free end, and a cycle without a free end is not accepted. Apply also starts from that end, and an Add to the source of a file comes after that Move. A Move that overwrites an existing file happens only when you say so with `MoveAsync(oldPath, newPath, overwrite: true)`. The commit replaces it with one rename and copies no bytes (the destination's ACL becomes the source's). If this transaction has a Delete at the destination, that Delete folds into the replacing Move. No further operation is allowed on the source or destination of a replacing Move. With `overwrite: true` when the source or destination is a directory, it swaps the existing file or directory at the destination. The commit moves the existing one aside to `{name}.{txid}.txold`, renames, and deletes the `.txold`. When a file swaps out a directory, nothing remains under it in the post-commit view. The source may be a directory that `ImportAsync` or `CopyAsync` of the same transaction created (`ImportAsync(external, "site.new")` followed by `MoveAsync("site.new", "site", overwrite: true)`). A `DeleteTreeAsync` at the destination folds into the swap. To change the kind at a path, prepare the new one under another name, then use this swap. `CreateDirectoryAsync` after `Delete`, and Add after `Delete` of an empty directory, are not accepted.
 
 ```csharp
 await tx.MoveAsync("tree", "archive");
@@ -325,26 +327,26 @@ await tx.MoveAsync("tree", "archive");
 
 ```mermaid
 flowchart TD
-  move["MoveAsync"] --> same{"同じパス?"}
-  same -->|はい| invSame["InvalidOperationException"]
-  same -->|いいえ| vol{"別ボリューム?"}
-  vol -->|はい| uns["UnsupportedOperationException"]
-  vol -->|いいえ| place{"元が無い、または先が塞がっていて別の Move の移動元でもない?"}
-  place -->|はい| ext["ExternalConflictException"]
-  place -->|いいえ| cycle{"空いている端が無い?"}
-  cycle -->|はい| inv["InvalidOperationException"]
-  cycle -->|いいえ| under{"配下、または自分自身の配下?"}
-  under -->|はい| inv
-  under -->|いいえ| ok["移動を予約する"]
+  move["MoveAsync"] --> same{"The same path?"}
+  same -->|Yes| invSame["InvalidOperationException"]
+  same -->|No| vol{"Another volume?"}
+  vol -->|Yes| uns["UnsupportedOperationException"]
+  vol -->|No| place{"Source missing, or destination occupied and not the source of another Move?"}
+  place -->|Yes| ext["ExternalConflictException"]
+  place -->|No| cycle{"No free end?"}
+  cycle -->|Yes| inv["InvalidOperationException"]
+  cycle -->|No| under{"Under a scheduled directory, or under itself?"}
+  under -->|Yes| inv
+  under -->|No| ok["Schedule the move"]
 ```
 
 ## CreateDirectoryAsync
 
-`CreateDirectoryAsync` だけは、呼んだ時点で本物のパスに空ディレクトリを作ります。中身は素のファイル API で書きます。同じプロセスでも別プロセスでもよいです。配下では、親が最初からあるディレクトリと同じ操作ができます。ジャーナルの `CreateDirectory` はディレクトリ 1 件で、素のファイルは走査しません。`GetPendingChanges` には、配下で予約した操作が出ます。
+Only `CreateDirectoryAsync` creates an empty directory at the real path when called. Its contents are written with the plain file API, from the same process or another. Under it, the same operations work as under a directory whose parent existed from the start. The journal's `CreateDirectory` is one entry for the directory, and plain files are not walked. `GetPendingChanges` shows the operations scheduled under it.
 
-コミットが `Succeeded` なら、ディレクトリはその場所に残り、rename はしません。破棄すると、中の `.txnew` と、素のファイル API で書いたものも、ディレクトリごと消えます。印が無ければ同じ削除をし、無ければ何もしません。印のあとでは、ディレクトリがあれば残して進め、無い、またはファイルなら `ConflictDetected` です。
+When the commit is `Succeeded`, the directory stays in place and is not renamed. Discard deletes it, including the `.txnew` files inside and whatever the plain file API wrote. Without the marker, recovery does the same delete, or nothing if it is missing. After the marker, the directory is kept if it exists, and `ConflictDetected` if it is missing or is a file.
 
-ワークフォルダ全体は共有で押さえ、そのディレクトリをロックします。配下は予約しないので、別のトランザクションは子をステージできます。配下の操作は、それぞれの操作のロックも取ります。そのパス自身への Delete、DeleteTree、Move、Update、もう一度の `CreateDirectoryAsync` は畳みません。配下にこのトランザクションの操作が無いときだけ、そのディレクトリをコピー元にできます。
+It holds the whole work folder as shared and locks the directory. It does not reserve what is under it, so other transactions can stage children. Operations under it also take their own locks. Delete, DeleteTree, Move, Update, or a second `CreateDirectoryAsync` on the path itself are not folded. The directory can be a copy source only when this transaction has no operation under it.
 
 ```csharp
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
@@ -356,23 +358,23 @@ CommitReport report = await tx.CommitAsync();
 
 ```mermaid
 flowchart TD
-  mk["CreateDirectoryAsync"] --> self{"ワークフォルダ自身?"}
-  self -->|はい| arg["ArgumentException"]
-  self -->|いいえ| again{"このトランザクションがすでにそのパスを作っている?"}
-  again -->|はい| inv["InvalidOperationException"]
-  again -->|いいえ| blocked{"既にある、または親が無い?"}
-  blocked -->|はい| ext["ExternalConflictException"]
-  blocked -->|いいえ| made["空ディレクトリをその場で作る"]
-  made --> commit{"コミット時に無い、またはファイル?"}
-  commit -->|はい| failed["Failed"]
-  commit -->|いいえ| keep["その場所に残す"]
+  mk["CreateDirectoryAsync"] --> self{"The work folder itself?"}
+  self -->|Yes| arg["ArgumentException"]
+  self -->|No| again{"Has this transaction already created that path?"}
+  again -->|Yes| inv["InvalidOperationException"]
+  again -->|No| blocked{"Already exists, or no parent?"}
+  blocked -->|Yes| ext["ExternalConflictException"]
+  blocked -->|No| made["Create the empty directory right away"]
+  made --> commit{"Missing, or a file, at commit?"}
+  commit -->|Yes| failed["Failed"]
+  commit -->|No| keep["Keep it in place"]
 ```
 
 ## CopyAsync
 
-`CopyAsync` は、ワークフォルダの中のファイルまたはディレクトリを、ワークフォルダの中へコピーします。コピー元は残します。同じボリュームでもバイトをコピーし、rename やハードリンクにはしません。ファイルは先の `.txnew` を Add として残し、ディレクトリはディスク上のファイルを 1 つずつ Add にし、空のサブディレクトリも作ります。未コミットの Add は本物の名前でディスクに無いので含まれません。ジャンクションとシンボリックリンクは辿りません。
+`CopyAsync` copies a file or directory inside the work folder to another place inside the work folder. The source stays. Bytes are copied even on the same volume; it is never a rename or a hard link. A file leaves the destination's `.txnew` as an Add; a directory turns each file on disk into an Add and creates empty subdirectories too. Uncommitted Adds are not on disk under their real names, so they are not included. Junctions and symbolic links are not followed.
 
-コミットすると先が残り、元も残ります。失敗、取り消し、未コミットの破棄では、作りかけの `.txnew` と、この操作が作ったディレクトリを消します。名指ししたパスがリパースポイントなら `InvalidOperationException` で、メッセージは「リパースポイントは操作できません」です。ファイルでは、ワークフォルダ全体を共有で押さえ、元と先をロックします。ディレクトリでも、ワークフォルダ全体は共有で押さえます。元と先をロックし、子はロックしません。先の意図ロックは排他で終わりまで持ちます。元の意図ロックは呼び出しのあいだだけ排他で持ち、終わると閉じます。81920 バイトごとに通知します。ディレクトリは全体サイズを測らないので、`TotalBytes` は null です。
+After commit, the destination remains, and so does the source. On failure, cancellation, or discard without commit, the half-written `.txnew` and the directories this operation created are deleted. If a named path is a reparse point, it throws `InvalidOperationException` with the message "A reparse point cannot be used". For a file, it holds the whole work folder as shared and locks the source and destination. For a directory too, it holds the whole work folder as shared. It locks the source and destination, not the children. The destination's intent lock is exclusive until the end. The source's intent lock is exclusive only during the call, and closed when it ends. It reports every 81920 bytes. A directory's total size is not measured, so `TotalBytes` is null.
 
 ```csharp
 await tx.CopyAsync("src", "dest");
@@ -380,18 +382,18 @@ await tx.CopyAsync("src", "dest");
 
 ```mermaid
 flowchart TD
-  copy["CopyAsync"] --> blocked{"先が塞がっている、または親が無い?"}
-  blocked -->|はい| ext["ExternalConflictException"]
-  blocked -->|いいえ| bad{"シンボリックリンク、同一パス、または配下?"}
-  bad -->|はい| inv["InvalidOperationException"]
-  bad -->|いいえ| add["各ファイルを Add。元は残る"]
+  copy["CopyAsync"] --> blocked{"Destination occupied, or no parent?"}
+  blocked -->|Yes| ext["ExternalConflictException"]
+  blocked -->|No| bad{"Symbolic link, same path, or under itself?"}
+  bad -->|Yes| inv["InvalidOperationException"]
+  bad -->|No| add["Add each file. The source stays"]
 ```
 
 ## ImportAsync
 
-`ImportAsync` は、ワークフォルダの外にあるファイルまたはディレクトリを、中の `.txnew` へコピーして Add として残します。コピー元は消しません。先のディレクトリ自身とその空のサブディレクトリは、この操作が作ります。失敗、取り消し、破棄では、作りかけの `.txnew` と、この操作が作ったディレクトリを消します。
+`ImportAsync` copies a file or directory outside the work folder into `.txnew` files inside, and keeps them as Adds. The source is not deleted. This operation creates the destination directory itself and its empty subdirectories. On failure, cancellation, or discard, the half-written `.txnew` and the directories this operation created are deleted.
 
-ジャンクションとシンボリックリンクは辿りません。ファイルでは、ワークフォルダ全体を共有で押さえ、先だけをロックします。ディレクトリでも、ワークフォルダ全体は共有で押さえます。先だけをロックし、その意図ロックは排他で終わりまで持ちます。81920 バイトごとに通知します。ディレクトリの `TotalBytes` は null です。
+Junctions and symbolic links are not followed. For a file, it holds the whole work folder as shared and locks only the destination. For a directory too, it holds the whole work folder as shared. It locks only the destination, and holds its intent lock exclusively until the end. It reports every 81920 bytes. For a directory, `TotalBytes` is null.
 
 ```csharp
 await tx.ImportAsync(@"D:\incoming\drop", "imported");
@@ -399,20 +401,20 @@ await tx.ImportAsync(@"D:\incoming\drop", "imported");
 
 ```mermaid
 flowchart TD
-  imp["ImportAsync"] --> inside{"元がワークフォルダの中?"}
-  inside -->|はい| arg["ArgumentException"]
-  inside -->|いいえ| blocked{"先が塞がっている、または親が無い?"}
-  blocked -->|はい| ext["ExternalConflictException"]
-  blocked -->|いいえ| bad{"シンボリックリンク、同一パス、または配下?"}
-  bad -->|はい| inv["InvalidOperationException"]
-  bad -->|いいえ| add["各ファイルを Add。元は残る"]
+  imp["ImportAsync"] --> inside{"Source inside the work folder?"}
+  inside -->|Yes| arg["ArgumentException"]
+  inside -->|No| blocked{"Destination occupied, or no parent?"}
+  blocked -->|Yes| ext["ExternalConflictException"]
+  blocked -->|No| bad{"Symbolic link, same path, or under itself?"}
+  bad -->|Yes| inv["InvalidOperationException"]
+  bad -->|No| add["Add each file. The source stays"]
 ```
 
 ## ExportAsync
 
-`ExportAsync` は、読み取りと同じバイトをワークフォルダの外へコピーします。ファイルは 1 つ、ディレクトリは配下の各ファイルです。ジャーナルには残さず、ワークフォルダのファイルは変えず、ロックもしません。未コミットの Add は含まれません。Update 済みのファイルを出すと、出るのは `.txnew` の新しい内容で、ディスク上の本物は古いままです。
+`ExportAsync` copies the same bytes as a read to outside the work folder: one file, or each file under a directory. Nothing goes into the journal, no file in the work folder changes, and nothing is locked. Uncommitted Adds are not included. Exporting a file that has an Update gives the new content of the `.txnew`, while the real file on disk stays old.
 
-ジャンクションとシンボリックリンクは辿りません。成功したコピー先は、破棄しても残ります。失敗や取り消しでは、外に作りかけたものを消します。コミットは外を変えません。復旧の対象でもありません。81920 バイトごとに通知します。ディレクトリの `TotalBytes` は null です。
+Junctions and symbolic links are not followed. A destination that succeeded stays even after discard. On failure or cancellation, what was partly created outside is deleted. The commit does not change anything outside, and recovery does not cover it either. It reports every 81920 bytes. For a directory, `TotalBytes` is null.
 
 ```csharp
 await tx.ExportAsync("src", @"D:\outgoing\copy");
@@ -420,27 +422,27 @@ await tx.ExportAsync("src", @"D:\outgoing\copy");
 
 ```mermaid
 flowchart TD
-  exp["ExportAsync"] --> inside{"先がワークフォルダの中?"}
-  inside -->|はい| arg["ArgumentException"]
-  inside -->|いいえ| missing{"先が塞がっている、親が無い、または元が無い?"}
-  missing -->|はい| ext["ExternalConflictException"]
-  missing -->|いいえ| out["外へコピー。ジャーナルには残さない"]
+  exp["ExportAsync"] --> inside{"Destination inside the work folder?"}
+  inside -->|Yes| arg["ArgumentException"]
+  inside -->|No| missing{"Destination occupied, no parent, or no source?"}
+  missing -->|Yes| ext["ExternalConflictException"]
+  missing -->|No| out["Copy outside. Nothing in the journal"]
 ```
 
-## ZIP アーカイブ
+## ZIP archives
 
-ZIP は `System.IO.Compression` で読み書きし、ほかの操作と同じトランザクションに入ります。ワークフォルダの中と外の区別は、Copy / Import / Export と同じです。反対側のパスを渡すと `ArgumentException` です。ZIP のパスや展開先が既にある、または親が無いときは `ExternalConflictException` で、上書きも混ぜ込みもしません。
+ZIPs are read and written with `System.IO.Compression`, and join the same transaction as other operations. Inside and outside the work folder are told apart as with Copy / Import / Export. Passing a path on the wrong side throws `ArgumentException`. When the ZIP path or the destination already exists, or has no parent, it throws `ExternalConflictException`; nothing is overwritten or merged.
 
-| API                   | 読むもの                                          | 書くもの                                 | ロック                                                                  |
-| --------------------- | ------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
-| `CreateArchiveAsync`  | ディスク上のファイル。`CopyAsync` と同じ          | 中の ZIP を 1 件の Add                   | ワークフォルダ全体は共有。元と ZIP も。入力ディレクトリは呼び出しのあいだだけ排他の意図ロック。配下は予約しない |
-| `ExportArchiveAsync`  | 読み取りと同じバイト。Update の内容が入る         | 外の ZIP。成功した ZIP は破棄しても残る  | しない                                                                                                                    |
-| `ExtractArchiveAsync` | 中の ZIP を読み取りと同じバイトで。未コミットも可 | 新しいディレクトリへ、ファイルごとの Add | ワークフォルダ全体は共有。展開先をロックし、その意図ロックは終わりまで排他                 |
-| `ImportArchiveAsync`  | 外の ZIP                                          | 同上                                     | 同上                                                                                                                      |
+| API                   | Reads                                                       | Writes                                                       | Locks                                                                                                                   |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `CreateArchiveAsync`  | Files on disk, as `CopyAsync` does                          | A ZIP inside, as one Add                                     | The whole work folder as shared, plus the source and ZIP. The input directory has an exclusive intent lock only during the call. What is under it is not reserved |
+| `ExportArchiveAsync`  | The same bytes as a read. Includes Update content           | A ZIP outside. A ZIP that succeeded stays even after discard | None                                                                                                                    |
+| `ExtractArchiveAsync` | A ZIP inside, with the same bytes as a read. Uncommitted OK | A new directory, with an Add per file                        | The whole work folder as shared. The destination is locked, and its intent lock is exclusive until the end              |
+| `ImportArchiveAsync`  | A ZIP outside                                               | Same as above                                                | Same as above                                                                                                           |
 
-作成では、`CompressionLevel`（省略時は `Optimal`）と、ディレクトリ名をエントリのルートに含めるか（省略時は含めない）を選べます。空のサブディレクトリはディレクトリエントリになり、エントリの日時は元のファイルの最終更新日時です。エントリ名は UTF-8 で書きます。進捗は圧縮前のバイト数で、`TotalBytes` は null です。
+When creating, you can choose the `CompressionLevel` (default `Optimal`) and whether to include the directory name as the root of the entries (default: not included). Empty subdirectories become directory entries, and the entry time is the last write time of the source file. Entry names are written in UTF-8. Progress is bytes before compression, and `TotalBytes` is null.
 
-入れるものと名前を選ぶときは、`ArchiveEntrySource` の列を渡します。Create と Export の両方で使えます。名前を省略するとワークフォルダからの相対パスになり、ディレクトリに空文字を渡すと中身を ZIP のルートに置きます。ディレクトリは配下を再帰で入れます。ZIP の中はリストの順です。同じファイルを別の名前で 2 回入れても構いません。空のリストなら空の ZIP です。名前は展開と同じ規則（下の段落）で確かめ、当たれば `ArgumentException` です。ワークフォルダ全体は共有のままで、ディレクトリの要素は呼び出しのあいだだけ排他の意図ロックで押さえます。入力の配下は予約しません。
+To choose what goes in and under which name, pass a sequence of `ArchiveEntrySource`. Both Create and Export accept it. Without a name, it is the path relative to the work folder; an empty string for a directory puts its contents at the root of the ZIP. A directory adds everything under it recursively. Entries in the ZIP follow the order of the list. The same file may be added twice under different names. An empty list gives an empty ZIP. Names are checked by the same rules as extract (the paragraph below), and a match throws `ArgumentException`. The whole work folder stays shared, and directory elements are held with an exclusive intent lock only during the call. What is under the input is not reserved.
 
 ```csharp
 await tx.ExportArchiveAsync(
@@ -452,11 +454,11 @@ await tx.ExportArchiveAsync(
     @"D:\outgoing\bundle.zip");
 ```
 
-`ExportArchiveAsync` は `ExportAsync` と同じく、ディレクトリでは未コミットの Add を含みません。ファイルを直接渡せば、Add した内容も入ります。
+Like `ExportAsync`, `ExportArchiveAsync` does not include uncommitted Adds for a directory. If you pass the file directly, the added content goes in too.
 
-展開では、展開したファイルの最終更新日時をエントリの日時にします。UTF-8 の印が無い古い ZIP（Windows で作った Shift_JIS 名など）は、`entryNameEncoding` で読み方を指定します。進捗は展開後のバイト数で、`TotalBytes` はエントリの合計サイズです。
+When extracting, the last write time of each extracted file is set to the entry time. For old ZIPs without the UTF-8 flag (such as Shift_JIS names made on Windows), choose how to read names with `entryNameEncoding`. Progress is bytes after extraction, and `TotalBytes` is the total size of the entries.
 
-失敗、取り消し、破棄では、作りかけの `.txnew`（Export なら外の ZIP）と、この操作が作ったディレクトリを消します。
+On failure, cancellation, or discard, the half-written `.txnew` (for Export, the external ZIP) and the directories this operation created are deleted.
 
 ```csharp
 await tx.ExportArchiveAsync("reports", @"D:\outgoing\reports.zip");
@@ -464,113 +466,116 @@ Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 await tx.ImportArchiveAsync(@"D:\incoming\drop.zip", "incoming", Encoding.GetEncoding(932), maxExtractedBytes: 1L << 30);
 ```
 
-展開は、書き始める前にエントリ名を全部確かめます。1 つでも次に当たれば、何もステージせず、展開先も作らずに `InvalidDataException` です。展開先の外へ出る名前（`..`、先頭の `/`、ドライブ指定）、Windows のパスに使えない名前（`<>:"|?*`、末尾の `.` や空白、`CON` や `NUL` などの予約名）、`.txnew` で終わる名前、大文字と小文字だけが違う重複、同じ名前のファイルとディレクトリです。ZIP 自体が壊れているときも `InvalidDataException` です。
+Extract checks every entry name before it starts writing. If even one matches the following, nothing is staged, the destination is not created, and it throws `InvalidDataException`: names that leave the destination (`..`, a leading `/`, a drive letter), names not valid in a Windows path (`<>:"|?*`, a trailing `.` or space, reserved names such as `CON` and `NUL`), names ending in `.txnew`, duplicates that differ only in case, and a file and a directory with the same name. A corrupt ZIP also throws `InvalidDataException`.
 
-`maxExtractedBytes` を渡すと、エントリが申告した展開後のサイズの合計が上限を超える ZIP は、何もステージせずに `InvalidDataException` になります。無圧縮のエントリは申告より多く読めるので、実際に読んだバイト数が上限を超えたときも同じ例外になり、書きかけは消します。圧縮率の高い ZIP で共有のディスクを埋めないよう、外から受け取った ZIP では上限を渡してください。省略すると上限はありません。
-
-```mermaid
-flowchart TD
-  ext["ExtractArchiveAsync / ImportArchiveAsync"] --> side{"ZIP か展開先が反対側?"}
-  side -->|はい| arg["ArgumentException"]
-  side -->|いいえ| busy{"展開先の配下に操作がある、または操作済み?"}
-  busy -->|はい| inv["InvalidOperationException"]
-  busy -->|いいえ| blocked{"ZIP が無い、展開先が既にある、または親が無い?"}
-  blocked -->|はい| conflict["ExternalConflictException"]
-  blocked -->|いいえ| names{"危険なエントリ名がある?"}
-  names -->|はい| data["InvalidDataException。何も残さない"]
-  names -->|いいえ| size{"申告の合計か読んだバイト数が上限を超える?"}
-  size -->|はい| data
-  size -->|いいえ| add["各ファイルを Add"]
-```
-
-## 同じパスへ続けて呼ぶ
-
-同じパスへ続けて呼ぶと、予約は次のように 1 件へ畳みます。図に無い組み合わせは `InvalidOperationException` で、メッセージは「このパスは既に別の操作でステージングされています」です。`DeleteTreeAsync` の配下への操作、ディレクトリ Move の移動元と移動先の配下への操作も、同じ例外です。`CreateDirectory` の配下は、この図の各枝に従います。
+When you pass `maxExtractedBytes`, a ZIP whose declared total extracted size exceeds the limit throws `InvalidDataException` without staging anything. An uncompressed entry can yield more bytes than declared, so the same exception is thrown when the bytes actually read exceed the limit, and the partial output is deleted. Pass a limit for ZIPs received from outside, so that a ZIP with a high compression ratio does not fill the shared disk. When omitted, there is no limit.
 
 ```mermaid
 flowchart TD
-  again["同じパスへ続けて呼ぶ"] --> kind{"すでに予約がある"}
-  kind -->|Add| add["書く、または Update → Add のまま"]
-  kind -->|Update| upd["書く、または Update → Update"]
-  kind -->|Delete| del["書く、Add、または Update → Update"]
-  kind -->|Move の先へ Update| fold["先の Add と、元の Delete"]
-  kind -->|Move の元または先へ Delete| back["元の Delete。ディレクトリは直下の規則"]
-  kind -->|Move のあとに Move| chain["最初の元から最後の先"]
-  kind -->|ディレクトリ Move の元または先そのものへ DeleteTree| tree["Move を消し、元の DeleteTree"]
-  kind -->|CreateDirectory のパス自身| stop["畳まない。InvalidOperationException"]
+  ext["ExtractArchiveAsync / ImportArchiveAsync"] --> side{"ZIP or destination on the wrong side?"}
+  side -->|Yes| arg["ArgumentException"]
+  side -->|No| busy{"Operations under the destination, or already staged?"}
+  busy -->|Yes| inv["InvalidOperationException"]
+  busy -->|No| blocked{"No ZIP, destination exists, or no parent?"}
+  blocked -->|Yes| conflict["ExternalConflictException"]
+  blocked -->|No| names{"A dangerous entry name?"}
+  names -->|Yes| data["InvalidDataException. Nothing is left"]
+  names -->|No| size{"Declared total or bytes read over the limit?"}
+  size -->|Yes| data
+  size -->|No| add["Add each file"]
 ```
 
-## 例外の見分け
+## Calling the same path again
 
-コミットの成否は例外にしません。`CommitReport.Result` を見てください。拒んだ操作と飛ばした操作は `Operations` に載ります。それ以外の失敗は例外です。基底は `TxfioException` です。
+When you call the same path again, the scheduled operations fold into one as follows. Combinations not in the diagram throw `InvalidOperationException` with the message "This path is already staged by another operation". Operations under a `DeleteTreeAsync`, and under the source and destination of a directory Move, throw the same exception. Under a `CreateDirectory`, each branch of this diagram applies.
 
-| 状況                                                                                  | 型                              |
-| ------------------------------------------------------------------------------------- | ------------------------------- |
-| 対象が無い、既にある、親が無い、直下に予定外の子がある、コピー先が塞がっている        | `ExternalConflictException`     |
-| ディレクトリの読み取り、ファイルへの `DeleteTreeAsync`、ボリュームをまたぐ Move       | `UnsupportedOperationException` |
-| 別操作でステージング済み、自分自身の配下への Move や Copy、内側のリパースポイント | `InvalidOperationException`     |
-| パスがワークフォルダの外、Import の元が中、Export の先が中                            | `ArgumentException`             |
-| ほかの Txfio がパスまたはワークフォルダを押さえている                                 | `LockContentionException`       |
-| 落ちたジャーナルが残っている（先に `RecoverAsync`）                                   | `RecoveryRequiredException`     |
-| JSON として読めない                                                                   | `JsonException`                 |
-| ZIP のエントリ名が危険、または ZIP が壊れている                                       | `InvalidDataException`          |
+```mermaid
+flowchart TD
+  again["Call the same path again"] --> kind{"Already scheduled"}
+  kind -->|Add| add["Write, or Update → stays Add"]
+  kind -->|Update| upd["Write, or Update → Update"]
+  kind -->|Delete| del["Write, Add, or Update → Update"]
+  kind -->|Update at a Move destination| fold["Add at the destination, and Delete of the source"]
+  kind -->|Delete at a Move source or destination| back["Delete of the source. A directory follows the direct-children rule"]
+  kind -->|Move after Move| chain["From the first source to the last destination"]
+  kind -->|DeleteTree on the source or destination of a directory Move itself| tree["Remove the Move, DeleteTree of the source"]
+  kind -->|The path of a CreateDirectory itself| stop["Not folded. InvalidOperationException"]
+```
 
-`ExternalConflictException` と `LockContentionException` は、失敗したパスを 1 つ持ちます。`RecoveryRequiredException` の `Path` はワークフォルダです。
+## Telling exceptions apart
 
-## TxFileManager と SQLite
+Commit success or failure is not an exception. Check `CommitReport.Result`. Rejected and skipped operations are in `Operations`. Other failures are exceptions. The base is `TxfioException`.
 
-- **Txfio**（このライブラリ）
-- **[TxFileManager](https://github.com/chinhdo/txFileManager)**（NuGet `TxFileManager`）。`System.Transactions` にファイル操作を参加させるライブラリです。Windows の TxF ではありません。TxF は Microsoft が非推奨としており、このライブラリは採用していません
-- **データを SQLite に置く使い方**。ファイルツリーの代わりに、行や BLOB を 1 つのデータベースファイルへ入れます
+| Situation                                                                                                   | Type                            |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| The target is missing, already exists, has no parent, a directory has an unexpected direct child, or the copy destination is occupied | `ExternalConflictException`     |
+| Reading a directory, `DeleteTreeAsync` on a file, a Move across volumes                                     | `UnsupportedOperationException` |
+| Already staged by another operation, Move or Copy under itself, a reparse point inside                     | `InvalidOperationException`     |
+| The path is outside the work folder, the Import source is inside, the Export destination is inside         | `ArgumentException`             |
+| Another Txfio holds the path or the work folder                                                             | `LockContentionException`       |
+| A crashed journal remains (call `RecoverAsync` first)                                                       | `RecoveryRequiredException`     |
+| Cannot be read as JSON                                                                                      | `JsonException`                 |
+| A dangerous ZIP entry name, or a corrupt ZIP                                                                | `InvalidDataException`          |
 
-### 有利なとき
+`ExternalConflictException` and `LockContentionException` have one failed path. The `Path` of `RecoveryRequiredException` is the work folder.
 
-本物のファイルを、遅いファイルサーバー上に残したいときです。コミットは再コピーではなく rename で、ディレクトリの移動は子を走査しません。ジャーナルはワークフォルダに残るので、プロセスが落ちても `RecoverAsync` で片付けられます。大きなディレクトリの移動や `DeleteTreeAsync` で、一時フォルダへの退避コピーを避けられます。
+## TxFileManager and SQLite
 
-### 不利なとき
+- **Txfio** (this library)
+- **[TxFileManager](https://github.com/chinhdo/txFileManager)** (NuGet `TxFileManager`). A library that enlists file operations in `System.Transactions`. It is not Windows TxF. Microsoft has deprecated TxF, and that library does not use it
+- **Keeping the data in SQLite**. Instead of a file tree, put rows and BLOBs into one database file
 
-SQL の INSERT とファイル作成を、落ちても両方戻る 1 つのトランザクションにしたいときです。それは TxFileManager と `TransactionScope` の領域で、このライブラリは参加しません。ただし TxFileManager 側には、落ちたあとのファイル復旧がありません。
+### When Txfio is better
 
-確定後も普通のファイルである必要がなく、検索や同時読み取りの一貫性が欲しいときは、SQLite の方が単純です。共有フォルダ上の既存ツールがファイルを直接開く必要があるなら、SQLite へ入れると利用者がファイルを扱えなくなります。
+When the real files must stay on a slow file server. The commit is a rename, not a second copy, and moving a directory does not walk its children. The journal stays in the work folder, so after a crash `RecoverAsync` can clean up. Moving large directories and `DeleteTreeAsync` avoid a backup copy to a temporary folder.
 
-コミットの途中で他プロセスから見て中間状態が許されないときも向きません。複数ファイルの反映は 1 操作ずつです。`.txnew` が見えること、素のファイル API がロックを無視することも、許容できないなら向きません。
+### When it is worse
 
-| 観点                      | Txfio                                                                                                                                 | TxFileManager                                                                    | SQLite にデータを置く                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| 確定後に残るもの          | 普通のファイルとディレクトリ                                                                                                          | 普通のファイルとディレクトリ                                                     | データベースファイル。個別ファイルにはならない                    |
-| いつ見えるか              | コミットまで本物のパスは旧状態。`.txnew` は見える                                                                                     | 呼んだ瞬間に反映される。分離は Read Uncommitted                                  | 他接続からは、コミット済みの状態が見える                          |
-| クラッシュ                | ジャーナルが残る。`RecoverAsync` が戻すか進める                                                                                       | 復旧は揮発。落ちると途中のファイル操作が残る                                     | DB はジャーナルまたは WAL で復旧する。DB の外のファイルは含まない |
-| 複数対象の揃い            | コミット中は一部だけ新しい。`Failed` は本物を変えない                                                                                 | 変更は即時に見える。複数ファイルの Move のロールバックが途中で止まった報告がある | DB 内の変更は 1 つのコミットに揃う                                |
-| ディレクトリ全削除        | `DeleteTreeAsync`。ステージでは走査せず、コミット時に再帰削除。`DeleteAsync` は直下だけ                                               | `DeleteDirectory`。実行時点で temp へ退避する                                    | パスを表す行を SQL で消す。ファイルツリーの削除ではない           |
-| ディレクトリの移動        | 同一ボリュームで 1 回の rename。ボリューム跨ぎはエラー                                                                                | `MoveDirectory`。即時。temp が別ボリュームだとコピーと削除になる                 | パス列の更新                                                      |
-| 一時置き場                | 使わない。`.txnew` は同じディレクトリ                                                                                                 | 既定は `Path.GetTempPath()`                                                      | データベースファイル自身                                          |
-| SMB 上の共有              | 対象。サーバーキャッシュの永続化は保証外                                                                                              | 設計の主対象ではない                                                             | ネットワーク共有に置く使い方はサポート外                          |
-| DB と同じトランザクション | 参加しない                                                                                                                            | `TransactionScope` で参加できる                                                  | データベースの中だけ                                              |
-| 同時実行                  | 利用者間はパス単位。ディレクトリの配下は意図ロックで予約する（`CreateDirectoryAsync` と ZIP の作成は予約しない）。ワークフォルダ全体を排他にするのは `RecoverAsync` だけ | スレッドセーフと README にある。分離は Read Uncommitted                          | 書き込みは原則 1 接続。読み取りは WAL などで並行できる            |
-| 素の File API             | 止められない                                                                                                                          | 止められない                                                                     | DB を経由しない読み書きはトランザクションの外                     |
-| プラットフォーム          | 保証は Windows                                                                                                                        | .NET Standard 2.0。Windows と Ubuntu でテストされている                          | クロスプラットフォーム                                            |
-| API の形                  | 非同期のみ。コピーの進捗あり                                                                                                          | 同期が中心                                                                       | `Microsoft.Data.Sqlite` なら同期と非同期                          |
+When an SQL INSERT and a file creation must be one transaction that both roll back after a crash. That is the domain of TxFileManager and `TransactionScope`; this library does not enlist. Note, though, that TxFileManager has no file recovery after a crash.
 
-TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`（ディレクトリを temp へ移し、ロールバックで戻し、確定後に temp を再帰削除する）に基づきます。作者は揮発エンリストだけをサポートし、プロセスが落ちると途中のまま残ると説明しています。SQLite をネットワークファイルシステム上に置くことは、SQLite 作者が確実な動作の対象外としています。
+When the data does not need to be ordinary files after commit, and you want consistency for searches and concurrent reads, SQLite is simpler. If existing tools on the shared folder must open the files directly, putting them into SQLite takes the files away from those users.
 
-## ドキュメント
+It also does not fit when other processes must never see an intermediate state during a commit. Several files are applied one operation at a time. If visible `.txnew` files, or the plain file API ignoring the locks, are not acceptable, it does not fit either.
 
-| 文書                                         | 役割                 |
-| -------------------------------------------- | -------------------- |
-| [`docs/design.md`](docs/design.md)           | 設計の正本           |
-| [`docs/roadmap.md`](docs/roadmap.md)         | 実装順（Phase は仮） |
-| [`docs/conventions.md`](docs/conventions.md) | コーディング規約     |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md)         | 進め方               |
-| [`SECURITY.md`](SECURITY.md)                 | 脆弱性の報告         |
+| Criterion                     | Txfio                                                                                                                                                            | TxFileManager                                                                              | Data in SQLite                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| What remains after commit     | Ordinary files and directories                                                                                                                                   | Ordinary files and directories                                                             | A database file. Not individual files                                       |
+| When changes are visible      | The real paths keep the old state until commit. `.txnew` is visible                                                                                              | Applied the moment you call. Isolation is Read Uncommitted                                 | Other connections see the committed state                                   |
+| Crash                         | The journal remains. `RecoverAsync` rolls back or forward                                                                                                        | Recovery is volatile. A crash leaves file operations half done                             | The DB recovers with its journal or WAL. Files outside the DB are not covered |
+| Several targets at once       | During commit, some are new. `Failed` does not change the real files                                                                                             | Changes are visible immediately. A rollback of multi-file Moves stopping partway has been reported | Changes in the DB line up in one commit                              |
+| Deleting a whole directory    | `DeleteTreeAsync`. Staging does not walk; recursive delete at commit. `DeleteAsync` is direct children only                                                     | `DeleteDirectory`. Moves it to temp when called                                            | Delete the rows that represent paths with SQL. Not a file tree delete       |
+| Moving a directory            | One rename within a volume. Across volumes is an error                                                                                                           | `MoveDirectory`. Immediate. Copy and delete if temp is on another volume                   | Update a path column                                                        |
+| Temporary location            | None. `.txnew` is in the same directory                                                                                                                          | `Path.GetTempPath()` by default                                                            | The database file itself                                                    |
+| Shares on SMB                 | Supported. Durability of the server cache is not guaranteed                                                                                                      | Not the main target of the design                                                          | Placing it on a network share is not supported                              |
+| Same transaction as a DB      | Does not enlist                                                                                                                                                  | Can enlist with `TransactionScope`                                                         | Only inside the database                                                    |
+| Concurrency                   | Per path between users. What is under a directory is reserved with intent locks (`CreateDirectoryAsync` and ZIP creation do not reserve). Only `RecoverAsync` makes the whole work folder exclusive | Thread-safe according to its README. Isolation is Read Uncommitted                        | Writes are one connection as a rule. Reads can run in parallel with WAL and so on |
+| Plain File API                | Cannot be stopped                                                                                                                                                | Cannot be stopped                                                                          | Reads and writes that bypass the DB are outside the transaction             |
+| Platform                      | Guaranteed on Windows                                                                                                                                            | .NET Standard 2.0. Tested on Windows and Ubuntu                                            | Cross-platform                                                              |
+| API shape                     | Async only. Copy progress                                                                                                                                        | Mostly synchronous                                                                         | Sync and async with `Microsoft.Data.Sqlite`                                 |
 
-## ローカル検証
+The TxFileManager features are based on its public README and `DeleteDirectoryOperation` (it moves the directory to temp, moves it back on rollback, and deletes temp recursively after commit). Its author says only volatile enlistment is supported, and that a process crash leaves things half done. The SQLite authors do not cover reliable operation on network file systems.
 
-Windows では `./build.ps1` がゲートです。restore / format / build はソリューション全体、テストは単体テストだけです。耐久テストは `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回します。Linux ではこのスクリプトを実行せず、ソリューションに対して restore / format / build を回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行します。Linux では Windows 専用のテストが Skip になります。
+## Documentation
+
+| Document                                     | Role                                 |
+| -------------------------------------------- | ------------------------------------ |
+| [`docs/design.md`](docs/design.md)           | Source of truth for the design       |
+| [`docs/roadmap.md`](docs/roadmap.md)         | Implementation order (phases are provisional) |
+| [`docs/conventions.md`](docs/conventions.md) | Coding conventions                   |
+| [`docs/language.md`](docs/language.md)       | Language policy and translations     |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)         | How to contribute                    |
+| [`SECURITY.md`](SECURITY.md)                 | Reporting vulnerabilities            |
+
+Japanese translations: [`README.ja.md`](README.ja.md), [`docs/design.ja.md`](docs/design.ja.md), [`docs/roadmap.ja.md`](docs/roadmap.ja.md), [`docs/conventions.ja.md`](docs/conventions.ja.md), [`CONTRIBUTING.ja.md`](CONTRIBUTING.ja.md).
+
+## Local verification
+
+On Windows, `./build.ps1` is the gate. Restore / format / build cover the whole solution, and the tests are the unit tests only. Run the stress tests explicitly with `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj`. On Linux, do not run this script; run restore / format / build on the solution, then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. On Linux, Windows-only tests are skipped.
 
 ```powershell
 ./build.ps1
 ```
 
-## ライセンス
+## License
 
 [MIT](LICENSE)

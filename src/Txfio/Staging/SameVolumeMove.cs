@@ -4,30 +4,30 @@ using System.Runtime.InteropServices;
 namespace Txfio;
 
 /// <summary>
-/// コミットと復旧の移動を、コピーと削除にせず rename する
+/// Renames moves at commit and recovery, without turning them into copy and delete.
 /// </summary>
 internal static partial class SameVolumeMove
 {
     private const uint MoveFileReplaceExisting = 0x1;
 
     /// <summary>
-    /// ファイルを rename で移動する
+    /// Moves a file with a rename.
     /// </summary>
-    /// <param name="sourcePath">移動元</param>
-    /// <param name="destPath">移動先</param>
-    /// <param name="replace"><see langword="true"/> なら移動先の既存ファイルを置き換える（`MOVEFILE_REPLACE_EXISTING`）</param>
-    /// <exception cref="IOException">rename できない</exception>
+    /// <param name="sourcePath">The source.</param>
+    /// <param name="destPath">The destination.</param>
+    /// <param name="replace">When <see langword="true"/>, replaces an existing file at the destination (<c>MOVEFILE_REPLACE_EXISTING</c>).</param>
+    /// <exception cref="IOException">It cannot be renamed.</exception>
     internal static void MoveFile(string sourcePath, string destPath, bool replace = false)
     {
         Move(sourcePath, destPath, directory: false, replace);
     }
 
     /// <summary>
-    /// ディレクトリを rename で移動する
+    /// Moves a directory with a rename.
     /// </summary>
-    /// <param name="sourcePath">移動元</param>
-    /// <param name="destPath">移動先</param>
-    /// <exception cref="IOException">rename できない</exception>
+    /// <param name="sourcePath">The source.</param>
+    /// <param name="destPath">The destination.</param>
+    /// <exception cref="IOException">It cannot be renamed.</exception>
     internal static void MoveDirectory(string sourcePath, string destPath)
     {
         Move(sourcePath, destPath, directory: true, replace: false);
@@ -49,7 +49,7 @@ internal static partial class SameVolumeMove
             return;
         }
 
-        // コピーを許すフラグは付けない（付けると別ボリュームでコピーと削除になる）
+        // Do not add the flag that allows a copy (with it, another volume would mean copy and delete).
         uint flags = replace ? MoveFileReplaceExisting : 0;
         if (!MoveFileEx(ExtendIfNeeded(sourcePath), ExtendIfNeeded(destPath), flags))
         {

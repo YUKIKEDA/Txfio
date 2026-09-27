@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class StagingApplierTests
 {
     /// <summary>
-    /// ジャーナルでは Update が先でも、適用は Move してから Update する
+    /// Even if the journal lists the Update first, apply moves first and then updates.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動元ファイルと、移動先への Update 用 .txnew がある</para>
-    /// <para>手順: Update を先に並べた操作一覧を TryApplyAll する</para>
-    /// <para>期待: 先は Update の内容で、元も .txnew も無い</para>
+    /// <para>Given: a source file, and a .txnew for an Update at the destination.</para>
+    /// <para>When: TryApplyAll runs on a list of operations with the Update first.</para>
+    /// <para>Then: the destination has the Update content, and neither the source nor the .txnew exists.</para>
     /// </remarks>
     [Fact]
-    public async Task TryApplyAll_ジャーナルではUpdateが先でもMoveしてからUpdateすること()
+    public async Task TryApplyAll_MovesBeforeUpdateEvenWhenJournalListsUpdateFirst()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -51,15 +51,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// 移動先が既にあると AlreadyExists になる
+    /// An existing destination gives AlreadyExists.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルとディレクトリのそれぞれで、移動元と移動先の両方が存在する</para>
-    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
-    /// <para>期待: どちらも失敗し、理由は AlreadyExists、移動元は残る</para>
+    /// <para>Given: for both a file and a directory, the source and the destination exist.</para>
+    /// <para>When: TryMove and TryMoveDirectory are called.</para>
+    /// <para>Then: both fail with the reason AlreadyExists, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task TryMove_移動先があるとAlreadyExistsになること()
+    public async Task TryMove_ExistingDestinationIsAlreadyExists()
     {
         await using TempDirectory work = TempDirectory.Create();
         string fileSource = System.IO.Path.Combine(work.Path, "a.txt");
@@ -81,15 +81,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// ファイルとディレクトリを取り違えると、種類に合った理由になる
+    /// Mixing up files and directories gives a reason that matches the kind.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイル移動の移動先がディレクトリ、ファイル移動の移動元がディレクトリかつ移動先がファイル、ディレクトリ移動の移動元がファイルかつ移動先がディレクトリ、ファイル削除の対象がディレクトリである</para>
-    /// <para>手順: TryMove、TryMoveDirectory、TryDeleteFile を呼ぶ</para>
-    /// <para>期待: どれも失敗し、ファイル移動の移動先がディレクトリなら AlreadyExists、それ以外は ReplacedByFile、元のパスは残る</para>
+    /// <para>Given: the destination of a file move is a directory; the source of a file move is a directory and its destination a file; the source of a directory move is a file and its destination a directory; and the target of a file delete is a directory.</para>
+    /// <para>When: TryMove, TryMoveDirectory, and TryDeleteFile are called.</para>
+    /// <para>Then: all fail; a directory at a file move's destination is AlreadyExists, the others are ReplacedByFile, and the original paths remain.</para>
     /// </remarks>
     [Fact]
-    public async Task TryApply_種類が違うと理由が付くこと()
+    public async Task TryApply_WrongKindGivesReason()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -125,15 +125,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// 移動元も移動先も無いと Missing になる
+    /// When neither the source nor the destination exists, the reason is Missing.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイル移動とディレクトリ移動のそれぞれで、移動元も移動先も無い</para>
-    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
-    /// <para>期待: どちらも失敗し、理由は Missing</para>
+    /// <para>Given: for both a file move and a directory move, neither the source nor the destination exists.</para>
+    /// <para>When: TryMove and TryMoveDirectory are called.</para>
+    /// <para>Then: both fail with the reason Missing.</para>
     /// </remarks>
     [Fact]
-    public void TryMove_移動元も移動先も無いとMissingになること()
+    public void TryMove_MissingSourceAndDestinationIsMissing()
     {
         string missingFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-file-" + Guid.NewGuid().ToString("N"));
         string missingDest = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-dest-" + Guid.NewGuid().ToString("N"));
@@ -147,15 +147,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// 移動元が無く移動先が別の種類だと AlreadyExists になる
+    /// When the source is missing and the destination is of another kind, the reason is AlreadyExists.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイル移動の移動先だけディレクトリ、ディレクトリ移動の移動先だけファイルがある</para>
-    /// <para>手順: TryMove と TryMoveDirectory を呼ぶ</para>
-    /// <para>期待: どちらも失敗し、理由は AlreadyExists、移動先は残る</para>
+    /// <para>Given: only a directory at the destination of a file move, and only a file at the destination of a directory move.</para>
+    /// <para>When: TryMove and TryMoveDirectory are called.</para>
+    /// <para>Then: both fail with the reason AlreadyExists, and the destination remains.</para>
     /// </remarks>
     [Fact]
-    public async Task TryMove_移動元が無く移動先が別種類ならAlreadyExistsになること()
+    public async Task TryMove_MissingSourceWithOtherKindAtDestinationIsAlreadyExists()
     {
         await using TempDirectory work = TempDirectory.Create();
         string missingFile = System.IO.Path.Combine(work.Path, "gone.txt");
@@ -174,15 +174,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// .txnew が無く Before だけ一致すると IoFailure になる
+    /// When the .txnew is gone and only Before matches, the reason is IoFailure.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update の対象ファイルがあり Before は一致し、.txnew は無い</para>
-    /// <para>手順: TryApplyStagedFile を呼ぶ</para>
-    /// <para>期待: 失敗し、理由は IoFailure、対象は元の内容のまま</para>
+    /// <para>Given: the Update target file exists and matches Before, and the .txnew does not exist.</para>
+    /// <para>When: TryApplyStagedFile is called.</para>
+    /// <para>Then: it fails with the reason IoFailure, and the target keeps its original content.</para>
     /// </remarks>
     [Fact]
-    public async Task TryApplyStagedFile_txnewが無くBeforeだけ一致するとIoFailureになること()
+    public async Task TryApplyStagedFile_MissingTxnewWithOnlyBeforeMatchIsIoFailure()
     {
         await using TempDirectory work = TempDirectory.Create();
         string path = System.IO.Path.Combine(work.Path, "a.txt");
@@ -201,15 +201,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// ディレクトリ削除の対象がファイルなら ReplacedByFile になる
+    /// When the target of a directory delete is a file, the reason is ReplacedByFile.
     /// </summary>
     /// <remarks>
-    /// <para>前提: DeleteTree と Delete の対象パスがファイルである</para>
-    /// <para>手順: TryDeleteTree と TryDeleteDirectory を呼ぶ</para>
-    /// <para>期待: どちらも失敗し、理由は ReplacedByFile、ファイルは残る</para>
+    /// <para>Given: the target paths of DeleteTree and Delete are files.</para>
+    /// <para>When: TryDeleteTree and TryDeleteDirectory are called.</para>
+    /// <para>Then: both fail with the reason ReplacedByFile, and the files remain.</para>
     /// </remarks>
     [Fact]
-    public async Task TryDelete_対象がファイルならReplacedByFileになること()
+    public async Task TryDelete_FileTargetIsReplacedByFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
@@ -226,15 +226,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// 読み取り専用ファイルの削除は IoFailure になる
+    /// Deleting a read-only file is IoFailure.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 削除対象のファイルと .txnew が読み取り専用である</para>
-    /// <para>手順: TryDeleteFile と TryDeleteStaging を呼ぶ</para>
-    /// <para>期待: どちらも失敗し、理由は IoFailure、ファイルは残る</para>
+    /// <para>Given: the file to delete and the .txnew are read-only.</para>
+    /// <para>When: TryDeleteFile and TryDeleteStaging are called.</para>
+    /// <para>Then: both fail with the reason IoFailure, and the files remain.</para>
     /// </remarks>
-    [WindowsFact("読み取り専用のファイルを消せないのは Windows の挙動（Linux の unlink はファイルの権限を見ない）")]
-    public async Task TryDelete_読み取り専用はIoFailureになること()
+    [WindowsFact("A read-only file cannot be deleted on Windows (Linux unlink ignores file permissions)")]
+    public async Task TryDelete_ReadOnlyIsIoFailure()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -260,15 +260,15 @@ public sealed class StagingApplierTests
     }
 
     /// <summary>
-    /// 後始末は、Move の退避先（.txold）を消さない
+    /// Cleanup does not delete the swap backup (.txold) of a Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 入れ替えの Move の退避先にファイルがある（入れ替えの途中で止まり、元の移動先がそこにある）</para>
-    /// <para>手順: その操作一覧で DeleteStagingFiles を呼ぶ</para>
-    /// <para>期待: 退避先のファイルは残る</para>
+    /// <para>Given: a file exists at the backup path of a swapping Move (the swap stopped partway, and the original destination is there).</para>
+    /// <para>When: DeleteStagingFiles is called with that list of operations.</para>
+    /// <para>Then: the file at the backup path remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteStagingFiles_Moveの退避先は消さないこと()
+    public async Task DeleteStagingFiles_DoesNotDeleteMoveBackup()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -319,7 +319,7 @@ public sealed class StagingApplierTests
         return applied;
     }
 
-    // 種別ごとの処理は OperationKind の入れ子の型にあるので、入れ子も探す
+    // Per-kind processing is in types nested in OperationKind, so search nested types too.
     private static System.Reflection.MethodInfo FindMethod(string name)
     {
         const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;

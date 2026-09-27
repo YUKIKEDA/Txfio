@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class MoveTests
 {
     /// <summary>
-    /// Move はコミット前に対象を動かさない
+    /// Move does not move the target before commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象ファイルがある</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: pending は Move 1 件で、元は残り、先は無い</para>
+    /// <para>Given: the target file exists.</para>
+    /// <para>When: MoveAsync is called.</para>
+    /// <para>Then: one pending Move, the source remains, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_コミット前は対象を動かさないこと()
+    public async Task MoveAsync_DoesNotMoveTargetBeforeCommit()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -31,15 +31,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 未コミット Dispose では元ファイルが残る
+    /// Dispose without commit keeps the source file.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move した直後である</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: 元が残り、先は無い</para>
+    /// <para>Given: right after a Move.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: the source remains, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_未コミットDisposeでは元が残ること()
+    public async Task MoveAsync_DisposeWithoutCommitKeepsSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -54,15 +54,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 無いファイルへの Move はその場で失敗する
+    /// A Move of a missing file fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動元にファイルが無い</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は移動元である</para>
+    /// <para>Given: no file exists at the source.</para>
+    /// <para>When: MoveAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is the source.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_無いファイルだとExternalConflictExceptionになること()
+    public async Task MoveAsync_MissingFileThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -71,15 +71,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 移動先が既にあると失敗する
+    /// A Move fails when the destination already exists.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動先にファイルがある</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は移動先である</para>
+    /// <para>Given: a file exists at the destination.</para>
+    /// <para>When: MoveAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is the destination.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先があるとExternalConflictExceptionになること()
+    public async Task MoveAsync_ExistingDestinationThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
@@ -91,15 +91,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 移動先がディレクトリだと失敗する
+    /// A Move fails when the destination is a directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動元はファイルで、移動先はディレクトリである</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は移動先である</para>
+    /// <para>Given: the source is a file, and the destination is a directory.</para>
+    /// <para>When: MoveAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is the destination.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先がディレクトリだとExternalConflictExceptionになること()
+    public async Task MoveAsync_DirectoryDestinationThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
@@ -111,15 +111,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 移動先の親が無いと失敗する
+    /// A Move fails when the destination's parent does not exist.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動先の親ディレクトリが無い</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は移動先の親である</para>
+    /// <para>Given: the destination's parent directory does not exist.</para>
+    /// <para>When: MoveAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is the destination's parent.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_親が無いとExternalConflictExceptionになること()
+    public async Task MoveAsync_MissingParentThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
@@ -129,15 +129,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Add のあと Move は Add の対象を付け替える
+    /// A Move after an Add moves the target of the Add.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 同じパスを Add している</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: pending は Add（移動先）1 件で、.txnew は移動先の名前で移動先のディレクトリにある</para>
+    /// <para>Given: the same path is added.</para>
+    /// <para>When: MoveAsync is called.</para>
+    /// <para>Then: one pending Add (at the destination), and the .txnew has the destination's name in the destination's directory.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_Addのあとだと移動先のAddになること()
+    public async Task MoveAsync_AfterAddBecomesAddAtDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -157,15 +157,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Add を付け替えたあと移動先を Update すると、移動先の .txnew を書き直す
+    /// After an Add is moved, updating the destination rewrites the destination's .txnew.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add のあと別ディレクトリへ Move している</para>
-    /// <para>手順: 移動先へ UpdateAsync する</para>
-    /// <para>期待: pending は Add（移動先）1 件で、.txnew は移動先のディレクトリに 1 件だけあり、新しい内容である</para>
+    /// <para>Given: after an Add, it is moved to another directory.</para>
+    /// <para>When: UpdateAsync is called on the destination.</para>
+    /// <para>Then: one pending Add (at the destination), and exactly one .txnew in the destination's directory with the new content.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_Addを付け替えた先のtxnewを書き直すこと()
+    public async Task UpdateAsync_RewritesTxnewOfMovedAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -189,15 +189,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Add を付け替えた先の Update で journal 書き込みに失敗しても、移動先の .txnew は前の内容のままである
+    /// Even if the journal write fails for an Update at a moved Add, the destination's .txnew keeps its earlier content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add のあと Move し、journal を排他ロックしている</para>
-    /// <para>手順: 移動先へ UpdateAsync する</para>
-    /// <para>期待: 例外は IOException で、pending は Add のまま、.txnew は移動先のディレクトリに 1 件で前の内容である</para>
+    /// <para>Given: an Add is moved, and the journal is locked exclusively.</para>
+    /// <para>When: UpdateAsync is called on the destination.</para>
+    /// <para>Then: IOException, the pending change stays Add, and there is one .txnew in the destination's directory with the earlier content.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_Addを付け替えた先でjournal書き込みに失敗するとtxnewは元のままであること()
+    public async Task UpdateAsync_JournalWriteFailureAtMovedAddKeepsTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -225,15 +225,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Update のあと Move は移動先への Add と元の Delete になる
+    /// A Move after an Update becomes an Add at the destination and a Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Update している</para>
-    /// <para>手順: MoveAsync する</para>
-    /// <para>期待: pending は Add と Delete で、.txnew は移動先のディレクトリへ移り、元ファイルは残る</para>
+    /// <para>Given: an existing file is updated.</para>
+    /// <para>When: MoveAsync is called.</para>
+    /// <para>Then: the pending changes are an Add and a Delete, the .txnew moves to the destination's directory, and the source file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_UpdateのあとだとAddとDeleteになること()
+    public async Task MoveAsync_AfterUpdateBecomesAddAndDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -254,15 +254,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move のあと Move は始点から終点へ畳む
+    /// A Move after a Move folds from the start to the end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: A から B へ Move している</para>
-    /// <para>手順: B から C へ MoveAsync する</para>
-    /// <para>期待: pending は Move(A→C) 1 件である</para>
+    /// <para>Given: A is moved to B.</para>
+    /// <para>When: MoveAsync moves B to C.</para>
+    /// <para>Then: one pending Move(A→C).</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_続けてMoveすると始点から終点へ畳むこと()
+    public async Task MoveAsync_ConsecutiveMovesFoldFromStartToEnd()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -282,15 +282,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 先への Add はその場で失敗する
+    /// An Add at a Move destination fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: A から B へ Move している</para>
-    /// <para>手順: B へ AddAsync する</para>
-    /// <para>期待: InvalidOperationException になり、pending は Move のままである</para>
+    /// <para>Given: A is moved to B.</para>
+    /// <para>When: AddAsync is called on B.</para>
+    /// <para>Then: InvalidOperationException, and the pending change stays the Move.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_Move先だとInvalidOperationExceptionになること()
+    public async Task AddAsync_MoveDestinationThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -306,15 +306,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 先への Update は移動先の Add と元の Delete になる
+    /// An Update at a Move destination becomes an Add at the destination and a Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: A から B へ Move している</para>
-    /// <para>手順: B へ UpdateAsync する</para>
-    /// <para>期待: pending は Add(B) と Delete(A) で、.txnew は B 側、元ファイルは残る</para>
+    /// <para>Given: A is moved to B.</para>
+    /// <para>When: UpdateAsync is called on B.</para>
+    /// <para>Then: the pending changes are Add(B) and Delete(A), the .txnew is on B's side, and the source file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_Move先だとAddとDeleteになること()
+    public async Task UpdateAsync_MoveDestinationBecomesAddAndDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -337,15 +337,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 先への Update の未コミット Dispose では元が残り、.txnew は消える
+    /// Dispose without commit after an Update at a Move destination keeps the source and deletes the .txnew.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move のあと移動先を Update している</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: 元が残り、先も .txnew も無い</para>
+    /// <para>Given: after a Move, the destination is updated.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: the source remains, and neither the destination nor the .txnew exists.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_Move先の未コミットDisposeでは元が残ること()
+    public async Task UpdateAsync_DisposeWithoutCommitAtMoveDestinationKeepsSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -363,15 +363,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 先への Delete は移動元の Delete になる
+    /// A Delete at a Move destination becomes a Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: A から B へ Move している</para>
-    /// <para>手順: B を DeleteAsync する</para>
-    /// <para>期待: pending は Delete(A) 1 件で、元は残り、先は無い</para>
+    /// <para>Given: A is moved to B.</para>
+    /// <para>When: DeleteAsync is called on B.</para>
+    /// <para>Then: one pending Delete(A), the source remains, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_Move先だと元のDeleteになること()
+    public async Task DeleteAsync_MoveDestinationBecomesSourceDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -389,15 +389,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 先を Update したあと Delete すると、Add は打ち消され元の Delete だけ残る
+    /// Deleting a Move destination after updating it cancels the Add, leaving only the Delete of the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move(A→B) のあと B を Update している</para>
-    /// <para>手順: B を DeleteAsync する</para>
-    /// <para>期待: pending は Delete(A) 1 件で、.txnew は無く、元は残り、先は無い</para>
+    /// <para>Given: after Move(A→B), B is updated.</para>
+    /// <para>When: DeleteAsync is called on B.</para>
+    /// <para>Then: one pending Delete(A), no .txnew, the source remains, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_Move先をUpdateしたあとだと元のDeleteだけ残ること()
+    public async Task DeleteAsync_AfterUpdatingMoveDestinationLeavesOnlySourceDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -418,15 +418,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 元への Delete は Move を Delete に置き換える
+    /// A Delete at a Move source replaces the Move with a Delete.
     /// </summary>
     /// <remarks>
-    /// <para>前提: A から B へ Move している</para>
-    /// <para>手順: A を DeleteAsync する</para>
-    /// <para>期待: pending は Delete(A) 1 件で、元は残り、先は無い</para>
+    /// <para>Given: A is moved to B.</para>
+    /// <para>When: DeleteAsync is called on A.</para>
+    /// <para>Then: one pending Delete(A), the source remains, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_Move元だとDeleteになること()
+    public async Task DeleteAsync_MoveSourceBecomesDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -444,15 +444,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Add のあと Move でジャーナル書き込みに失敗しても pending と .txnew は元のまま残る
+    /// Even if the journal write fails for a Move after an Add, the pending change and .txnew stay as they were.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add したあと、journal を排他ロックしている</para>
-    /// <para>手順: 別ディレクトリへ MoveAsync する</para>
-    /// <para>期待: 例外は IOException で、pending は Add のままで .txnew も元の場所にある</para>
+    /// <para>Given: after an Add, the journal is locked exclusively.</para>
+    /// <para>When: MoveAsync moves it to another directory.</para>
+    /// <para>Then: IOException, the pending change stays Add, and the .txnew is still in its original place.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_Addのあとでjournal書き込みに失敗するとAddのまま残ること()
+    public async Task MoveAsync_JournalWriteFailureAfterAddKeepsAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -475,15 +475,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 先への Update でジャーナル書き込みに失敗しても pending は Move のままである
+    /// Even if the journal write fails for an Update at a Move destination, the pending change stays the Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move したあと、journal を排他ロックしている</para>
-    /// <para>手順: 移動先へ UpdateAsync する</para>
-    /// <para>期待: 例外は IOException で、pending は Move のままで .txnew は無い</para>
+    /// <para>Given: after a Move, the journal is locked exclusively.</para>
+    /// <para>When: UpdateAsync is called on the destination.</para>
+    /// <para>Then: IOException, the pending change stays the Move, and there is no .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_Move先でjournal書き込みに失敗するとMoveのまま残ること()
+    public async Task UpdateAsync_JournalWriteFailureAtMoveDestinationKeepsMove()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -505,15 +505,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 大文字小文字だけが違う Move は失敗する
+    /// A Move that differs only in case fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: A.txt へ Move する</para>
-    /// <para>期待: InvalidOperationException で、pending は空、ロックは無く、a.txt が残り内容も変わらない</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: it is moved to A.txt.</para>
+    /// <para>Then: InvalidOperationException, no pending changes, no locks, and a.txt remains with the same content.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_大文字小文字だけが違うとInvalidOperationExceptionになること()
+    public async Task MoveAsync_DifferingOnlyInCaseThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -522,7 +522,7 @@ public sealed class MoveTests
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", "A.txt"));
 
-        Assert.Contains("同じパスへは移動できません", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("A path cannot be moved to itself", ex.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, ".txfio", "locks")));
         Assert.Equal("keep", await File.ReadAllTextAsync(source));
@@ -530,15 +530,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 完全に同じパスへの Move は失敗する
+    /// A Move to exactly the same path fails.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: a.txt から a.txt へ Move する</para>
-    /// <para>期待: InvalidOperationException で、pending は空である</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: it is moved from a.txt to a.txt.</para>
+    /// <para>Then: InvalidOperationException, and there are no pending changes.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_同じパスだとInvalidOperationExceptionになること()
+    public async Task MoveAsync_SamePathThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -546,20 +546,20 @@ public sealed class MoveTests
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", "a.txt"));
 
-        Assert.Contains("同じパスへは移動できません", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("A path cannot be moved to itself", ex.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
     }
 
     /// <summary>
-    /// 別パスへの Move を表記だけ変えてもう一度呼んでも、元の予約のまま残る
+    /// Calling a Move to another path again with only a different spelling keeps the original scheduled Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を b.txt へ Move してある</para>
-    /// <para>手順: a.txt を B.txt へ Move する</para>
-    /// <para>期待: 例外にならず、pending は a.txt から b.txt の 1 件のままである</para>
+    /// <para>Given: a.txt is moved to b.txt.</para>
+    /// <para>When: a.txt is moved to B.txt.</para>
+    /// <para>Then: no exception, and the pending change stays one Move from a.txt to b.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_同じ移動先を表記だけ変えても予約は変わらないこと()
+    public async Task MoveAsync_SameDestinationWithDifferentSpellingKeepsSchedule()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -576,15 +576,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move は、コミットで移動先の既存ファイルを移動元で置き換える
+    /// A replacing Move replaces the existing destination file with the source at commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt がある</para>
-    /// <para>手順: Move(a.txt→b.txt, overwrite: true) を予約し、コミット前後のディスクを見る</para>
-    /// <para>期待: コミット前は両方とも元のまま、コミット後は b.txt が旧 a.txt の中身であり、a.txt は無く、.txnew も無い</para>
+    /// <para>Given: a.txt and b.txt exist.</para>
+    /// <para>When: Move(a.txt→b.txt, overwrite: true) is scheduled, and the disk is checked before and after commit.</para>
+    /// <para>Then: before commit both are unchanged; after commit b.txt has the old content of a.txt, and neither a.txt nor any .txnew exists.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_overwriteなら移動先を置き換えること()
+    public async Task MoveAsync_OverwriteReplacesDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -605,15 +605,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 移動先の Delete は、置き換えの Move に畳む
+    /// A Delete at the destination folds into the replacing Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt がある</para>
-    /// <para>手順: Delete(b.txt) のあと Move(a.txt→b.txt, overwrite: true) してコミットする</para>
-    /// <para>期待: 未確定の操作は Move 1 件であり、コミット後の b.txt は旧 a.txt の中身</para>
+    /// <para>Given: a.txt and b.txt exist.</para>
+    /// <para>When: Delete(b.txt), then Move(a.txt→b.txt, overwrite: true), then commit.</para>
+    /// <para>Then: the pending operations are one Move, and after commit b.txt has the old content of a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先のDeleteを置き換えのMoveに畳むこと()
+    public async Task MoveAsync_FoldsDestinationDeleteIntoReplacingMove()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
@@ -630,15 +630,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 移動先が無ければ、置き換えの指定があっても普通の Move になる
+    /// When the destination does not exist, it is a normal Move even with overwrite.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt があり、b.txt は無い</para>
-    /// <para>手順: Move(a.txt→b.txt, overwrite: true) してジャーナルを読み、コミットする</para>
-    /// <para>期待: ジャーナルに overwrite は無く、コミット後は b.txt がある</para>
+    /// <para>Given: a.txt exists, and b.txt does not.</para>
+    /// <para>When: Move(a.txt→b.txt, overwrite: true), the journal is read, and the transaction commits.</para>
+    /// <para>Then: the journal has no overwrite, and after commit b.txt exists.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動先が無ければ普通のMoveになること()
+    public async Task MoveAsync_BecomesNormalMoveWhenDestinationIsMissing()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
@@ -653,15 +653,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// ディレクトリをファイルに入れ替える
+    /// A file swaps out a directory.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と、子 old.txt を持つディレクトリ d がある</para>
-    /// <para>手順: Move(a.txt→d, overwrite: true) し、コミット後の姿を見てからコミットする</para>
-    /// <para>期待: 姿では d は a.txt の中身であり、d/old.txt は無く、コミット後の d はファイルであり、a.txt も .txold も無い</para>
+    /// <para>Given: a.txt, and a directory d with a child old.txt.</para>
+    /// <para>When: Move(a.txt→d, overwrite: true), the post-commit view is checked, and the transaction commits.</para>
+    /// <para>Then: in the view d has the content of a.txt and d/old.txt does not exist; after commit d is a file, and neither a.txt nor .txold exists.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_overwriteでディレクトリをファイルに入れ替えること()
+    public async Task MoveAsync_OverwriteSwapsDirectoryForFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "d");
@@ -681,15 +681,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// ファイルをディレクトリに入れ替える
+    /// A directory swaps out a file.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイル x と、子 new.txt を持つディレクトリ d がある</para>
-    /// <para>手順: Move(d→x, overwrite: true) してコミットする</para>
-    /// <para>期待: x はディレクトリで new.txt を持ち、d も .txold も無い</para>
+    /// <para>Given: a file x, and a directory d with a child new.txt.</para>
+    /// <para>When: Move(d→x, overwrite: true), then commit.</para>
+    /// <para>Then: x is a directory with new.txt, and neither d nor .txold exists.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_overwriteでファイルをディレクトリに入れ替えること()
+    public async Task MoveAsync_OverwriteSwapsFileForDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "x");
@@ -707,15 +707,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Delete のあとの同じパスの CreateDirectory と、空ディレクトリの Delete のあとの Add は受け付けない
+    /// A CreateDirectory at the same path after a Delete, and an Add after a Delete of an empty directory, are not accepted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイル x と空ディレクトリ e がある</para>
-    /// <para>手順: Delete(x) のあと CreateDirectory(x)、Delete(e) のあと e へ Add する</para>
-    /// <para>期待: どちらも InvalidOperationException であり、操作は Delete 2 件のまま</para>
+    /// <para>Given: a file x and an empty directory e.</para>
+    /// <para>When: CreateDirectory(x) after Delete(x), and an Add to e after Delete(e).</para>
+    /// <para>Then: both throw InvalidOperationException, and the operations stay two Deletes.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_同じパスの種類はDeleteのあとで変えられないこと()
+    public async Task DeleteAsync_KindAtPathCannotChangeAfterDelete()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "x"), "file");
@@ -731,15 +731,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move の移動元と移動先へは、続けて操作できない
+    /// No further operation is allowed on the source or destination of a replacing Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
-    /// <para>手順: b.txt への書き込み、a.txt への書き込み、b.txt の Delete、b.txt の Move をする</para>
-    /// <para>期待: どれも InvalidOperationException であり、操作は Move 1 件のまま</para>
+    /// <para>Given: a.txt and b.txt exist, and Move(a.txt→b.txt, overwrite: true) is scheduled.</para>
+    /// <para>When: a write to b.txt, a write to a.txt, a Delete of b.txt, and a Move of b.txt.</para>
+    /// <para>Then: each throws InvalidOperationException, and the operations stay one Move.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_置き換えのMoveの元と先へは続けて操作できないこと()
+    public async Task MoveAsync_NoFurtherOperationOnReplacingMoveSourceOrDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
@@ -756,15 +756,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// ステージ済みの Add を置き換えの Move で動かすと、移動先の Update になる
+    /// Moving a staged Add with a replacing Move becomes an Update of the destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: b.txt がある</para>
-    /// <para>手順: a.txt を Add し、Move(a.txt→b.txt, overwrite: true) してコミットする</para>
-    /// <para>期待: 未確定の操作は b.txt の Update 1 件であり、コミット後の b.txt は Add した中身</para>
+    /// <para>Given: b.txt exists.</para>
+    /// <para>When: a.txt is added, Move(a.txt→b.txt, overwrite: true), then commit.</para>
+    /// <para>Then: the pending operation is one Update of b.txt, and after commit b.txt has the added content.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ステージ済みのAddを置き換えると移動先のUpdateになること()
+    public async Task MoveAsync_ReplacingWithStagedAddBecomesDestinationUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dest = System.IO.Path.Combine(work.Path, "b.txt");
@@ -782,15 +782,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// Move 先への Update は、移動先の .txnew を書く前にジャーナルへ載せる
+    /// An Update at a Move destination is recorded in the journal before the destination's .txnew is written.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt があり、Move(a.txt→b.txt) を予約した</para>
-    /// <para>手順: b.txt を UpdateAsync し、書き込み中の進捗でジャーナルを読む</para>
-    /// <para>期待: 進捗が届いたどの時点でも、ジャーナルに b.txt の .txnew が書いてあり、最後は Add と Delete に畳まれる</para>
+    /// <para>Given: a.txt exists, and Move(a.txt→b.txt) is scheduled.</para>
+    /// <para>When: UpdateAsync is called on b.txt, and the journal is read on progress while writing.</para>
+    /// <para>Then: at every progress report the journal contains the .txnew of b.txt, and at the end it is folded into an Add and a Delete.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_Move先への書き込みはtxnewより先にジャーナルへ載せること()
+    public async Task UpdateAsync_RecordsJournalBeforeTxnewAtMoveDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
@@ -809,15 +809,15 @@ public sealed class MoveTests
     }
 
     /// <summary>
-    /// ステージ済みの Add を Move すると、.txnew は移動先の名前に付け替わり、ジャーナルもそれを指す
+    /// Moving a staged Add renames the .txnew to the destination's name, and the journal points to it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Add した</para>
-    /// <para>手順: Move(a.txt→c.txt) する</para>
-    /// <para>期待: .txnew は c.txt の名前の 1 つだけで、ジャーナルは c.txt の .txnew を指し、a.txt の .txnew を指さない</para>
+    /// <para>Given: a.txt is added.</para>
+    /// <para>When: Move(a.txt→c.txt).</para>
+    /// <para>Then: there is only one .txnew, with the name of c.txt, and the journal points to the .txnew of c.txt, not of a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ステージ済みのAddはtxnewとジャーナルを移動先へ付け替えること()
+    public async Task MoveAsync_MovesStagedAddTxnewAndJournalToDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);

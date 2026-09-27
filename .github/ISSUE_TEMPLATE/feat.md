@@ -1,6 +1,6 @@
 ---
 name: Feature
-about: 利用者に見える能力追加
+about: A new capability users can see
 labels: ["type:feat"]
 ---
 
@@ -31,4 +31,4 @@ labels: ["type:feat"]
 
 ## Grill
 
-- 実施済み / 不要（理由）:
+- Done / not needed (reason):

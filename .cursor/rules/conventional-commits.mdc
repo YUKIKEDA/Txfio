@@ -29,8 +29,7 @@ Use one of: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `build`
 
 ## Subject
 
-- Japanese is allowed (and preferred when it communicates intent better)
-- Type and scope stay in English
+- English
 - Imperative / concise; no trailing period required
 
 ## Breaking changes
@@ -44,9 +43,9 @@ BREAKING CHANGE: description
 ## Examples
 
 ```text
-feat(txfio): コミット時の rename 適用を追加
-docs: 設計ドキュメントを docs/design.md へ移す
-chore(repo): リポジトリ基盤を追加
+feat(txfio): apply renames at commit
+docs: move the design document to docs/design.md
+chore(repo): add the repository foundation
 ```
 
 ## Agent behavior

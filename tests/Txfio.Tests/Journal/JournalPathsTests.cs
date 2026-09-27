@@ -6,15 +6,15 @@ namespace Txfio.Tests.Journal;
 public sealed class JournalPathsTests
 {
     /// <summary>
-    /// ジャーナルには、ワークフォルダからの相対パスを書く
+    /// The journal holds paths relative to the work folder.
     /// </summary>
     /// <remarks>
-    /// <para>前提: サブフォルダ sub がある</para>
-    /// <para>手順: sub/a.txt を Add し、ジャーナルを読む</para>
-    /// <para>期待: ジャーナルにワークフォルダの絶対パスは無く、sub/a.txt の相対パスがある</para>
+    /// <para>Given: a subfolder sub exists.</para>
+    /// <para>When: sub/a.txt is added, and the journal is read.</para>
+    /// <para>Then: the journal has no absolute path of the work folder, and has the relative path sub/a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_ジャーナルには相対パスを書くこと()
+    public async Task AddAsync_WritesRelativePathsToJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -31,15 +31,15 @@ public sealed class JournalPathsTests
     }
 
     /// <summary>
-    /// ワークフォルダを別の場所へ移してからでも、Recover はロールフォワードできる
+    /// Even after the work folder is moved elsewhere, Recover can roll forward.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt の Update を Committing の直後に止めた</para>
-    /// <para>手順: ワークフォルダごと別の名前へ移し、移した先で RecoverAsync する</para>
-    /// <para>期待: RolledForward であり、移した先の a.txt が新しい内容になる</para>
+    /// <para>Given: an Update of a.txt is stopped right after Committing.</para>
+    /// <para>When: the whole work folder is moved to another name, and RecoverAsync runs there.</para>
+    /// <para>Then: RolledForward, and a.txt in the new location has the new content.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ワークフォルダを移したあとでもロールフォワードできること()
+    public async Task RecoverAsync_RollsForwardAfterWorkFolderIsMoved()
     {
         await using TempDirectory root = TempDirectory.Create();
         string before = System.IO.Path.Combine(root.Path, "before");
@@ -64,15 +64,15 @@ public sealed class JournalPathsTests
     }
 
     /// <summary>
-    /// ワークフォルダの外を指すジャーナルは読めない扱いとし、外のファイルを消さない
+    /// A journal that points outside the work folder is treated as unreadable, and files outside are not deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 未コミットの Add のジャーナルで、stagingPath をワークフォルダの外のファイルに書き換えてある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable であり、ジャーナルと外のファイルは残る</para>
+    /// <para>Given: in the journal of an uncommitted Add, stagingPath is rewritten to a file outside the work folder.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable, and the journal and the file outside remain.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_外を指すジャーナルは読めない扱いとし外のファイルを消さないこと()
+    public async Task RecoverAsync_JournalPointingOutsideIsUnreadableAndKeepsOutsideFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();

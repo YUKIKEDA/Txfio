@@ -4,12 +4,12 @@ using System.Text.Json.Serialization;
 namespace Txfio;
 
 /// <summary>
-/// ジャーナルファイルの読み書き
+/// Reads and writes journal files.
 /// </summary>
 internal static class JournalStore
 {
     /// <summary>
-    /// 現在のジャーナル文書形式の版
+    /// The version of the current journal document format.
     /// </summary>
     internal const int CurrentVersion = 1;
 
@@ -22,13 +22,13 @@ internal static class JournalStore
     };
 
     /// <summary>
-    /// 未コミットの新規ジャーナルを作成する（一時ファイルに書いてから rename し、ジャーナルのパスに途中の状態を残さない）
+    /// Creates a new uncommitted journal (writes a temporary file and renames it, so the journal path never holds a partial state).
     /// </summary>
-    /// <param name="journalPath">書き込み先</param>
-    /// <param name="transactionId">トランザクション ID</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>書き込みの完了</returns>
-    /// <exception cref="IOException">ジャーナルのパスに既にファイルがある、または書き込みに失敗した</exception>
+    /// <param name="journalPath">The path to write to.</param>
+    /// <param name="transactionId">The transaction ID.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the journal is written.</returns>
+    /// <exception cref="IOException">A file already exists at the journal path, or the write failed.</exception>
     internal static async Task WriteNewAsync(string journalPath, Guid transactionId, CancellationToken cancellationToken)
     {
         JournalDocument document = JournalPaths.ToStored(
@@ -52,12 +52,12 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// 既存ジャーナルを、一時ファイル経由で置き換える
+    /// Replaces an existing journal through a temporary file.
     /// </summary>
-    /// <param name="journalPath">書き込み先</param>
-    /// <param name="document">書き出す文書</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>書き込みの完了</returns>
+    /// <param name="journalPath">The path to write to.</param>
+    /// <param name="document">The document to write.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the journal is written.</returns>
     internal static async Task SaveAsync(string journalPath, JournalDocument document, CancellationToken cancellationToken)
     {
         string tempPath = MetadataNames.JournalTempPath(journalPath);
@@ -66,7 +66,7 @@ internal static class JournalStore
             JournalDocument stored = JournalPaths.ToStored(document, MetadataNames.WorkFolderFromJournal(journalPath));
             await WriteAsync(tempPath, stored, FileMode.Create, cancellationToken).ConfigureAwait(false);
 
-            // File.Move の共有違反は UnauthorizedAccessException になるため、先に開いて閉じる（開けないときの共有違反は IOException のまま返す）
+            // A sharing violation in File.Move becomes UnauthorizedAccessException, so open and close first (a sharing violation when opening stays IOException).
             EnsureReplaceable(journalPath);
             File.Move(tempPath, journalPath, overwrite: true);
         }
@@ -78,17 +78,17 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// ジャーナルを読み、版と種別と必須の欄を確かめる
+    /// Reads a journal, and checks the version, the kinds, and the required fields.
     /// </summary>
-    /// <param name="journalPath">読み取り元</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>読めた文書、または読めない理由（JSON として読めない、値が JSON の null である、種別が名前に無い、path が空、または Move の newPath が空、版が違う、結合したパスがワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下である）</returns>
-    /// <exception cref="IOException">読み取りに失敗した</exception>
+    /// <param name="journalPath">The path to read from.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The document that was read, or why it cannot be read (not readable as JSON, a JSON null value, a kind that is not a name, an empty path, an empty Move newPath, a different version, or a combined path outside the work folder, at the work folder itself, at the metadata folder, or under the metadata folder).</returns>
+    /// <exception cref="IOException">The read failed.</exception>
     internal static async Task<JournalReadResult> ReadAsync(string journalPath, CancellationToken cancellationToken)
     {
         byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
 
-        // 1 行目の版が 1 でなければ、操作を解釈する前に版が違うと返す（未知の種別で逆シリアル化が落ちても .txnew を消さない）
+        // If the version on the first line is not 1, return "different version" before interpreting operations (so .txnew files are not deleted even if deserialization fails on an unknown kind).
         if (IsUnsupportedVersion(FirstRecord(payload)))
         {
             return JournalReadResult.OtherVersion();
@@ -140,13 +140,13 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// 表の末尾に足した操作と作成ディレクトリを、ジャーナルへ 1 行追記する（全体は書き直さない）
+    /// Appends one line with the operations and created directories added to the end of the table (does not rewrite the whole journal).
     /// </summary>
-    /// <param name="journalPath">書き込み先</param>
-    /// <param name="operations">末尾に足した操作</param>
-    /// <param name="createdDirectories">末尾に足した作成ディレクトリ</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>追記の完了</returns>
+    /// <param name="journalPath">The path to write to.</param>
+    /// <param name="operations">The operations added to the end.</param>
+    /// <param name="createdDirectories">The created directories added to the end.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the line is appended.</returns>
     internal static async Task AppendAsync(
         string journalPath,
         IReadOnlyList<JournalOperation> operations,
@@ -178,9 +178,9 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// 上書き用の一時ファイルがあれば消す
+    /// Deletes the temporary file for overwriting, if there is one.
     /// </summary>
-    /// <param name="journalPath">対応するジャーナルのパス</param>
+    /// <param name="journalPath">The path of the matching journal.</param>
     internal static void DeleteTemp(string journalPath)
     {
         string tempPath = MetadataNames.JournalTempPath(journalPath);
@@ -191,10 +191,10 @@ internal static class JournalStore
     }
 
     /// <summary>
-    /// ジャーナルファイルがあれば削除する
+    /// Deletes the journal file, if there is one.
     /// </summary>
-    /// <param name="journalPath">削除対象</param>
-    /// <returns>削除の完了</returns>
+    /// <param name="journalPath">The journal to delete.</param>
+    /// <returns>A task that completes when the journal is deleted.</returns>
     internal static Task DeleteAsync(string journalPath)
     {
         if (File.Exists(journalPath))
@@ -230,7 +230,7 @@ internal static class JournalStore
         }
     }
 
-    // 1 行目は文書、2 行目以降は追記レコードであり、改行で終わっていない最後の行は、追記の途中で落ちたものとして捨てる
+    // The first line is the document and later lines are append records; a last line without a newline is dropped as a crash during an append.
     private static JournalDocument? ReadLines(byte[] payload)
     {
         List<ReadOnlyMemory<byte>> lines = new List<ReadOnlyMemory<byte>>();
@@ -269,7 +269,7 @@ internal static class JournalStore
             JournalAppend? record = JsonSerializer.Deserialize<JournalAppend>(lines[i].Span, _jsonOptions);
             if (record is null)
             {
-                throw new JsonException("ジャーナルの追記レコードが null です");
+                throw new JsonException("A journal append record is null");
             }
 
             operations.AddRange(record.Append);
@@ -292,7 +292,7 @@ internal static class JournalStore
         return line;
     }
 
-    // 種別が名前に無い、または path が空、または Move の newPath が空の操作は、適用も巻き戻しもできない
+    // An operation whose kind is not a name, whose path is empty, or whose Move newPath is empty can be neither applied nor rolled back.
     private static bool IsComplete(JournalOperation operation)
     {
         if (!Enum.IsDefined(operation.Kind) || string.IsNullOrEmpty(operation.Path))
@@ -303,7 +303,7 @@ internal static class JournalStore
         return operation.Kind != PendingChangeKind.Move || !string.IsNullOrEmpty(operation.NewPath);
     }
 
-    // 版の確認は 1 行目だけにする（追記レコードが続くと、ファイル全体は 1 個の JSON ではない）
+    // Check the version on the first line only (with append records after it, the whole file is not one JSON value).
     private static byte[] FirstRecord(byte[] payload)
     {
         int newline = Array.IndexOf(payload, (byte)'\n');
@@ -317,7 +317,7 @@ internal static class JournalStore
         return line;
     }
 
-    // 版の欄が数値の 1 でなければ、操作を解釈せず版が違うと返す
+    // If the version field is not the number 1, return "different version" without interpreting operations.
     private static bool IsUnsupportedVersion(byte[] payload)
     {
         try
@@ -374,7 +374,7 @@ internal static class JournalStore
         }
         catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            // 消せなくても、呼び出し側が元の例外を返す
+            // Even if it cannot be deleted, the caller returns the original exception.
         }
     }
 }

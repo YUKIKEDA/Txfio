@@ -8,7 +8,7 @@ alwaysApply: true
 ## Title
 
 Same as Conventional Commits: `type(optional-scope): subject`
-(Japanese subject OK; type/scope English.)
+(in English)
 
 ## Body
 
@@ -21,7 +21,8 @@ Follow `.github/pull_request_template.md` exactly — same section headings:
 5. `## Risk / Rollback`
 6. `## Checklist`
 
-- Headings stay in **English**; bullet text may be Japanese
+- Write the title and body in **English** (`.cursor/rules/language.mdc`)
+- If the PR changes a bilingual document, it changes its `*.ja.md` pair too, or says why not and links a follow-up Issue
 - Empty optional fields: write `N/A`, do not delete the section
 - Verification must record local `./build.ps1` on Windows
 - **Issue link (required):** In `## Related`, put a GitHub closing keyword on its **own line**:

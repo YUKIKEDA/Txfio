@@ -3,61 +3,61 @@ using System.Runtime.CompilerServices;
 namespace Txfio;
 
 /// <summary>
-/// 公開の非同期メソッドが、呼び出し元のスレッド（UI など）で IO をしないようにする
+/// Keeps public async methods from doing IO on the caller's thread (such as a UI thread).
 /// </summary>
 internal static class CallerContext
 {
     /// <summary>
-    /// 呼び出し元に <see cref="SynchronizationContext"/> か既定以外の <see cref="TaskScheduler"/> があれば、スレッドプールへ移る
+    /// Switches to the thread pool if the caller has a <see cref="SynchronizationContext"/> or a non-default <see cref="TaskScheduler"/>.
     /// </summary>
     /// <remarks>
-    /// どちらも無ければ（サーバーやコンソールであるとき、既にスレッドプール上にいるとき）移らずにそのまま続ける
+    /// If it has neither (on a server or console, or already on the thread pool), it continues without switching.
     /// </remarks>
-    /// <returns>await するとスレッドプールで続く値</returns>
+    /// <returns>A value that continues on the thread pool when awaited.</returns>
     internal static LeaveAwaitable LeaveAsync()
     {
         return default;
     }
 
     /// <summary>
-    /// <see cref="LeaveAsync"/> の await 先
+    /// The await target of <see cref="LeaveAsync"/>.
     /// </summary>
     internal readonly struct LeaveAwaitable : ICriticalNotifyCompletion
     {
         /// <summary>
-        /// 移る必要が無ければ <see langword="true"/>
+        /// Gets a value indicating whether no switch is needed.
         /// </summary>
         public bool IsCompleted => SynchronizationContext.Current is null && TaskScheduler.Current == TaskScheduler.Default;
 
         /// <summary>
-        /// await 用の自分自身
+        /// Returns itself, for await.
         /// </summary>
-        /// <returns>この値</returns>
+        /// <returns>This value.</returns>
         public LeaveAwaitable GetAwaiter()
         {
             return this;
         }
 
         /// <summary>
-        /// 続きをスレッドプールで動かす
+        /// Runs the continuation on the thread pool.
         /// </summary>
-        /// <param name="continuation">続き</param>
+        /// <param name="continuation">The continuation.</param>
         public void OnCompleted(Action continuation)
         {
             ThreadPool.QueueUserWorkItem(static state => ((Action)state!)(), continuation);
         }
 
         /// <summary>
-        /// 続きをスレッドプールで動かす（実行コンテキストは流す）
+        /// Runs the continuation on the thread pool (the execution context flows).
         /// </summary>
-        /// <param name="continuation">続き</param>
+        /// <param name="continuation">The continuation.</param>
         public void UnsafeOnCompleted(Action continuation)
         {
             OnCompleted(continuation);
         }
 
         /// <summary>
-        /// 何も返さない
+        /// Returns nothing.
         /// </summary>
         public void GetResult()
         {

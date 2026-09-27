@@ -3,24 +3,24 @@ using System.Text.Json.Serialization;
 namespace Txfio;
 
 /// <summary>
-/// ジャーナルに記録する 1 操作
+/// One operation recorded in the journal.
 /// </summary>
 internal sealed class JournalOperation
 {
     /// <summary>
-    /// 操作の種類とパスを指定する
+    /// Initializes a new instance of the <see cref="JournalOperation"/> class with the operation kind and paths.
     /// </summary>
-    /// <param name="kind">操作の種類</param>
-    /// <param name="path">対象パス</param>
-    /// <param name="stagingPath">ステージングファイル（`.txnew`）のパス（Add / Update 以外は null）</param>
-    /// <param name="newPath">Move の移動先（それ以外は null）</param>
-    /// <param name="before">対象パスの適用直前状態（未記録なら null）</param>
-    /// <param name="after">対象パスの適用直後状態（未記録なら null）</param>
-    /// <param name="destBefore">Move の移動先の適用直前状態（それ以外は null）</param>
-    /// <param name="destAfter">Move の移動先の適用直後状態（それ以外は null）</param>
-    /// <param name="isDirectory">ディレクトリの Delete、DeleteTree、Move、または CreateDirectory なら <see langword="true"/></param>
-    /// <param name="directoryCreated">CreateDirectory がディレクトリを作り終えたなら <see langword="true"/></param>
-    /// <param name="overwrite">置き換えの Move なら <see langword="true"/></param>
+    /// <param name="kind">The operation kind.</param>
+    /// <param name="path">The target path.</param>
+    /// <param name="stagingPath">The path of the staging file (<c>.txnew</c>) (<see langword="null"/> except for Add / Update).</param>
+    /// <param name="newPath">The Move destination (<see langword="null"/> otherwise).</param>
+    /// <param name="before">The state of the target path just before apply (<see langword="null"/> if not recorded).</param>
+    /// <param name="after">The state of the target path just after apply (<see langword="null"/> if not recorded).</param>
+    /// <param name="destBefore">The state of the Move destination just before apply (<see langword="null"/> otherwise).</param>
+    /// <param name="destAfter">The state of the Move destination just after apply (<see langword="null"/> otherwise).</param>
+    /// <param name="isDirectory"><see langword="true"/> for a directory Delete, DeleteTree, Move, or CreateDirectory.</param>
+    /// <param name="directoryCreated"><see langword="true"/> once CreateDirectory has created the directory.</param>
+    /// <param name="overwrite"><see langword="true"/> for a replacing Move.</param>
     [JsonConstructor]
     public JournalOperation(
         PendingChangeKind kind,
@@ -49,75 +49,75 @@ internal sealed class JournalOperation
     }
 
     /// <summary>
-    /// 操作の種類
+    /// Gets the operation kind.
     /// </summary>
     public PendingChangeKind Kind { get; }
 
     /// <summary>
-    /// 対象パス
+    /// Gets the target path.
     /// </summary>
     public string Path { get; }
 
     /// <summary>
-    /// ステージングファイル（`.txnew`）のパス（Add / Update 以外は null）
+    /// Gets the path of the staging file (<c>.txnew</c>) (<see langword="null"/> except for Add / Update).
     /// </summary>
     public string? StagingPath { get; }
 
     /// <summary>
-    /// Move の移動先パス
+    /// Gets the Move destination path.
     /// </summary>
     public string? NewPath { get; }
 
     /// <summary>
-    /// 対象パスの適用直前状態（未記録なら null）
+    /// Gets the state of the target path just before apply (<see langword="null"/> if not recorded).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PathState? Before { get; }
 
     /// <summary>
-    /// 対象パスの適用直後状態（未記録なら null）
+    /// Gets the state of the target path just after apply (<see langword="null"/> if not recorded).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PathState? After { get; }
 
     /// <summary>
-    /// Move の移動先の適用直前状態（それ以外は null）
+    /// Gets the state of the Move destination just before apply (<see langword="null"/> otherwise).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PathState? DestBefore { get; }
 
     /// <summary>
-    /// Move の移動先の適用直後状態（それ以外は null）
+    /// Gets the state of the Move destination just after apply (<see langword="null"/> otherwise).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PathState? DestAfter { get; }
 
     /// <summary>
-    /// ディレクトリの Delete、DeleteTree、Move、または CreateDirectory なら <see langword="true"/>
+    /// Gets a value indicating whether this is a directory Delete, DeleteTree, Move, or CreateDirectory.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsDirectory { get; }
 
     /// <summary>
-    /// CreateDirectory がディレクトリを作り終えたなら <see langword="true"/>（未作成のまま落ちたときは、同じ名前のディレクトリを他が作ったかもしれない）
+    /// Gets a value indicating whether CreateDirectory has created the directory (if it crashed while not created, someone else may have created a directory with the same name).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool DirectoryCreated { get; }
 
     /// <summary>
-    /// 置き換えの Move なら <see langword="true"/>
+    /// Gets a value indicating whether this is a replacing Move.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Overwrite { get; }
 
     /// <summary>
-    /// Before / After を付けたコピーを返す
+    /// Returns a copy with Before / After.
     /// </summary>
-    /// <param name="before">対象パスの適用直前状態</param>
-    /// <param name="after">対象パスの適用直後状態</param>
-    /// <param name="destBefore">Move の移動先の適用直前状態</param>
-    /// <param name="destAfter">Move の移動先の適用直後状態</param>
-    /// <returns>状態を記録した操作</returns>
+    /// <param name="before">The state of the target path just before apply.</param>
+    /// <param name="after">The state of the target path just after apply.</param>
+    /// <param name="destBefore">The state of the Move destination just before apply.</param>
+    /// <param name="destAfter">The state of the Move destination just after apply.</param>
+    /// <returns>The operation with the states recorded.</returns>
     internal JournalOperation WithOutcome(
         PathState before,
         PathState after,
@@ -139,9 +139,9 @@ internal sealed class JournalOperation
     }
 
     /// <summary>
-    /// 作成済みを付けたコピーを返す
+    /// Returns a copy marked as created.
     /// </summary>
-    /// <returns>作成済みを記録した操作</returns>
+    /// <returns>The operation recorded as created.</returns>
     internal JournalOperation WithDirectoryCreated()
     {
         return new JournalOperation(

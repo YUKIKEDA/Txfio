@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoveryRequiredTests
 {
     /// <summary>
-    /// 落ちた DeleteTree の残骸があるあいだは、新しいトランザクションを開始できない
+    /// While the leftovers of a crashed DeleteTree remain, a new transaction cannot begin.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d/old.txt があり、d の DeleteTree を AfterCommitting で止めて Dispose している</para>
-    /// <para>手順: BeginAsync し、RecoverAsync してからもう一度 BeginAsync する</para>
-    /// <para>期待: 1 回目は RecoveryRequiredException（Path はワークフォルダ）で d は残る。Recover は RolledForward で d は消え、2 回目は開始できる</para>
+    /// <para>Given: d/old.txt exists, and a DeleteTree of d is stopped at AfterCommitting and disposed.</para>
+    /// <para>When: BeginAsync, then RecoverAsync, then BeginAsync again.</para>
+    /// <para>Then: the first throws RecoveryRequiredException (Path is the work folder) and d remains. Recover is RolledForward and d is gone, and the second begins.</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_落ちたDeleteTreeが残っているとRecoveryRequiredExceptionになること()
+    public async Task BeginAsync_ThrowsRecoveryRequiredWhileCrashedDeleteTreeRemains()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "d");
@@ -36,15 +36,15 @@ public sealed class RecoveryRequiredTests
     }
 
     /// <summary>
-    /// 開始したあとで別のトランザクションが落ちたら、コミットは実体に触れずに拒否する
+    /// If another transaction crashes after this one began, the commit is rejected without touching the disk.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d/old.txt がある。tx2 を開始したあと、tx1 が d の DeleteTree を AfterCommitting で止めて Dispose している</para>
-    /// <para>手順: tx2 が d/important.txt を Add して CommitAsync し、Dispose してから RecoverAsync する</para>
-    /// <para>期待: コミットは RecoveryRequiredException になり、d/important.txt は作られない。Recover は RolledForward で d は消え、ジャーナルは残らない</para>
+    /// <para>Given: d/old.txt exists. After tx2 begins, tx1 stops a DeleteTree of d at AfterCommitting and is disposed.</para>
+    /// <para>When: tx2 adds d/important.txt and calls CommitAsync, is disposed, and RecoverAsync runs.</para>
+    /// <para>Then: the commit throws RecoveryRequiredException and d/important.txt is not created. Recover is RolledForward, d is gone, and no journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_開始後に別トランザクションが落ちるとRecoveryRequiredExceptionで実体に触れないこと()
+    public async Task CommitAsync_ThrowsRecoveryRequiredWithoutTouchingDiskWhenAnotherTransactionCrashesAfterBegin()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "d");
@@ -71,15 +71,15 @@ public sealed class RecoveryRequiredTests
     }
 
     /// <summary>
-    /// 未コミットの残骸ジャーナルでも開始を拒否し、Recover のあとは開始できる
+    /// An uncommitted orphaned journal also rejects begin, and begin works after Recover.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生存ロックの無い、未コミットのジャーナルだけがある</para>
-    /// <para>手順: BeginAsync し、RecoverAsync してからもう一度 BeginAsync する</para>
-    /// <para>期待: 1 回目は RecoveryRequiredException で、新しいジャーナルも生存ロックも作らない。Recover は RolledBack で、2 回目は開始できる</para>
+    /// <para>Given: only an uncommitted journal without a liveness lock exists.</para>
+    /// <para>When: BeginAsync, then RecoverAsync, then BeginAsync again.</para>
+    /// <para>Then: the first throws RecoveryRequiredException and creates neither a new journal nor a liveness lock. Recover is RolledBack, and the second begins.</para>
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_未コミットの残骸ジャーナルがあるとRecoveryRequiredExceptionになること()
+    public async Task BeginAsync_ThrowsRecoveryRequiredWithUncommittedOrphanedJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -101,15 +101,15 @@ public sealed class RecoveryRequiredTests
     }
 
     /// <summary>
-    /// 操作の無いコミットは残骸ジャーナルを確認しない
+    /// A commit without operations does not check for orphaned journals.
     /// </summary>
     /// <remarks>
-    /// <para>前提: トランザクションを開始したあと、未コミットの残骸ジャーナルができている</para>
-    /// <para>手順: 何も操作せずに CommitAsync する</para>
-    /// <para>期待: Succeeded で、残骸ジャーナルは残る</para>
+    /// <para>Given: after a transaction begins, an uncommitted orphaned journal appears.</para>
+    /// <para>When: CommitAsync runs without any operation.</para>
+    /// <para>Then: Succeeded, and the orphaned journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_操作が無ければ残骸があってもSucceededになること()
+    public async Task CommitAsync_SucceedsWithoutOperationsEvenWithOrphanedJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");

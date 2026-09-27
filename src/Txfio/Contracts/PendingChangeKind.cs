@@ -1,37 +1,37 @@
 namespace Txfio;
 
 /// <summary>
-/// ジャーナルに記録する操作の種類
+/// The kind of operation recorded in the journal.
 /// </summary>
 public enum PendingChangeKind
 {
     /// <summary>
-    /// 新規ファイルの追加
+    /// Adding a new file.
     /// </summary>
     Add = 0,
 
     /// <summary>
-    /// 既存ファイルの更新
+    /// Updating an existing file.
     /// </summary>
     Update = 1,
 
     /// <summary>
-    /// 削除予約
+    /// A scheduled delete.
     /// </summary>
     Delete = 2,
 
     /// <summary>
-    /// 同一ボリューム内の移動またはリネーム
+    /// A move or rename within one volume.
     /// </summary>
     Move = 3,
 
     /// <summary>
-    /// ディレクトリとその配下すべての削除予約
+    /// A scheduled delete of a directory and everything under it.
     /// </summary>
     DeleteTree = 4,
 
     /// <summary>
-    /// 空ディレクトリを呼び出した時点で作る（配下の操作は別のエントリになる）
+    /// An empty directory created when the method is called (operations under it are separate entries).
     /// </summary>
     CreateDirectory = 5,
 }

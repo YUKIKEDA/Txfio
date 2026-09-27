@@ -4,20 +4,20 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 多プロセスの耐久テストが起動する子プロセスで、共有のディレクトリへトランザクションを繰り返す
+/// In a child process started by the multi-process stress test, repeats transactions on shared directories.
 /// </summary>
 public static class DirectoryStressWriter
 {
     /// <summary>
-    /// 起動コマンド
+    /// The start-up command.
     /// </summary>
     public const string Command = "stress-dir-writer";
 
     /// <summary>
-    /// 子プロセスが奪い合うディレクトリの相対パス
+    /// The relative paths of the directories the child processes compete for.
     /// </summary>
-    /// <param name="count">ディレクトリの数</param>
-    /// <returns><c>d0</c> から順に並べたパス</returns>
+    /// <param name="count">The number of directories.</param>
+    /// <returns>The paths in order from <c>d0</c>.</returns>
     public static IReadOnlyList<string> Paths(int count)
     {
         return Enumerable.Range(0, count)
@@ -26,15 +26,15 @@ public static class DirectoryStressWriter
     }
 
     /// <summary>
-    /// 開始ファイルができたら、ディレクトリの作成、空の削除、木の削除、上書きしない Move を繰り返す
+    /// Once the start file appears, repeats directory create, delete of an empty directory, delete of a tree, and Move without overwrite.
     /// </summary>
     /// <remarks>
-    /// 行はタブ区切りで、トークン、結果、Commit 直前の時刻、試した回数、操作である。
-    /// 操作は <c>パス=種類</c>、Move は <c>パス&gt;移動先=Move</c> である。
-    /// リトライする子は、ロック競合のあと少し待って、その時点のディスクを見てやり直す
+    /// Lines are tab-separated: token, result, time just before Commit, number of attempts, and operation.
+    /// An operation is <c>path=kind</c>, and a Move is <c>path&gt;destination=Move</c>.
+    /// A retrying child waits a little after lock contention, looks at the disk at that time, and retries.
     /// </remarks>
-    /// <param name="args">コマンド、ワークフォルダ、子の番号、トランザクション数、シード、ディレクトリ数、リトライするか（1 か 0）、記録ファイル、開始ファイル</param>
-    /// <returns>最後まで回れば 0、引数が足りなければ 2、想定外の例外なら 1</returns>
+    /// <param name="args">The command, work folder, child number, transaction count, seed, directory count, whether to retry (1 or 0), log file, and start file.</param>
+    /// <returns>0 if it runs to the end, 2 if arguments are missing, 1 on an unexpected exception.</returns>
     public static async Task<int> RunAsync(string[] args)
     {
         if (args.Length != 9)

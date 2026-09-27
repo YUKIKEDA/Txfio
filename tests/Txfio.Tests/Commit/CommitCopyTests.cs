@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitCopyTests
 {
     /// <summary>
-    /// ファイルのコピーはコミットでコピー先を作り、コピー元を残す
+    /// A file copy creates the destination at commit and keeps the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を b.txt へコピーしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で両方に同じ内容がある</para>
+    /// <para>Given: a.txt is copied to b.txt.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and both have the same content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ファイルのコピーは両方残ること()
+    public async Task CommitAsync_FileCopyKeepsBoth()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -30,15 +30,15 @@ public sealed class CommitCopyTests
     }
 
     /// <summary>
-    /// ディレクトリのコピーはコミットで中身と空ディレクトリを残す
+    /// A directory copy keeps its contents and empty directories at commit.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ファイルと空のサブディレクトリがあるディレクトリをコピーしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded でコピー先にファイルと空ディレクトリがあり、コピー元も残る</para>
+    /// <para>Given: a directory with a file and an empty subdirectory is copied.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, the destination has the file and the empty directory, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ディレクトリのコピーは空ディレクトリも残ること()
+    public async Task CommitAsync_DirectoryCopyKeepsEmptyDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");

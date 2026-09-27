@@ -5,15 +5,15 @@ namespace Txfio.Tests.Lock;
 public sealed class PathLockTests
 {
     /// <summary>
-    /// 別トランザクションは同じパスをロックできない
+    /// Another transaction cannot lock the same path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 一方のトランザクションが Add している</para>
-    /// <para>手順: もう一方が同じパスと、大文字だけ変えたパスを Add する</para>
-    /// <para>期待: どちらも LockContentionException になり、Path はそれぞれの Add 対象パスである</para>
+    /// <para>Given: one transaction has an Add.</para>
+    /// <para>When: the other adds the same path, and the same path with different case.</para>
+    /// <para>Then: both throw LockContentionException, and Path is each Add target.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_他のトランザクションが同じパスを使うとLockContentionExceptionになること()
+    public async Task AddAsync_SamePathInAnotherTransactionThrowsLockContentionException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string lower = System.IO.Path.Combine(work.Path, "a.txt");
@@ -33,15 +33,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// 別パスは同時にステージングできる
+    /// Different paths can be staged at the same time.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 2つのトランザクションを開始している</para>
-    /// <para>手順: それぞれ別のパスを Add する</para>
-    /// <para>期待: どちらもステージングされ、ロックファイルが 3 つある</para>
+    /// <para>Given: two transactions have begun.</para>
+    /// <para>When: each adds a different path.</para>
+    /// <para>Then: both are staged, and there are three lock files.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_別パスは同時にステージングできること()
+    public async Task AddAsync_DifferentPathsStageConcurrently()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -59,15 +59,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// 同じトランザクションの再ステージは競合しない
+    /// A restage in the same transaction does not conflict.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Update している</para>
-    /// <para>手順: 同じトランザクションでもう一度 Update する</para>
-    /// <para>期待: 例外にならず、ロックファイルは哨兵と対象の 2 つのままである</para>
+    /// <para>Given: an existing file is updated.</para>
+    /// <para>When: the same transaction updates it again.</para>
+    /// <para>Then: no exception, and the lock files stay two: the work-folder lock and the target.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_同じトランザクションの再ステージは競合しないこと()
+    public async Task UpdateAsync_RestageInSameTransactionDoesNotConflict()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -83,15 +83,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// コミット後は別トランザクションがロックでき、.lock は残る
+    /// After commit, another transaction can lock the path, and the .lock remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add をコミットしている</para>
-    /// <para>手順: 別トランザクションが同じパスを Update する</para>
-    /// <para>期待: Update でき、.lock ファイルは残る</para>
+    /// <para>Given: an Add has been committed.</para>
+    /// <para>When: another transaction updates the same path.</para>
+    /// <para>Then: the Update works, and the .lock file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_あとには別トランザクションが同じパスをロックできファイルは残ること()
+    public async Task CommitAsync_AnotherTransactionCanLockSamePathAfterwardAndFileRemains()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -111,15 +111,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// Dispose 後は別トランザクションがロックでき、.lock は残る
+    /// After Dispose, another transaction can lock the path, and the .lock remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add したトランザクションを Dispose している</para>
-    /// <para>手順: 別トランザクションが同じパスを Add する</para>
-    /// <para>期待: Add でき、.lock ファイルは残る</para>
+    /// <para>Given: a transaction with an Add has been disposed.</para>
+    /// <para>When: another transaction adds the same path.</para>
+    /// <para>Then: the Add works, and the .lock file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task DisposeAsync_あとには別トランザクションが同じパスをロックできファイルは残ること()
+    public async Task DisposeAsync_AnotherTransactionCanLockSamePathAfterwardAndFileRemains()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -137,15 +137,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ロールバック中にジャーナル削除が失敗してもロックは閉じ、例外は出さない
+    /// Even if deleting the journal fails during rollback, the locks are closed and no exception is thrown.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add したあと、ジャーナルを共有なしで開いている</para>
-    /// <para>手順: DisposeAsync し、BeginAsync したあと、ジャーナルを閉じてから RecoverAsync し、別トランザクションが同じパスを Add する</para>
-    /// <para>期待: DisposeAsync は例外を出さず、.txnew は消え、BeginAsync は RecoveryRequiredException（Path はワークフォルダ）であり、Recover は RolledBack であり、そのあと Add できる</para>
+    /// <para>Given: after an Add, the journal is opened without sharing.</para>
+    /// <para>When: DisposeAsync, then BeginAsync; the journal is closed, RecoverAsync runs, and another transaction adds the same path.</para>
+    /// <para>Then: DisposeAsync throws nothing, the .txnew is gone, BeginAsync throws RecoveryRequiredException (Path is the work folder), Recover is RolledBack, and the Add works afterwards.</para>
     /// </remarks>
-    [WindowsFact("開いたファイルは削除できない")]
-    public async Task DisposeAsync_ジャーナル削除に失敗してもロックを閉じること()
+    [WindowsFact("An open file cannot be deleted")]
+    public async Task DisposeAsync_ClosesLocksWhenJournalDeleteFails()
     {
         await using TempDirectory work = TempDirectory.Create();
         ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -172,15 +172,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// 親が無い Add のあとも、そのパスは押さえられたままである
+    /// Even after an Add without a parent, the path stays held.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 親ディレクトリが無い</para>
-    /// <para>手順: Add してから、別トランザクションが同じパスを Add する</para>
-    /// <para>期待: 先は ExternalConflictException、後は LockContentionException である</para>
+    /// <para>Given: the parent directory does not exist.</para>
+    /// <para>When: an Add is made, then another transaction adds the same path.</para>
+    /// <para>Then: the first throws ExternalConflictException, and the second throws LockContentionException.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_親が無くてもロックは残ること()
+    public async Task AddAsync_LockRemainsWithoutParent()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "missing", "a.txt");
@@ -195,15 +195,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// Move は移動元と移動先の両方をロックする
+    /// Move locks both the source and the destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動元のファイルがある</para>
-    /// <para>手順: Move したあと、別トランザクションが移動元を Delete し、移動先を Add する</para>
-    /// <para>期待: どちらも LockContentionException になり、Path はそれぞれの対象パスである</para>
+    /// <para>Given: the source file exists.</para>
+    /// <para>When: after the Move, another transaction deletes the source and adds the destination.</para>
+    /// <para>Then: both throw LockContentionException, and Path is each target.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_移動元と移動先の両方をロックすること()
+    public async Task MoveAsync_LocksBothSourceAndDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -221,15 +221,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// Move の2本目のロックが取れなくても、1本目は残る
+    /// Even if the second lock of a Move cannot be taken, the first remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動先を別トランザクションが Update している</para>
-    /// <para>手順: その移動先へ Move し、さらに別トランザクションが移動元を Delete する</para>
-    /// <para>期待: Move は移動先で LockContentionException になり、移動元のロックもまだ取れない</para>
+    /// <para>Given: another transaction has updated the destination.</para>
+    /// <para>When: a Move to that destination is made, then a third transaction deletes the source.</para>
+    /// <para>Then: the Move throws LockContentionException on the destination, and the source's lock still cannot be taken.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_2本目が取れなくても1本目は残ること()
+    public async Task MoveAsync_FirstLockRemainsWhenSecondFails()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -249,15 +249,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリ Delete は配下へのステージングを止める
+    /// A directory Delete stops staging under it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のディレクトリを Delete 予約している</para>
-    /// <para>手順: 別トランザクションがその直下を Add する</para>
-    /// <para>期待: LockContentionException になり、Path はそのディレクトリである</para>
+    /// <para>Given: an empty directory is scheduled for Delete.</para>
+    /// <para>When: another transaction adds a file directly under it.</para>
+    /// <para>Then: LockContentionException, and Path is that directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_ディレクトリの配下は別トランザクションが触れないこと()
+    public async Task DeleteAsync_OtherTransactionsCannotTouchUnderDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string sub = System.IO.Path.Combine(work.Path, "sub");
@@ -275,15 +275,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリ Move のあと、移動元は別トランザクションが触れない
+    /// After a directory Move, other transactions cannot touch the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリがある</para>
-    /// <para>手順: Move してから、別トランザクションが移動元を Delete する</para>
-    /// <para>期待: LockContentionException になり、Path は移動元のディレクトリである</para>
+    /// <para>Given: a directory exists.</para>
+    /// <para>When: it is moved, then another transaction deletes the source.</para>
+    /// <para>Then: LockContentionException, and Path is the source directory.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_ディレクトリの移動元は戻ったあとも予約されること()
+    public async Task MoveAsync_DirectorySourceStaysReservedAfterReturn()
     {
         await using TempDirectory work = TempDirectory.Create();
         string sub = System.IO.Path.Combine(work.Path, "sub");
@@ -299,15 +299,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// 全削除のあと、無関係なパスは通り、配下は止まる
+    /// After DeleteTree, unrelated paths pass and what is under it is blocked.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ディレクトリと、別のファイルがある</para>
-    /// <para>手順: DeleteTree してから、別トランザクションが別ファイルを Delete し、配下を Add する</para>
-    /// <para>期待: 別ファイルは Delete でき、配下の Add は LockContentionException で Path はそのディレクトリである</para>
+    /// <para>Given: a directory and another file exist.</para>
+    /// <para>When: DeleteTree, then another transaction deletes the other file and adds a file under the directory.</para>
+    /// <para>Then: the other file can be deleted, and the Add under it throws LockContentionException with Path set to that directory.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteTreeAsync_戻ったあとは配下だけを予約すること()
+    public async Task DeleteTreeAsync_ReservesOnlyUnderDirectoryAfterReturn()
     {
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
@@ -328,15 +328,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// CreateDirectory のあと、別トランザクションは無関係なパスも配下も触れる
+    /// After CreateDirectory, other transactions can touch unrelated paths and what is under it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 別ファイル a.txt がある</para>
-    /// <para>手順: CreateDirectory してから、別トランザクションが a.txt を Delete し、作ったディレクトリの直下を Add する</para>
-    /// <para>期待: どちらも成功する</para>
+    /// <para>Given: another file a.txt exists.</para>
+    /// <para>When: CreateDirectory, then another transaction deletes a.txt and adds a file directly under the created directory.</para>
+    /// <para>Then: both succeed.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_戻ったあとは配下を予約しないこと()
+    public async Task CreateDirectoryAsync_DoesNotReserveUnderDirectoryAfterReturn()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -353,15 +353,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// 反対方向の Move を同時に呼んでも止まらない
+    /// Moves in opposite directions called at the same time do not hang.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 移動元 a.txt があり、b.txt は無い</para>
-    /// <para>手順: Move(a→b) と Move(b→a) を同時に開始して完了を待つ</para>
-    /// <para>期待: 5秒以内に終わり、一方は LockContentionException である</para>
+    /// <para>Given: a source a.txt exists, and b.txt does not.</para>
+    /// <para>When: Move(a→b) and Move(b→a) start at the same time, and both are awaited.</para>
+    /// <para>Then: they finish within 5 seconds, and one throws LockContentionException.</para>
     /// </remarks>
     [Fact]
-    public async Task MoveAsync_反対方向を同時に呼んでも止まらないこと()
+    public async Task MoveAsync_OppositeMovesAtSameTimeDoNotHang()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
@@ -388,15 +388,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ファイルコピーは別パスの変更を止めない
+    /// A file copy does not block changes to other paths.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: a.txt を b.txt へコピーしてから、別トランザクションが c.txt を Add する</para>
-    /// <para>期待: Add は成功する</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: a.txt is copied to b.txt, then another transaction adds c.txt.</para>
+    /// <para>Then: the Add succeeds.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ファイルは別パスを止めないこと()
+    public async Task CopyAsync_FileDoesNotBlockOtherPaths()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -411,15 +411,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリコピーは先だけを予約し、元と無関係なパスは通す
+    /// A directory copy reserves only the destination, and lets the source and unrelated paths pass.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子ファイルがあるディレクトリと、別のファイルがある</para>
-    /// <para>手順: ディレクトリをコピーしてから、別トランザクションが別ファイルを Delete し、元の配下と先の配下を Add する</para>
-    /// <para>期待: 別ファイルと元の配下は成功し、先の配下は LockContentionException で Path はコピー先である</para>
+    /// <para>Given: a directory with a child file, and another file, exist.</para>
+    /// <para>When: the directory is copied, then another transaction deletes the other file and adds files under the source and under the destination.</para>
+    /// <para>Then: the other file and the source child succeed, and the destination child throws LockContentionException with Path set to the destination.</para>
     /// </remarks>
     [Fact]
-    public async Task CopyAsync_ディレクトリはコピー先だけを予約すること()
+    public async Task CopyAsync_DirectoryReservesOnlyDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -444,15 +444,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリからの ZIP 作成は、戻ったあと配下を予約しない
+    /// Creating a ZIP from a directory does not reserve what is under it after the call returns.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子ファイルがあるディレクトリと、別のファイルがある</para>
-    /// <para>手順: ディレクトリから ZIP を作ってから、別トランザクションがそのファイルを Delete する</para>
-    /// <para>期待: Delete は成功する</para>
+    /// <para>Given: a directory with a child file, and another file, exist.</para>
+    /// <para>When: a ZIP is created from the directory, then another transaction deletes that file.</para>
+    /// <para>Then: the Delete succeeds.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_ディレクトリは戻ったあと配下を予約しないこと()
+    public async Task CreateArchiveAsync_DirectoryDoesNotReserveUnderItAfterReturn()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -470,15 +470,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ZIP の展開は展開先を予約し、無関係なパスは通す
+    /// Extracting a ZIP reserves the destination, and lets unrelated paths pass.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ZIP と、別のファイルがある</para>
-    /// <para>手順: ZIP を展開してから、別トランザクションが別ファイルを Delete し、展開先の配下を Add する</para>
-    /// <para>期待: 別ファイルは Delete でき、配下の Add は LockContentionException で Path は展開先である</para>
+    /// <para>Given: a ZIP and another file exist.</para>
+    /// <para>When: the ZIP is extracted, then another transaction deletes the other file and adds a file under the destination.</para>
+    /// <para>Then: the other file can be deleted, and the Add under the destination throws LockContentionException with Path set to the destination.</para>
     /// </remarks>
     [Fact]
-    public async Task ExtractArchiveAsync_展開先だけを予約すること()
+    public async Task ExtractArchiveAsync_ReservesOnlyDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -502,15 +502,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ファイルだけを組で指定した ZIP 作成は、ほかのパスの変更を止めない
+    /// Creating a ZIP from a list of files only does not block changes to other paths.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt がある</para>
-    /// <para>手順: a.txt だけを組で指定して ZIP を作ってから、別トランザクションが b.txt を Delete する</para>
-    /// <para>期待: Delete は成功し、どちらのトランザクションも操作を 1 件持つ</para>
+    /// <para>Given: a.txt and b.txt exist.</para>
+    /// <para>When: a ZIP is created from a list with only a.txt, then another transaction deletes b.txt.</para>
+    /// <para>Then: the Delete succeeds, and each transaction has one operation.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_ファイルだけの組はほかのパスの変更を止めないこと()
+    public async Task CreateArchiveAsync_FileOnlyListDoesNotBlockOtherPaths()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
@@ -526,15 +526,15 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// ディレクトリを含む組で指定した ZIP 作成は、戻ったあとほかのパスを止めない
+    /// Creating a ZIP from a list that includes a directory does not block other paths after the call returns.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子ファイルがあるディレクトリと、別のファイルが 2 つある</para>
-    /// <para>手順: ファイル 1 つとディレクトリを組で指定して ZIP を作ってから、別トランザクションがもう一方のファイルを Delete する</para>
-    /// <para>期待: Delete は成功する</para>
+    /// <para>Given: a directory with a child file, and two other files, exist.</para>
+    /// <para>When: a ZIP is created from a list with one file and the directory, then another transaction deletes the other file.</para>
+    /// <para>Then: the Delete succeeds.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_ディレクトリを含む組は戻ったあとほかのパスを止めないこと()
+    public async Task CreateArchiveAsync_ListWithDirectoryDoesNotBlockOtherPathsAfterReturn()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");

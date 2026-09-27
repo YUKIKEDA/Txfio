@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// 持ち主のいない残骸ジャーナルが残っており、<see cref="Txfio.RecoverAsync(string, CancellationToken)"/> を呼べば解消する
+/// An orphaned journal remains; calling <see cref="Txfio.RecoverAsync(string, CancellationToken)"/> resolves it.
 /// </summary>
 public sealed class RecoveryRequiredException : TxfioException
 {
     /// <summary>
-    /// メッセージとワークフォルダを指定して例外を作る
+    /// Initializes a new instance of the <see cref="RecoveryRequiredException"/> class with a message and the work folder.
     /// </summary>
-    /// <param name="message">例外メッセージ</param>
-    /// <param name="path">ワークフォルダ</param>
+    /// <param name="message">The exception message.</param>
+    /// <param name="path">The work folder.</param>
     public RecoveryRequiredException(string message, string path)
         : base(message)
     {
@@ -17,7 +17,7 @@ public sealed class RecoveryRequiredException : TxfioException
     }
 
     /// <summary>
-    /// ワークフォルダ
+    /// Gets the work folder.
     /// </summary>
     public string Path { get; }
 }

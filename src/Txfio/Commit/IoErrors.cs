@@ -1,25 +1,25 @@
 namespace Txfio;
 
 /// <summary>
-/// ディスク操作で起きる例外の見分けと、失敗の理由への振り分け
+/// Tells apart exceptions from disk operations, and sorts them into failure reasons.
 /// </summary>
 internal static class IoErrors
 {
     /// <summary>
-    /// ディスク操作の失敗として扱う例外かどうかを判定する
+    /// Returns whether the exception is treated as a failed disk operation.
     /// </summary>
-    /// <param name="exception">調べる例外</param>
-    /// <returns><see cref="IOException"/> か <see cref="UnauthorizedAccessException"/> なら <see langword="true"/></returns>
+    /// <param name="exception">The exception to check.</param>
+    /// <returns><see langword="true"/> for <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>.</returns>
     internal static bool IsIo(Exception exception)
     {
         return exception is IOException or UnauthorizedAccessException;
     }
 
     /// <summary>
-    /// ディスク操作の例外を、操作の失敗の理由へ振り分ける
+    /// Sorts an exception from a disk operation into the reason an operation failed.
     /// </summary>
-    /// <param name="exception"><see cref="IsIo"/> が <see langword="true"/> になる例外</param>
-    /// <returns>共有違反なら <see cref="OperationFailureReason.SharingViolation"/>、それ以外は <see cref="OperationFailureReason.IoFailure"/></returns>
+    /// <param name="exception">An exception for which <see cref="IsIo"/> returns <see langword="true"/>.</param>
+    /// <returns><see cref="OperationFailureReason.SharingViolation"/> for a sharing violation, otherwise <see cref="OperationFailureReason.IoFailure"/>.</returns>
     internal static OperationFailureReason Classify(Exception exception)
     {
         return exception is IOException io && PathLockSet.IsSharingViolation(io)
@@ -28,11 +28,11 @@ internal static class IoErrors
     }
 
     /// <summary>
-    /// パスを 1 件消す
+    /// Deletes one path.
     /// </summary>
-    /// <param name="ignoreIoFailures"><see langword="true"/> なら、ディスク操作の失敗を投げずに <see langword="false"/> を返す</param>
-    /// <param name="delete">消す処理</param>
-    /// <returns>消せたら <see langword="true"/></returns>
+    /// <param name="ignoreIoFailures">When <see langword="true"/>, returns <see langword="false"/> instead of throwing a failed disk operation.</param>
+    /// <param name="delete">The delete to run.</param>
+    /// <returns><see langword="true"/> if it was deleted.</returns>
     internal static bool TryDelete(bool ignoreIoFailures, Action delete)
     {
         try

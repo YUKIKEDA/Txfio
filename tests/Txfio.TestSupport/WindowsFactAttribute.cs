@@ -3,22 +3,22 @@ using Xunit;
 namespace Txfio.Tests.Support;
 
 /// <summary>
-/// Windows でだけ回す Fact。ほかの OS では理由を付けて Skip にする
+/// A Fact that runs only on Windows. On other operating systems it is skipped with a reason.
 /// </summary>
 /// <remarks>
-/// ジャンクション、ドライブ文字、開いたファイルを消せないことなど、Windows の挙動そのものを確かめるテストに付ける
+/// Use it for tests that check Windows behavior itself, such as junctions, drive letters, and open files that cannot be deleted.
 /// </remarks>
 public sealed class WindowsFactAttribute : FactAttribute
 {
     /// <summary>
-    /// Windows 以外なら理由を付けて Skip にする
+    /// Initializes a new instance of the <see cref="WindowsFactAttribute"/> class, which skips with the reason on operating systems other than Windows.
     /// </summary>
-    /// <param name="reason">Windows 専用である理由</param>
+    /// <param name="reason">Why the test is Windows only.</param>
     public WindowsFactAttribute(string reason)
     {
         if (!OperatingSystem.IsWindows())
         {
-            Skip = "Windows 専用: " + reason;
+            Skip = "Windows only: " + reason;
         }
     }
 }

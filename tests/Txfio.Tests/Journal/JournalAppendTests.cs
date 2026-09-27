@@ -5,15 +5,15 @@ namespace Txfio.Tests.Journal;
 public sealed class JournalAppendTests
 {
     /// <summary>
-    /// 末尾に足すだけの操作は、ジャーナルへ 1 行ずつ追記する
+    /// Operations that only add to the end append one line each to the journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダだけがある</para>
-    /// <para>手順: a.txt、b.txt、c.txt を順に Add し、ジャーナルの行数を数える</para>
-    /// <para>期待: 1 行目の文書と追記 3 行の計 4 行であり、操作の path は a.txt、b.txt、c.txt である</para>
+    /// <para>Given: only the work folder exists.</para>
+    /// <para>When: a.txt, b.txt, and c.txt are added in order, and the journal lines are counted.</para>
+    /// <para>Then: there are four lines, the document on the first line and three appended lines, and the operation paths are a.txt, b.txt, and c.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_末尾に足すだけならジャーナルへ追記すること()
+    public async Task AddAsync_AppendsToJournalWhenOnlyAddingToEnd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -30,15 +30,15 @@ public sealed class JournalAppendTests
     }
 
     /// <summary>
-    /// 途中が変わる操作は、ジャーナルを 1 行の文書に書き直す
+    /// An operation that changes the middle rewrites the journal as a one-line document.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt を Add した</para>
-    /// <para>手順: a.txt を Delete して Add を打ち消す</para>
-    /// <para>期待: ジャーナルは 1 行であり、操作は b.txt の Add だけ</para>
+    /// <para>Given: a.txt and b.txt are added.</para>
+    /// <para>When: a.txt is deleted, canceling its Add.</para>
+    /// <para>Then: the journal is one line, and the only operation is the Add of b.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task DeleteAsync_途中が変わるとジャーナルを書き直すこと()
+    public async Task DeleteAsync_RewritesJournalWhenMiddleChanges()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -52,15 +52,15 @@ public sealed class JournalAppendTests
     }
 
     /// <summary>
-    /// 追記したジャーナルも、Recover は追記した操作ごと巻き戻す
+    /// Recover rolls back an appended journal, including the appended operations.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 3 件 Add したあと、ロールバックせずに Dispose した（落ちたのと同じ）</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で .txnew は 1 つも残らず、ジャーナルも無い</para>
+    /// <para>Given: after three Adds, the transaction is disposed without rollback (the same as a crash).</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, no .txnew remains, and there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_追記したジャーナルを巻き戻すこと()
+    public async Task RecoverAsync_RollsBackAppendedJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
@@ -80,15 +80,15 @@ public sealed class JournalAppendTests
     }
 
     /// <summary>
-    /// 改行で終わっていない最後の行は、追記の途中で落ちたものとして捨てる
+    /// A last line that does not end with a newline is dropped as a crash during an append.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Add したジャーナルの末尾に、改行の無い書きかけの行がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で a.txt の .txnew は消える</para>
+    /// <para>Given: the journal with the Add of a.txt ends with a half-written line without a newline.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, and the .txnew of a.txt is deleted.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_書きかけの最後の行は捨てること()
+    public async Task RecoverAsync_DropsHalfWrittenLastLine()
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
@@ -105,15 +105,15 @@ public sealed class JournalAppendTests
     }
 
     /// <summary>
-    /// 改行で終わっているのに読めない行があれば、読めないジャーナルとする
+    /// A line that ends with a newline but cannot be read makes the journal unreadable.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Add したジャーナルの末尾に、改行で終わる壊れた行がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: JournalUnreadable で、ジャーナルは残る</para>
+    /// <para>Given: the journal with the Add of a.txt ends with a broken line that ends with a newline.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: JournalUnreadable, and the journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_改行で終わる壊れた行は読めないジャーナルにすること()
+    public async Task RecoverAsync_BrokenLineEndingWithNewlineMakesJournalUnreadable()
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();

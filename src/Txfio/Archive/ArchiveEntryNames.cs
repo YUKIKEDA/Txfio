@@ -3,7 +3,7 @@ using System.IO.Compression;
 namespace Txfio;
 
 /// <summary>
-/// 展開前に ZIP のエントリ名を検証し、展開先からの相対パスにする
+/// Checks ZIP entry names before extracting, and turns them into paths relative to the destination.
 /// </summary>
 internal static class ArchiveEntryNames
 {
@@ -12,11 +12,11 @@ internal static class ArchiveEntryNames
     private static readonly HashSet<string> _reservedNames = CreateReservedNames();
 
     /// <summary>
-    /// すべてのエントリ名を検証し、展開の予定を返す
+    /// Checks every entry name, and returns the extract plan.
     /// </summary>
-    /// <param name="entries">ZIP のエントリ</param>
-    /// <returns>エントリごとの相対パスと種別</returns>
-    /// <exception cref="InvalidDataException">危険な名前、Windows で使えない名前、重複、またはファイルとディレクトリの同名がある</exception>
+    /// <param name="entries">The ZIP entries.</param>
+    /// <returns>The relative path and kind of each entry.</returns>
+    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a duplicate, or a file and a directory with the same name.</exception>
     internal static IReadOnlyList<ArchiveEntryPlan> Plan(IReadOnlyCollection<ZipArchiveEntry> entries)
     {
         List<ArchiveEntryPlan> plans = new List<ArchiveEntryPlan>(entries.Count);
@@ -32,10 +32,10 @@ internal static class ArchiveEntryNames
     }
 
     /// <summary>
-    /// これから書くエントリ名をすべて検証する
+    /// Checks every entry name that is about to be written.
     /// </summary>
-    /// <param name="fullNames">エントリ名（ディレクトリは末尾が `/`）</param>
-    /// <exception cref="InvalidDataException">危険な名前、Windows で使えない名前、重複、またはファイルとディレクトリの同名がある</exception>
+    /// <param name="fullNames">The entry names (directories end with <c>/</c>).</param>
+    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a duplicate, or a file and a directory with the same name.</exception>
     internal static void Validate(IEnumerable<string> fullNames)
     {
         NameSet names = new NameSet();
@@ -48,12 +48,12 @@ internal static class ArchiveEntryNames
     }
 
     /// <summary>
-    /// エントリ名を区切り、使えない名前なら拒否する
+    /// Splits an entry name, and rejects names that cannot be used.
     /// </summary>
-    /// <param name="fullName">ZIP のエントリ名</param>
-    /// <param name="isDirectory">末尾が区切りのディレクトリエントリなら <see langword="true"/></param>
-    /// <returns>区切った名前</returns>
-    /// <exception cref="InvalidDataException">展開先の外へ出る、または Windows で使えない名前である</exception>
+    /// <param name="fullName">The ZIP entry name.</param>
+    /// <param name="isDirectory">Returns <see langword="true"/> for a directory entry that ends with a separator.</param>
+    /// <returns>The split name.</returns>
+    /// <exception cref="InvalidDataException">The name leaves the destination, or is not valid on Windows.</exception>
     internal static string[] Split(string fullName, out bool isDirectory)
     {
         string normalized = fullName.Replace('\\', '/');
@@ -72,7 +72,7 @@ internal static class ArchiveEntryNames
     {
         if (segment.Length == 0 || segment == "." || segment == "..")
         {
-            throw new InvalidDataException("展開先の外へ出るエントリ名です: " + fullName);
+            throw new InvalidDataException("The entry name leaves the destination: " + fullName);
         }
 
         if (segment.IndexOfAny(_invalidCharacters) >= 0
@@ -80,12 +80,12 @@ internal static class ArchiveEntryNames
             || segment.EndsWith(' ')
             || _reservedNames.Contains(segment.Split('.')[0].TrimEnd(' ').ToUpperInvariant()))
         {
-            throw new InvalidDataException("Windows のパスに使えないエントリ名です: " + fullName);
+            throw new InvalidDataException("The entry name is not valid in a Windows path: " + fullName);
         }
 
         if (segment.EndsWith(".txnew", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException(".txnew で終わるエントリ名は展開できません: " + fullName);
+            throw new InvalidDataException("An entry name ending in .txnew cannot be extracted: " + fullName);
         }
     }
 
@@ -124,7 +124,7 @@ internal static class ArchiveEntryNames
             string key = string.Join('/', segments).ToUpperInvariant();
             if (_files.Contains(key) || _directories.Contains(key))
             {
-                throw new InvalidDataException("ZIP に同じ名前のエントリがあります: " + fullName);
+                throw new InvalidDataException("The ZIP has entries with the same name: " + fullName);
             }
 
             (isDirectory ? _directories : _files).Add(key);
@@ -142,7 +142,7 @@ internal static class ArchiveEntryNames
             {
                 if (_ancestors.Contains(file))
                 {
-                    throw new InvalidDataException("ZIP に同じ名前のファイルとディレクトリがあります: " + file);
+                    throw new InvalidDataException("The ZIP has a file and a directory with the same name: " + file);
                 }
             }
         }

@@ -11,6 +11,7 @@ Human-readable source of truth: [`CONTRIBUTING.md`](CONTRIBUTING.md). Coding det
 | Design | [`docs/design.md`](docs/design.md) | Product/architecture contracts |
 | Roadmap | [`docs/roadmap.md`](docs/roadmap.md) | Phases (provisional) |
 | Conventions | [`docs/conventions.md`](docs/conventions.md) | Layout, ownership, tests |
+| Language | [`docs/language.md`](docs/language.md) | English everywhere; which docs have a Japanese translation |
 | Contributing | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human-readable process |
 | Cursor rules | [`.cursor/rules/`](.cursor/rules/) | Always-applied enforcement |
 
@@ -23,7 +24,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 | Host | Verify |
 | --- | --- |
 | Windows | `./build.ps1` (full gate: restore → format verify → build → test) |
-| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx` then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. **Do not run `./build.ps1`.** Before opening a PR, every test in `Txfio.Tests` must pass except the ones skipped as `Windows 専用` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. This is a pre-PR check, not the merge gate: the merge gate stays `./build.ps1` on Windows |
+| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx` then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. **Do not run `./build.ps1`.** Before opening a PR, every test in `Txfio.Tests` must pass except the ones skipped as `Windows only` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. This is a pre-PR check, not the merge gate: the merge gate stays `./build.ps1` on Windows |
 
 ## Always-apply rules
 
@@ -32,7 +33,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - [`.cursor/rules/pull-requests.mdc`](.cursor/rules/pull-requests.mdc)
 - [`.cursor/rules/engineering.mdc`](.cursor/rules/engineering.mdc)
 - [`.cursor/rules/design-docs.mdc`](.cursor/rules/design-docs.mdc)
-- [`.cursor/rules/japanese-docs.mdc`](.cursor/rules/japanese-docs.mdc)
+- [`.cursor/rules/language.mdc`](.cursor/rules/language.mdc)
 - [`.cursor/rules/similar-findings.mdc`](.cursor/rules/similar-findings.mdc)
 
 ## Working agreements (summary)
@@ -42,13 +43,14 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - Design-changing work needs a **design PR first** (typos/examples may ship with code)
 - A sentence in `docs/design.md` is a past decision, not proof it is still best. Propose the current optimum. If it differs, change the design. Do not add public API only to keep an older shape (`.cursor/rules/design-docs.mdc`)
 - Branch: `type/<issue-number>-<slug>`
-- Commits / PR titles: Conventional Commits (Japanese subject OK)
+- Commits / PR titles: Conventional Commits, in English
 - Local verification gate: `./build.ps1` against **`Txfio.slnx`** on Windows
 - Layout: `src/Txfio` ↔ `tests/Txfio.Tests`, shared helpers in `tests/Txfio.TestSupport`, stress tests in `tests/Txfio.Stress` (explicit `dotnet test` only, not the merge gate), TFM `net8.0`, namespace `Txfio`
 - Private fields: `_camelCase`. Do not prefix members with `this.` unless needed for disambiguation
-- Comments (XML docs / inline) in **Japanese**; no `。` or `.` mid-sentence or at the end. Wording that Gemini or a human already corrected lives in [`.cursor/skills/japanese-writing/SKILL.md`](.cursor/skills/japanese-writing/SKILL.md). Read it before writing comments, and add a new general rule there in the same change when a review finds one
-- New or changed `src/` XML docs: Gemini reviews natural Japanese before the PR is ready (`.cursor/rules/japanese-docs.mdc`)
-- Test methods use natural Japanese names plus 前提 / 手順 / 期待 in remarks
+- **English is the repository language**: code, comments, tests, docs, commits, Issues, PRs (`.cursor/rules/language.mdc`). Chat with the user may be in any language
+- `README.md`, `CONTRIBUTING.md`, `docs/design.md`, `docs/roadmap.md`, `docs/conventions.md`, `docs/language.md` have Japanese translations (`*.ja.md`). English is the source of truth; change both files in the same PR
+- Comments (XML docs / inline) in **English**, full sentences, XML doc elements end with a period. Terminology lives in [`.cursor/skills/english-writing/SKILL.md`](.cursor/skills/english-writing/SKILL.md). Read it before writing comments, and add a new general rule there in the same change when a review finds one
+- Test methods use English `{Target}_{Behavior}` names plus Given / When / Then in remarks
 - When a problem is pointed out, search for the same kind of gap before fixing only the cited spot (`.cursor/rules/similar-findings.mdc`)
 
 ## Current backlog pointer

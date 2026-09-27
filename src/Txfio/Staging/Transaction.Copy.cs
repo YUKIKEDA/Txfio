@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// ワークフォルダ内のコピー
+/// Copies inside the work folder.
 /// </content>
 internal sealed partial class Transaction
 {
@@ -53,12 +53,12 @@ internal sealed partial class Transaction
 
         if (!File.Exists(sourcePath))
         {
-            throw new ExternalConflictException("コピー元が存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("The copy source does not exist: " + sourcePath, sourcePath);
         }
 
         if (WorkPath.IsReparsePoint(sourcePath))
         {
-            throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
+            throw new InvalidOperationException("A symbolic link cannot be copied: " + sourcePath);
         }
     }
 
@@ -66,7 +66,7 @@ internal sealed partial class Transaction
     {
         if (Directory.Exists(destinationPath) || File.Exists(destinationPath))
         {
-            throw new ExternalConflictException("コピー先が既に存在します: " + destinationPath, destinationPath);
+            throw new ExternalConflictException("The copy destination already exists: " + destinationPath, destinationPath);
         }
 
         StagingRules.EnsureParentDirectoryExists(destinationPath);
@@ -78,7 +78,7 @@ internal sealed partial class Transaction
         if ((index >= 0 && _paths.Rows[index].Kind != PendingChangeKind.CreateDirectory)
             || FindMoveToIndex(path) >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
     }
 
@@ -92,12 +92,12 @@ internal sealed partial class Transaction
         await _locks.AcquireAsync(_workFolder, new[] { sourcePath, destinationPath }, _lockAttempt).ConfigureAwait(false);
         if (!File.Exists(sourcePath))
         {
-            throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("The source file to copy does not exist: " + sourcePath, sourcePath);
         }
 
         if (WorkPath.IsReparsePoint(sourcePath))
         {
-            throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
+            throw new InvalidOperationException("A symbolic link cannot be copied: " + sourcePath);
         }
 
         EnsureCopyDestinationFree(destinationPath);
@@ -128,7 +128,7 @@ internal sealed partial class Transaction
             .ConfigureAwait(false);
         if (!Directory.Exists(sourcePath))
         {
-            throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("The source directory to copy does not exist: " + sourcePath, sourcePath);
         }
 
         EnsureCopyDestinationFree(destinationPath);
@@ -193,7 +193,7 @@ internal sealed partial class Transaction
             }
             catch (Exception exception) when (ignoreIoFailures && IoErrors.IsIo(exception))
             {
-                // 失敗したコピーの後始末では、元の例外を残す
+                // Cleanup after a failed copy keeps the original exception.
                 succeeded = false;
             }
         }

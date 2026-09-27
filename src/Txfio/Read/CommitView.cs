@@ -1,16 +1,16 @@
 namespace Txfio;
 
 /// <summary>
-/// パスの表からコミット後の姿を解く（ワークフォルダ全体は走査しない）
+/// Resolves the post-commit view from the path table (the whole work folder is not walked).
 /// </summary>
 internal static class CommitView
 {
     /// <summary>
-    /// 問い合わせたパスのコミット後の姿を返す
+    /// Returns the post-commit view of the queried path.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="targetPath">正規化済みの絶対パス</param>
-    /// <returns>コミット後の姿</returns>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="targetPath">The normalized absolute path.</param>
+    /// <returns>The post-commit view.</returns>
     internal static CommitAppearance Resolve(IReadOnlyList<JournalOperation> operations, string targetPath)
     {
         JournalOperation[] ordered = StagingApplier.InApplyOrder(operations);
@@ -79,7 +79,7 @@ internal static class CommitView
                 continue;
             }
 
-            // ファイルで入れ替えた移動先の配下は、コミット後には無い
+            // Nothing exists under a destination that was swapped for a file after commit.
             if (operation.Overwrite && PathMath.IsUnder(operation.NewPath, current))
             {
                 return CommitAppearance.Absent();

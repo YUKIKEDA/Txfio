@@ -5,29 +5,29 @@ namespace Txfio.Tests.Staging;
 public sealed class StagingRulesTests
 {
     /// <summary>
-    /// 同一ルートならボリューム跨ぎとみなさない
+    /// The same root is not treated as crossing volumes.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 両パスのルートが同じである</para>
-    /// <para>手順: EnsureSameVolume する</para>
-    /// <para>期待: 例外にならない</para>
+    /// <para>Given: both paths have the same root.</para>
+    /// <para>When: EnsureSameVolume is called.</para>
+    /// <para>Then: no exception.</para>
     /// </remarks>
-    [WindowsFact("ドライブ文字のパス")]
-    public void EnsureSameVolume_同じルートなら例外にならないこと()
+    [WindowsFact("Drive-letter paths")]
+    public void EnsureSameVolume_SameRootDoesNotThrow()
     {
         StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"C:\work\sub\b.txt");
     }
 
     /// <summary>
-    /// ルートが違えばボリューム跨ぎとして失敗する
+    /// Different roots fail as crossing volumes.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 両パスのルートが異なる</para>
-    /// <para>手順: EnsureSameVolume する</para>
-    /// <para>期待: UnsupportedOperationException になる</para>
+    /// <para>Given: the roots of the two paths differ.</para>
+    /// <para>When: EnsureSameVolume is called.</para>
+    /// <para>Then: UnsupportedOperationException.</para>
     /// </remarks>
-    [WindowsFact("ドライブ文字のパス")]
-    public void EnsureSameVolume_ルートが違うとUnsupportedOperationExceptionになること()
+    [WindowsFact("Drive-letter paths")]
+    public void EnsureSameVolume_DifferentRootThrowsUnsupportedOperationException()
     {
         Assert.Throws<UnsupportedOperationException>(() => StagingRules.EnsureSameVolume(@"C:\work\a.txt", @"D:\work\b.txt"));
     }

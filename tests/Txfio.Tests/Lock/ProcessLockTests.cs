@@ -5,15 +5,15 @@ namespace Txfio.Tests.Lock;
 public sealed class ProcessLockTests
 {
     /// <summary>
-    /// 別プロセスが同じパスを押さえていると競合する
+    /// It conflicts when another process holds the same path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子プロセスが a.txt を Add してロックを持っている</para>
-    /// <para>手順: 親プロセスが同じパスを Add する</para>
-    /// <para>期待: LockContentionException になり、Path は a.txt の絶対パスである</para>
+    /// <para>Given: a child process has added a.txt and holds the lock.</para>
+    /// <para>When: the parent process adds the same path.</para>
+    /// <para>Then: LockContentionException, and Path is the absolute path of a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_別プロセスが同じパスを押さえるとLockContentionExceptionになること()
+    public async Task AddAsync_SamePathHeldByAnotherProcessThrowsLockContentionException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -30,15 +30,15 @@ public sealed class ProcessLockTests
     }
 
     /// <summary>
-    /// 別プロセスが別パスを押さえていても、こちらのパスはステージングできる
+    /// Even when another process holds a different path, this path can be staged.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子プロセスが b.txt を Add してロックを持っている</para>
-    /// <para>手順: 親プロセスが a.txt を Add する</para>
-    /// <para>期待: 両方ステージングされ、ロックファイルが 3 つある</para>
+    /// <para>Given: a child process has added b.txt and holds the lock.</para>
+    /// <para>When: the parent process adds a.txt.</para>
+    /// <para>Then: both are staged, and there are three lock files.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_別プロセスが別パスを押さえていてもステージングできること()
+    public async Task AddAsync_StagesWhenAnotherProcessHoldsDifferentPath()
     {
         await using TempDirectory work = TempDirectory.Create();
         string ready = System.IO.Path.Combine(work.Path, "ready.signal");
@@ -57,15 +57,15 @@ public sealed class ProcessLockTests
     }
 
     /// <summary>
-    /// Dispose せず終了した別プロセスのロックは、Recover のあとで取り直せる
+    /// The lock of another process that exited without Dispose can be taken again after Recover.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子プロセスが a.txt を Add してロックを持っている</para>
-    /// <para>手順: 子プロセスを Dispose せず終了し、親プロセスが BeginAsync する。RecoverAsync してから同じパスを Add する</para>
-    /// <para>期待: Recover 前の BeginAsync は RecoveryRequiredException で、Recover のあとは Add でき、ロックファイルは残る</para>
+    /// <para>Given: a child process has added a.txt and holds the lock.</para>
+    /// <para>When: the child process exits without Dispose, and the parent process calls BeginAsync. Then RecoverAsync runs and the same path is added.</para>
+    /// <para>Then: BeginAsync before Recover throws RecoveryRequiredException, the Add works after Recover, and the lock file remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_別プロセスがDisposeせず終了したあとは同じパスを押さえられること()
+    public async Task AddAsync_TakesSamePathAfterAnotherProcessExitsWithoutDispose()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");

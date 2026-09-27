@@ -1,66 +1,72 @@
 # Contributing to Txfio
 
-この文書は開発規約の**人間向け正本**です。エージェントのエントリポイントは [`AGENTS.md`](AGENTS.md)、強制ルールは `.cursor/rules/` です。コーディング規約の詳細は [`docs/conventions.md`](docs/conventions.md) です。設計の正本は [`docs/design.md`](docs/design.md)、実装順は [`docs/roadmap.md`](docs/roadmap.md) です。
+English | [日本語](CONTRIBUTING.ja.md)
 
-`.dev/` は下書き専用です。決定事項を `.dev/` に残さないでください。
+This document is the **human-readable source** of the development rules. The agent entry point is [`AGENTS.md`](AGENTS.md), and the enforced rules are in `.cursor/rules/`. Coding conventions are in [`docs/conventions.md`](docs/conventions.md). The source of truth for the design is [`docs/design.md`](docs/design.md), and the implementation order is [`docs/roadmap.md`](docs/roadmap.md). Which language to write in is [`docs/language.md`](docs/language.md).
 
-## 必須ワークフロー
+`.dev/` is for drafts only. Do not leave decisions in `.dev/`.
 
-コードや規約に手を入れる作業は、**必ず次の順**で進める。Issue なし・ブランチなし・PR なしでの実装着手は禁止。
+## Language
+
+The repository language is **English**: code, comments, tests, docs, commit messages, Issues, and PRs. `README`, `CONTRIBUTING`, and the main docs in `docs/` also have a Japanese translation (`*.ja.md`). When you change one of them, change its translation in the same PR. The details are in [`docs/language.md`](docs/language.md).
+
+## Required workflow
+
+Work that touches code or conventions **always** goes in this order. Starting implementation without an Issue, a branch, or a PR is not allowed.
 
 ```text
-（設計判断が残っていれば Grill）→ Issue 作成 →（実装不能なら再 Grill / チェックリスト化）→ ブランチ作成 → 作業 → PR → 人間レビュー → squash マージ → 繰り返し
+(grill if design decisions remain) → create Issue → (grill again / checklist if not implementable) → create branch → work → PR → human review → squash merge → repeat
 ```
 
-1. **Grill**（Issue 作成の前）: API・意味論・フェーズ境界・例外方針など、判断が枝分かれするとき。スキルは [`.cursor/skills/grilling/SKILL.md`](.cursor/skills/grilling/SKILL.md)。受け入れ条件と非ゴールが Issue にあり、`docs/design.md` と矛盾しない作業では省略可
-2. **Issue 作成**（テンプレ必須。空白 Issue は禁止）
-3. 実装可能な粒度に落とせないときだけ **再 Grill**し、本文やチェックリストに書き戻す
-4. **ブランチ作成:** `type/<issue号>-<slug>`（Issue 番号必須）
-5. **作業**（Windows では `./build.ps1`）
-6. **PR 作成**（テンプレ厳守。`## Related` に単独行で `Closes #N`）
-7. **人間レビュー → squash マージ**
-8. 次の Issue へ
+1. **Grill** (before creating the Issue): when decisions branch, such as API, semantics, phase boundaries, or exception policy. The skill is [`.cursor/skills/grilling/SKILL.md`](.cursor/skills/grilling/SKILL.md). It may be skipped when the Issue has acceptance criteria and non-goals and does not conflict with `docs/design.md`
+2. **Create the Issue** (a template is required; blank Issues are not allowed)
+3. **Grill again** only when the work cannot be broken down to an implementable size, and write the answers back into the body or a checklist
+4. **Create the branch:** `type/<issue-number>-<slug>` (the Issue number is required)
+5. **Work** (`./build.ps1` on Windows)
+6. **Open the PR** (follow the template strictly; `Closes #N` on its own line in `## Related`)
+7. **Human review → squash merge**
+8. Next Issue
 
-- エージェントは Issue / ブランチ / PR を飛ばして実装を書き始めてはならない
-- 設計に触れる PR をエージェント単独でマージしない
-- ロードマップの予定項目は、GitHub Issue 化されるまで作業開始シグナルではない
+- Agents must not skip the Issue / branch / PR and start writing the implementation
+- Agents do not merge PRs that touch the design on their own
+- Planned items in the roadmap are not a signal to start work until they become GitHub Issues
 
-### 基盤バッチ例外
+### Foundation batch exception
 
-最初のリポジトリ基盤（Issue #1）だけ、規約・テンプレ・空ライブラリを 1 Issue = 1 PR にまとめてよい。2 本目以降は通常の粒度に戻す。
+Only the first repository foundation (Issue #1) may put conventions, templates, and the empty library into one Issue = one PR. From the second one on, the normal granularity applies.
 
-## 外部貢献者
+## External contributors
 
-Grill はメンテナ側の道具です。外部の人は次に従ってください。
+Grilling is a maintainer's tool. External contributors follow these rules.
 
-- **Issue を先に立ててから PR**する。ウォークイン PR（Issue なし）は受けない
-- 設計に触れる提案は Issue で議論する。マージ判断と必要なら Grill はメンテナが行う
-- 直接 push できるのはメンテナのみ（フォーク + PR）
+- **Open an Issue first, then a PR.** Walk-in PRs (without an Issue) are not accepted
+- Discuss proposals that touch the design in an Issue. The maintainer decides on merging, and grills if needed
+- Only maintainers can push directly (fork + PR)
 
-## Issue と PR
+## Issues and PRs
 
 - **1 Issue ≈ 1 PR**
-- Issue タイプ: **feat** / **bug** / **task** / **design** / **spike**
-- ブランチ名: `type/<issue号>-<slug>`（例: `feat/12-commit-rename`）
-- コミット / PR タイトル: [Conventional Commits](.cursor/rules/conventional-commits.mdc)（type/scope は英語、subject は日本語可）
-- 推奨 scope: `txfio`, `test`, `build`, `ci`, `docs`
-- PR 本文は [`.github/pull_request_template.md`](.github/pull_request_template.md) の見出しを厳密に使用する
-- **Issue の関連付け（必須）:** PR 本文の `## Related` に、GitHub が認識する Closing キーワードを**単独行**で書く（`Closes #12`）。箇条書きや URL だけは関連付けに失敗することがある
+- Issue types: **feat** / **bug** / **task** / **design** / **spike**
+- Branch names: `type/<issue-number>-<slug>` (for example `feat/12-commit-rename`)
+- Commit / PR titles: [Conventional Commits](.cursor/rules/conventional-commits.mdc), in English
+- Recommended scopes: `txfio`, `test`, `build`, `ci`, `docs`
+- The PR body uses the headings of [`.github/pull_request_template.md`](.github/pull_request_template.md) exactly
+- **Linking the Issue (required):** in `## Related` of the PR body, write a closing keyword that GitHub recognizes, **on its own line** (`Closes #12`). A bullet or a bare URL may fail to link
 
-### ラベル
+### Labels
 
 - `type:feat` / `type:bug` / `type:task` / `type:design` / `type:spike`
 - `phase:0` … `phase:3`
 
-## 設計変更プロセス
+## Design change process
 
-- **契約・公開 API・意味論・フェーズ境界・例外方針**に触れる変更は、先に `docs/design.md` を更新する **Design Issue + 設計 PR** をマージしてから実装 Issue を進める
-- **誤字・表現の明確化・例示のみ**なら、実装 PR に設計 diff を含めてよい
-- 「実装してから設計を後追い」は禁止
-- 実装中に設計が必要になったら実装を止め、設計 PR を先に出す
-- 書かれている設計は、その時点の意思決定である。提案するときは、その文を根拠に現状の形を守らない。いまの最適解を提案し、違うなら設計を変える。形を残すためだけに公開 API を足さない
+- A change that touches **contracts, public API, semantics, phase boundaries, or exception policy** first merges a **Design Issue + design PR** that updates `docs/design.md`, then the implementation Issue proceeds
+- **Typos, clearer wording, or examples only** may include the design diff in the implementation PR
+- "Implement first and update the design later" is not allowed
+- If the design needs to change during implementation, stop implementing and open the design PR first
+- The written design is the decision made at that time. When proposing, do not use its sentences as the reason to keep the current shape. Propose the best solution now, and if it differs, change the design. Do not add public API only to keep a shape
 
-## リポジトリ構成
+## Repository layout
 
 ```text
 Txfio.slnx
@@ -71,35 +77,35 @@ tests/Txfio.Stress/
 docs/design.md
 docs/roadmap.md
 docs/conventions.md
+docs/language.md
 ```
 
-- ソリューション形式: **`.slnx` のみ**（`.sln` は使わない・置かない）
-- ターゲット: **`net8.0`**（ランタイム保証は Windows）
-- テスト: **xUnit**
-- コーディング規約の詳細: [`docs/conventions.md`](docs/conventions.md)
-- XML ドキュメントの日本語は、変更 PR で Gemini レビューする（[`.cursor/rules/japanese-docs.mdc`](.cursor/rules/japanese-docs.mdc)）
+- Solution format: **`.slnx` only** (do not use or keep a `.sln`)
+- Target: **`net8.0`** (the run-time guarantee is Windows)
+- Tests: **xUnit**
+- Coding conventions in detail: [`docs/conventions.md`](docs/conventions.md)
 
-## バージョン
+## Versions
 
-SemVer。`0.x` は破壊的変更可。版の正本は git タグ（`v0.1.0` など）。nuget.org への push は GitHub を public にしたあと（Phase 3 完了後）。
+SemVer. `0.x` may have breaking changes. The source of truth for the version is the git tag (`v0.1.0` and so on). Pushing to nuget.org happens after the GitHub repository is public (after Phase 3 is done).
 
-## ローカル検証（正本）
+## Local verification (source of truth)
 
-GitHub Actions の workflow はリポジトリに置くが、**利用制限により CI が動かないことがある**。マージ前のゲートは Windows 上の `./build.ps1` とする。Actions が動き始めたら CI 緑も必須にする（そのとき PR テンプレにチェックを足す）。
+The GitHub Actions workflow is in the repository, but **CI may not run because of usage limits**. The gate before merge is `./build.ps1` on Windows. Once Actions run, a green CI will be required too (the PR template will get a checkbox then).
 
 ```powershell
 ./build.ps1
 ```
 
-想定内容: `dotnet restore` → `dotnet format --verify-no-changes` → `dotnet build` → `dotnet test`。restore / format / build の対象は **`Txfio.slnx`**。`dotnet test` の対象は **`tests/Txfio.Tests/Txfio.Tests.csproj`**。耐久テスト（`tests/Txfio.Stress`）は関門に含めず、`dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。
+It runs `dotnet restore` → `dotnet format --verify-no-changes` → `dotnet build` → `dotnet test`. Restore / format / build target **`Txfio.slnx`**. `dotnet test` targets **`tests/Txfio.Tests/Txfio.Tests.csproj`**. Stress tests (`tests/Txfio.Stress`) are not part of the gate; run them explicitly with `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj`.
 
-このスクリプトは **Windows 専用** です。Linux では `./build.ps1` を実行せず、`Txfio.slnx` に対して restore / format / build を順に回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行する。PR を出す前に、`Windows 専用` として Skip されるもの（`WindowsFact`）以外の単体テストがすべて通っていること。これは PR 前の条件で、マージの関門ではない。マージ前のテスト記録は Windows 側が必要です。テストの実行には .NET 10 SDK に加えて .NET 8 ランタイムが要る。
+This script is **Windows only**. On Linux, do not run `./build.ps1`; run restore / format / build on `Txfio.slnx` in order, then run `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. Before opening a PR, every unit test must pass except those skipped as `Windows only` (`WindowsFact`). This is a condition before the PR, not the merge gate. The test record before merge must come from Windows. Running the tests needs the .NET 8 runtime in addition to the .NET 10 SDK.
 
-クラッシュインジェクションと SMB 検証は、Issue の受け入れ条件に書いたときだけローカル必須とする。
+Crash injection and SMB verification are required locally only when the Issue's acceptance criteria say so.
 
-PR の Verification には、`./build.ps1` を実行した旨を書く。
+In the PR's Verification, state that `./build.ps1` was run.
 
-## マージ
+## Merging
 
-- **squash merge のみ**
-- エージェントが書いた PR のマージ判断は人間が行う
+- **Squash merge only**
+- A human decides whether to merge PRs written by agents

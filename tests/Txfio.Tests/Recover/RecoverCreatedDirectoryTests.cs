@@ -6,15 +6,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverCreatedDirectoryTests
 {
     /// <summary>
-    /// 落ちたディレクトリコピーの先と .txnew を Recover が消す
+    /// Recover deletes the destination and .txnew files of a crashed directory copy.
     /// </summary>
     /// <remarks>
-    /// <para>前提: src/sub/a.txt がある</para>
-    /// <para>手順: dst へ CopyAsync し、ロールバックせず破棄してから RecoverAsync する</para>
-    /// <para>期待: コピー中の未確定操作は Add だけ。RolledBack で dst と .txnew は消え、src は残る</para>
+    /// <para>Given: src/sub/a.txt exists.</para>
+    /// <para>When: CopyAsync to dst, the transaction is discarded without rollback, and RecoverAsync runs.</para>
+    /// <para>Then: during the copy, the pending changes are Adds only. RolledBack, dst and the .txnew files are gone, and src remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_落ちたディレクトリコピーの先とtxnewを消すこと()
+    public async Task RecoverAsync_DeletesDestinationAndTxnewOfCrashedDirectoryCopy()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
@@ -42,15 +42,15 @@ public sealed class RecoverCreatedDirectoryTests
     }
 
     /// <summary>
-    /// ファイルの無いコピー先も、落ちたあとに消える
+    /// A copy destination without files is also deleted after a crash.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空の src がある</para>
-    /// <para>手順: dst へ CopyAsync し、ロールバックせず破棄してから RecoverAsync する</para>
-    /// <para>期待: 未確定操作は無い。RolledBack で dst は消える</para>
+    /// <para>Given: an empty src exists.</para>
+    /// <para>When: CopyAsync to dst, the transaction is discarded without rollback, and RecoverAsync runs.</para>
+    /// <para>Then: there are no pending changes. RolledBack, and dst is gone.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_落ちた空ディレクトリのコピー先を消すこと()
+    public async Task RecoverAsync_DeletesCrashedEmptyDirectoryCopyDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "src"));
@@ -70,15 +70,15 @@ public sealed class RecoverCreatedDirectoryTests
     }
 
     /// <summary>
-    /// ロールバックは再ステージの退避も消す
+    /// Rollback also deletes the restage backup.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 未コミットの Add 残骸と、その .txnew.prev がある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で .txnew.prev は消える</para>
+    /// <para>Given: leftovers of an uncommitted Add, and its .txnew.prev.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, and the .txnew.prev is gone.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ロールバックでtxnewの退避を消すこと()
+    public async Task RecoverAsync_RollbackDeletesTxnewBackup()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -95,15 +95,15 @@ public sealed class RecoverCreatedDirectoryTests
     }
 
     /// <summary>
-    /// Committing の復旧は、作成ディレクトリを消さない
+    /// Recovering a Committing journal does not delete created directories.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Add 残骸と、ジャーナルにだけ載った作成ディレクトリがある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で Add は確定し、作成ディレクトリは残る</para>
+    /// <para>Given: leftovers of a Committing Add, and a created directory that is only in the journal.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, the Add is finished, and the created directory remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ロールフォワードでは作成ディレクトリを残すこと()
+    public async Task RecoverAsync_RollForwardKeepsCreatedDirectories()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(

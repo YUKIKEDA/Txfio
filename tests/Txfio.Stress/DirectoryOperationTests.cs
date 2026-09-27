@@ -3,15 +3,15 @@ namespace Txfio.Tests.Stress;
 public sealed class DirectoryOperationTests
 {
     /// <summary>
-    /// ディレクトリの作成、削除、木の削除、上書きしない Move を含む列が、木のモデルと食い違わない
+    /// A sequence with directory create, delete, tree delete, and Move without overwrite does not disagree with the tree model.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d と e は最初からあり、ほかのディレクトリとファイルはシードで置く。ファイルの長さは空、数バイト、数十 KB、数 MB からシードが選ぶ</para>
-    /// <para>手順: 1 つのトランザクションでシードごとの操作列を打ち、Commit か Dispose する</para>
-    /// <para>期待: 各手はモデルどおりに反映されるか InvalidOperationException か ExternalConflictException で拒否され、途中の ReadAsync と GetEntriesAsync はモデルと一致し、Commit が Succeeded ならディスクはモデル、それ以外は開始前のままで、作ったディレクトリとジャーナルは残らない</para>
+    /// <para>Given: d and e exist from the start, and other directories and files are placed by the seed. File lengths are chosen by the seed from empty, a few bytes, tens of KB, and several MB.</para>
+    /// <para>When: the sequence for each seed runs in one transaction, which then commits or is disposed.</para>
+    /// <para>Then: each step is applied as the model says, or rejected with InvalidOperationException or ExternalConflictException; ReadAsync and GetEntriesAsync along the way match the model; if Commit is Succeeded the disk matches the model, otherwise it is as before the start; and no created directory or journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ディレクトリの操作列_モデルと同じ結果になること()
+    public async Task DirectorySequence_MatchesModel()
     {
         int baseSeed = StressSettings.Seed(1);
         int count = StressSettings.Iterations(40);
@@ -24,22 +24,22 @@ public sealed class DirectoryOperationTests
             {
                 (DirectoryScenario shrunk, string shrunkFailure) = await DirectoryRunner.ShrinkAsync(scenario, failure);
                 Assert.Fail(
-                    $"{StressSettings.SeedVariable}={scenario.Seed} で約束が破れた（縮めた列）{Environment.NewLine}"
+                    $"{StressSettings.SeedVariable}={scenario.Seed} broke a promise (shrunk sequence){Environment.NewLine}"
                     + shrunk.Describe() + Environment.NewLine + shrunkFailure);
             }
         }
     }
 
     /// <summary>
-    /// 同じシードは同じディレクトリ列を作る
+    /// The same seed makes the same directory sequence.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長さの上限は 4 MiB</para>
-    /// <para>手順: 同じシードで列を 2 つ作る</para>
-    /// <para>期待: 開始時の木、操作、終わり方が一致する</para>
+    /// <para>Given: a length limit of 4 MiB.</para>
+    /// <para>When: two sequences are made with the same seed.</para>
+    /// <para>Then: the starting tree, the operations, and how it ends match.</para>
     /// </remarks>
     [Fact]
-    public void Generate_同じシードは同じディレクトリ列を作ること()
+    public void Generate_SameSeedMakesSameDirectorySequence()
     {
         DirectoryScenario left = DirectoryScenario.Generate(7, 10, StressContent.DefaultMaxBytes);
         DirectoryScenario right = DirectoryScenario.Generate(7, 10, StressContent.DefaultMaxBytes);

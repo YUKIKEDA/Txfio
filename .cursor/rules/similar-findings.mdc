@@ -1,13 +1,13 @@
 ---
-description: 指摘された不具合は同種の箇所も同時に調べる
+description: When a problem is pointed out, check for the same kind of gap elsewhere too
 alwaysApply: true
 ---
 
-# 指摘の横展開
+# Fix similar findings together
 
-問題点を指摘されたときは、指摘された箇所だけを直して終わらない。同じ種類の抜けが他にないか、直す前に調べる。
+When a problem is pointed out, do not fix only the cited spot and stop. Before fixing, check whether the same kind of gap exists elsewhere.
 
-- 同じファイルと、同じ契約の呼び出し先、対になる処理を探す
-- 例: `out` の失敗理由を一部の `return` で代入していない、対になるファイルとディレクトリで片方だけ理由が違う、例外の `catch` で理由を付けていない
-- 同種が見つかれば、指摘箇所と一緒に直す
-- 見つからなければ、調べた範囲と、残っていないことを伝える
+- Look in the same file, in callees with the same contract, and in the paired code
+- Examples: an `out` failure reason not assigned on some `return` paths; paired file and directory code where only one side has a different reason; a `catch` that does not set a reason
+- If you find the same kind of problem, fix it together with the cited spot
+- If you find none, say what you checked and that nothing remains

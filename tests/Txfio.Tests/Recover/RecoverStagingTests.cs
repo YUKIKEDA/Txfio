@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverStagingTests
 {
     /// <summary>
-    /// 未コミット残骸の Recover は .txnew を消し、対象は作らない
+    /// Recover of uncommitted leftovers deletes the .txnew and does not create the target.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、Add の journal と .txnew が残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で .txnew も journal も消え、対象は無い</para>
+    /// <para>Given: no live transaction, and an Add journal and its .txnew remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, the .txnew and the journal are deleted, and the target does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_未コミットのtxnewを削除してRolledBackになること()
+    public async Task RecoverAsync_DeletesUncommittedTxnewAndRollsBack()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -30,15 +30,15 @@ public sealed class RecoverStagingTests
     }
 
     /// <summary>
-    /// Committing 残骸の Recover は .txnew を対象へ Move する
+    /// Recover of Committing leftovers moves the .txnew to the target.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、Committing の journal と .txnew が残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で対象に内容があり、.txnew も journal も無い</para>
+    /// <para>Given: no live transaction, and a Committing journal and its .txnew remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, the target has the content, and there is no .txnew and no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_CommittingのtxnewをMoveしてRolledForwardになること()
+    public async Task RecoverAsync_MovesCommittingTxnewAndRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(
@@ -55,15 +55,15 @@ public sealed class RecoverStagingTests
     }
 
     /// <summary>
-    /// Committing の適用に失敗したら ConflictDetected を 1 回だけ返し、ジャーナルと .txnew を消す
+    /// If applying a Committing journal fails, ConflictDetected is returned once, and the journal and .txnew are deleted.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Add 残骸があり、対象パスは外部が既に作っている</para>
-    /// <para>手順: RecoverAsync を 2 回呼ぶ</para>
-    /// <para>期待: 1 回目は ConflictDetected で、journal と .txnew は消え、対象は外部の内容のまま。2 回目は NoPendingTransactions</para>
+    /// <para>Given: leftovers of a Committing Add, and the target path has already been created externally.</para>
+    /// <para>When: RecoverAsync is called twice.</para>
+    /// <para>Then: the first is ConflictDetected, the journal and .txnew are gone, and the target keeps the external content. The second is NoPendingTransactions.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_Committingの適用に失敗するとConflictDetectedになりjournalを消すこと()
+    public async Task RecoverAsync_FailedCommittingApplyIsConflictDetectedAndDeletesJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(

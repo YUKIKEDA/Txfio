@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitMoveTests
 {
     /// <summary>
-    /// Move のコミットはファイルを移動し、ジャーナルを残さない
+    /// Committing a Move moves the file and leaves no journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルを Move している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で先の内容があり、元も journal も無い</para>
+    /// <para>Given: an existing file is moved.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, the destination has the content, and neither the source nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Moveしたファイルが先へ移ること()
+    public async Task CommitAsync_MovedFileGoesToDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -30,15 +30,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Add を付け替えた Move のコミットは移動先だけ作る
+    /// Committing a Move that carried an Add creates only the destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add のあと Move している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で先だけあり、元は無い</para>
+    /// <para>Given: an Add followed by a Move.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, only the destination exists, and the source does not.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_AddのあとMoveすると先だけ作られること()
+    public async Task CommitAsync_MoveAfterAddCreatesOnlyDestination()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -53,15 +53,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Update のあと Move したコミットは先の内容を置き換え、元を消す
+    /// Committing a Move after an Update replaces the destination content and deletes the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update のあと Move している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: 先が新しい内容で、元は無い</para>
+    /// <para>Given: an Update followed by a Move.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: the destination has the new content, and the source does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_UpdateのあとMoveすると先が新しい内容になること()
+    public async Task CommitAsync_MoveAfterUpdateGivesDestinationNewContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -79,15 +79,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// 畳んだ Move のコミットは始点から終点へ移す
+    /// Committing a folded Move moves from the start to the end.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move(A→B) のあと Move(B→C) している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: C に内容があり A も B も無い</para>
+    /// <para>Given: Move(A→B) followed by Move(B→C).</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: C has the content, and neither A nor B exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_畳んだMoveは終点へ移ること()
+    public async Task CommitAsync_FoldedMoveGoesToEnd()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -104,15 +104,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Move のあと移動先を Update したコミットは先の内容を置き換え、元を消す
+    /// Committing an Update of the destination after a Move replaces the destination content and deletes the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move(A→B) のあと B を Update している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: 先が新しい内容で、元は無い</para>
+    /// <para>Given: Move(A→B) followed by an Update of B.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: the destination has the new content, and the source does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_MoveのあとUpdateすると先が新しい内容になること()
+    public async Task CommitAsync_UpdateAfterMoveGivesDestinationNewContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -131,15 +131,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Move のあと移動先を Delete したコミットは元を消し、先は作らない
+    /// Committing a Delete of the destination after a Move deletes the source and does not create the destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move(A→B) のあと B を Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: 元も先も無い</para>
+    /// <para>Given: Move(A→B) followed by a Delete of B.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: neither the source nor the destination exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Moveのあと先をDeleteすると元が消えること()
+    public async Task CommitAsync_DeleteDestinationAfterMoveDeletesSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -156,15 +156,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Move 先を Update したあと Delete したコミットは元を消し、先は作らない
+    /// Committing an Update and then a Delete of the Move destination deletes the source and does not create the destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move(A→B) のあと B を Update し、さらに B を Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: 元も先も無く、journal も無い</para>
+    /// <para>Given: Move(A→B), then an Update of B, then a Delete of B.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: neither the source nor the destination exists, and there is no journal.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Move先をUpdateしたあとDeleteすると元が消えること()
+    public async Task CommitAsync_UpdateThenDeleteMoveDestinationDeletesSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -184,15 +184,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Move のあと移動元を Delete したコミットは元を消し、先は作らない
+    /// Committing a Delete of the source after a Move deletes the source and does not create the destination.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move(A→B) のあと A を Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: 元も先も無い</para>
+    /// <para>Given: Move(A→B) followed by a Delete of A.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: neither the source nor the destination exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Moveのあと元をDeleteすると元が消えること()
+    public async Task CommitAsync_DeleteSourceAfterMoveDeletesSource()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -209,15 +209,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// コミット前に移動元が消えていれば Failed で、ジャーナルは残る
+    /// If the source is gone before commit, the result is Failed and the journal remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move したあと、移動元を外部が消している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で、先は無い</para>
+    /// <para>Given: after a Move, the source is deleted externally.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_移動元が消えているとFailedになること()
+    public async Task CommitAsync_FailsWhenSourceIsGone()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -234,15 +234,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// コミット前に移動先ができていれば Failed で、ジャーナルは残る
+    /// If the destination appears before commit, the result is Failed and the journal remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move したあと、移動先を外部が作っている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で、元は残る</para>
+    /// <para>Given: after a Move, the destination is created externally.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, and the source remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_移動先ができているとFailedになること()
+    public async Task CommitAsync_FailsWhenDestinationAppears()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -260,15 +260,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Update のあと Move した元へ Add しても、移動先の内容は変わらない
+    /// After an Update and a Move, an Add to the source does not change the destination content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: sub/a.txt を Update し、a.txt へ Move している</para>
-    /// <para>手順: sub/a.txt へ AddAsync し、a.txt を ReadAsync して CommitAsync する</para>
-    /// <para>期待: 読めるのは Update の内容で、Succeeded のあと a.txt は Update の内容、sub/a.txt は Add の内容である</para>
+    /// <para>Given: sub/a.txt is updated and moved to a.txt.</para>
+    /// <para>When: AddAsync to sub/a.txt, ReadAsync of a.txt, then CommitAsync.</para>
+    /// <para>Then: the read returns the Update content; after Succeeded, a.txt has the Update content and sub/a.txt has the Add content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_UpdateのあとMoveした元へAddしても移動先の内容が変わらないこと()
+    public async Task CommitAsync_AddToSourceAfterUpdateAndMoveKeepsDestinationContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
@@ -291,15 +291,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Add のあと Move した元へもう一度 Add しても、移動先の内容は変わらない
+    /// After an Add and a Move, another Add to the source does not change the destination content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Add し、b.txt へ Move している</para>
-    /// <para>手順: a.txt へ AddAsync して CommitAsync する</para>
-    /// <para>期待: Succeeded で、b.txt は最初の Add の内容、a.txt は 2 回目の Add の内容である</para>
+    /// <para>Given: a.txt is added and moved to b.txt.</para>
+    /// <para>When: AddAsync to a.txt, then CommitAsync.</para>
+    /// <para>Then: Succeeded, b.txt has the first Add content, and a.txt has the second Add content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_AddのあとMoveした元へAddしても移動先の内容が変わらないこと()
+    public async Task CommitAsync_AddToSourceAfterAddAndMoveKeepsDestinationContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -316,15 +316,15 @@ public sealed class CommitMoveTests
     }
 
     /// <summary>
-    /// Add を Move で出したパスへ別のファイルを Move して Update しても、先に出した内容は変わらない
+    /// Moving another file into a path whose Add was moved out, and updating it, does not change the content moved out earlier.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d.txt を Add して e.txt へ Move し、既存の a.txt を d.txt へ Move している</para>
-    /// <para>手順: d.txt へ UpdateAsync して CommitAsync する</para>
-    /// <para>期待: Succeeded で、e.txt は Add の内容、d.txt は Update の内容で、a.txt は無い</para>
+    /// <para>Given: d.txt is added and moved to e.txt, and the existing a.txt is moved to d.txt.</para>
+    /// <para>When: UpdateAsync on d.txt, then CommitAsync.</para>
+    /// <para>Then: Succeeded, e.txt has the Add content, d.txt has the Update content, and a.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Addを出したパスへMoveしてUpdateしても先に出した内容が変わらないこと()
+    public async Task CommitAsync_MoveIntoPathAndUpdateKeepsContentMovedOutEarlier()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");

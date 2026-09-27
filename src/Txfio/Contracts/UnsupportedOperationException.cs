@@ -1,14 +1,14 @@
 namespace Txfio;
 
 /// <summary>
-/// ライブラリが未対応の操作
+/// An operation the library does not support.
 /// </summary>
 public sealed class UnsupportedOperationException : TxfioException
 {
     /// <summary>
-    /// メッセージを指定して例外を作る
+    /// Initializes a new instance of the <see cref="UnsupportedOperationException"/> class with a message.
     /// </summary>
-    /// <param name="message">例外メッセージ</param>
+    /// <param name="message">The exception message.</param>
     public UnsupportedOperationException(string message)
         : base(message)
     {

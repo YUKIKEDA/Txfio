@@ -6,15 +6,15 @@ namespace Txfio.Tests.Staging;
 public sealed class TransferProgressTests
 {
     /// <summary>
-    /// バッファを超える Add は書き終えたバイト数を順に通知する
+    /// An Add larger than the buffer reports the bytes written in order.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 81921 バイトのシークできる内容がある</para>
-    /// <para>手順: 進捗を渡して AddAsync する</para>
-    /// <para>期待: 81920 のあと 81921 が通知され、どちらも TotalBytes は 81921 で、ステージングファイルもその長さである</para>
+    /// <para>Given: seekable content of 81921 bytes.</para>
+    /// <para>When: AddAsync is called with a progress receiver.</para>
+    /// <para>Then: 81920 and then 81921 are reported, both with TotalBytes 81921, and the staging file has that length.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_バッファごとにBytesCopiedが進むこと()
+    public async Task AddAsync_BytesCopiedAdvancesPerBuffer()
     {
         await using TempDirectory work = TempDirectory.Create();
         byte[] data = new byte[81921];
@@ -33,15 +33,15 @@ public sealed class TransferProgressTests
     }
 
     /// <summary>
-    /// 途中から読んだ Update は残りの長さを通知する
+    /// An Update read from the middle reports the remaining length.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 既存ファイルがあり、内容ストリームの位置は 2 である</para>
-    /// <para>手順: 進捗を渡して UpdateAsync する</para>
-    /// <para>期待: 通知は残り 5 バイトの 1 回で、ステージングされるのはその 5 バイトである</para>
+    /// <para>Given: an existing file, and the content stream is at position 2.</para>
+    /// <para>When: UpdateAsync is called with a progress receiver.</para>
+    /// <para>Then: one report of the remaining 5 bytes, and those 5 bytes are staged.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_開始位置からの残りを通知すること()
+    public async Task UpdateAsync_ReportsRemainingFromStartPosition()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -60,15 +60,15 @@ public sealed class TransferProgressTests
     }
 
     /// <summary>
-    /// 空の内容は 0 バイトを 1 回通知する
+    /// Empty content reports 0 bytes once.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長さ 0 のシークできる内容がある</para>
-    /// <para>手順: 進捗を渡して AddAsync する</para>
-    /// <para>期待: 通知は (0, 0) の 1 回である</para>
+    /// <para>Given: seekable content of length 0.</para>
+    /// <para>When: AddAsync is called with a progress receiver.</para>
+    /// <para>Then: one report of (0, 0).</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_空の内容は0を1回通知すること()
+    public async Task AddAsync_EmptyContentReportsZeroOnce()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using MemoryStream content = new MemoryStream();
@@ -81,15 +81,15 @@ public sealed class TransferProgressTests
     }
 
     /// <summary>
-    /// シークできない内容は残りバイト数を持たない
+    /// Content that cannot seek has no remaining byte count.
     /// </summary>
     /// <remarks>
-    /// <para>前提: シークできない 4 バイトの内容と、空のシークできない内容がある</para>
-    /// <para>手順: それぞれ進捗を渡して AddAsync する</para>
-    /// <para>期待: TotalBytes はどちらも null で、BytesCopied は 4 と 0 である</para>
+    /// <para>Given: 4 bytes of non-seekable content, and empty non-seekable content.</para>
+    /// <para>When: AddAsync is called on each with a progress receiver.</para>
+    /// <para>Then: TotalBytes is null for both, and BytesCopied is 4 and 0.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_シークできないとTotalBytesはnullであること()
+    public async Task AddAsync_NonSeekableHasNullTotalBytes()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -106,15 +106,15 @@ public sealed class TransferProgressTests
     }
 
     /// <summary>
-    /// 長さが位置より小さいときは残りを不明とする
+    /// When the length is smaller than the position, the remainder is unknown.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Length が -1 を返す内容がある</para>
-    /// <para>手順: 進捗を渡して AddAsync する</para>
-    /// <para>期待: TotalBytes は null で、BytesCopied は読めたバイト数である</para>
+    /// <para>Given: content whose Length returns -1.</para>
+    /// <para>When: AddAsync is called with a progress receiver.</para>
+    /// <para>Then: TotalBytes is null, and BytesCopied is the bytes that could be read.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_残りが負ならTotalBytesはnullであること()
+    public async Task AddAsync_NegativeRemainderHasNullTotalBytes()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ShrinkingLengthStream content = new ShrinkingLengthStream(new byte[] { 1, 2, 3 });
@@ -127,15 +127,15 @@ public sealed class TransferProgressTests
     }
 
     /// <summary>
-    /// 再ステージの通知は新しい内容だけである
+    /// A restage reports only the new content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Add している</para>
-    /// <para>手順: 別の内容で UpdateAsync し、進捗を受け取る</para>
-    /// <para>期待: 通知は新しい 5 バイトだけで、退避した古い内容の長さは含まない</para>
+    /// <para>Given: a.txt is added.</para>
+    /// <para>When: UpdateAsync is called with different content, receiving progress.</para>
+    /// <para>Then: only the new 5 bytes are reported, not the length of the old content that was backed up.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_再ステージは新しい内容だけ通知すること()
+    public async Task UpdateAsync_RestageReportsOnlyNewContent()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -150,15 +150,15 @@ public sealed class TransferProgressTests
     }
 
     /// <summary>
-    /// 進捗の Report が例外を投げるとステージングは残らない
+    /// When the progress Report throws, nothing stays staged.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 進捗の Report が例外を投げる</para>
-    /// <para>手順: AddAsync する</para>
-    /// <para>期待: InvalidOperationException になり、未確定操作と .txnew は残らない</para>
+    /// <para>Given: the progress Report throws.</para>
+    /// <para>When: AddAsync is called.</para>
+    /// <para>Then: InvalidOperationException, and neither a pending operation nor a .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_Reportが失敗するとtxnewは残らないこと()
+    public async Task AddAsync_ReportFailureLeavesNoTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using MemoryStream content = new MemoryStream(new byte[] { 1, 2, 3 });
@@ -171,15 +171,15 @@ public sealed class TransferProgressTests
     }
 
     /// <summary>
-    /// コピーの途中で取り消すと、それまでの通知のあと失敗する
+    /// Canceling during the copy fails after the reports so far.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 最初の通知で取り消しトークンが取り消される</para>
-    /// <para>手順: そのトークンで AddAsync する</para>
-    /// <para>期待: 通知が 1 回以上あり、OperationCanceledException になり、.txnew は残らない</para>
+    /// <para>Given: the cancellation token is canceled at the first report.</para>
+    /// <para>When: AddAsync is called with that token.</para>
+    /// <para>Then: at least one report, OperationCanceledException, and no .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_コピー中に取り消すとOperationCanceledExceptionになること()
+    public async Task AddAsync_CancelDuringCopyThrowsOperationCanceledException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using MemoryStream content = new MemoryStream(new byte[] { 1, 2, 3 });

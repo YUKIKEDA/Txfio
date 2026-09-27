@@ -3,13 +3,13 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 1 トランザクション分のコピー、取り込み、書き出しと、開始時の木
+/// A copy, import, and export sequence for one transaction, and the trees at the start.
 /// </summary>
-/// <param name="Seed">この列を作ったシード</param>
-/// <param name="Initial">開始前にワークフォルダへ置く木</param>
-/// <param name="Outside">開始前にワークフォルダの外へ置く木</param>
-/// <param name="Operations">順に打つ操作</param>
-/// <param name="Commit">最後に Commit するなら true、Dispose だけなら false</param>
+/// <param name="Seed">The seed that made this sequence.</param>
+/// <param name="Initial">The tree placed in the work folder before the start.</param>
+/// <param name="Outside">The tree placed outside the work folder before the start.</param>
+/// <param name="Operations">The operations to run in order.</param>
+/// <param name="Commit">true to Commit at the end, false to only Dispose.</param>
 internal sealed record TransferScenario(
     int Seed,
     DirectoryTree Initial,
@@ -20,12 +20,12 @@ internal sealed record TransferScenario(
     private static readonly string[] _destinations = new[] { "b.txt", "c.txt", "d/b.txt", "e/a.txt", "g", "h", "p", "d/g", "e/g", "q.txt" };
 
     /// <summary>
-    /// シードから操作列を作る。ファイルとディレクトリの Copy、Import、Export を、通る手として先に入れる
+    /// Makes a sequence from a seed. Copy, Import, and Export of files and directories go first as steps that pass.
     /// </summary>
-    /// <param name="seed">シード</param>
-    /// <param name="maxOperations">操作数の上限</param>
-    /// <param name="maxBytes">1 ファイルの長さの上限</param>
-    /// <returns>作った操作列</returns>
+    /// <param name="seed">The seed.</param>
+    /// <param name="maxOperations">The maximum number of operations.</param>
+    /// <param name="maxBytes">The maximum length of one file.</param>
+    /// <returns>The sequence that was made.</returns>
     public static TransferScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);
@@ -62,9 +62,9 @@ internal sealed record TransferScenario(
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形の操作列
+    /// A readable form of the sequence for failure reports.
     /// </summary>
-    /// <returns>開始時の木、外、操作、終わり方を並べた文字列</returns>
+    /// <returns>A string with the starting tree, outside, the operations, and how it ends.</returns>
     public string Describe()
     {
         StringBuilder text = new StringBuilder();

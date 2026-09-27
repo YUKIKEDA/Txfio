@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// 操作種別ごとの投影、適用、ロールバックと、適用順の群
+/// Per-kind projection, apply, and rollback of operations, and the apply-order group.
 /// </summary>
 internal abstract class OperationKind
 {
@@ -18,71 +18,71 @@ internal abstract class OperationKind
     private delegate bool ApplyWhenBefore(JournalOperation operation, out OperationFailureReason reason);
 
     /// <summary>
-    /// 適用順の群
+    /// The apply-order group.
     /// </summary>
     internal enum Phase
     {
         /// <summary>
-        /// Add、Move、CreateDirectory
+        /// Add, Move, CreateDirectory.
         /// </summary>
         Nondestructive,
 
         /// <summary>
-        /// Update
+        /// Update.
         /// </summary>
         Update,
 
         /// <summary>
-        /// Delete と DeleteTree（パスが深い順）
+        /// Delete and DeleteTree (deepest path first).
         /// </summary>
         Delete,
     }
 
     /// <summary>
-    /// この実装が担当する種別
+    /// Gets the kind this implementation handles.
     /// </summary>
     internal abstract PendingChangeKind Kind { get; }
 
     /// <summary>
-    /// 適用順の群
+    /// Gets the apply-order group.
     /// </summary>
     internal abstract Phase ApplyPhase { get; }
 
     /// <summary>
-    /// 種別の実装を返す（未知の種別は読み込み時に拒むので、ここに来たら呼び出し側の誤り）
+    /// Returns the implementation of a kind (unknown kinds are rejected when read, so reaching here is the caller's bug).
     /// </summary>
-    /// <param name="kind">操作種別</param>
-    /// <returns>その種別の実装</returns>
-    /// <exception cref="InvalidOperationException">未知の種別</exception>
+    /// <param name="kind">The operation kind.</param>
+    /// <returns>The implementation of that kind.</returns>
+    /// <exception cref="InvalidOperationException">An unknown kind.</exception>
     internal static OperationKind For(PendingChangeKind kind)
     {
         if (!_byKind.TryGetValue(kind, out OperationKind? behavior))
         {
-            throw new InvalidOperationException("未知の操作種別です: " + kind);
+            throw new InvalidOperationException("Unknown operation kind: " + kind);
         }
 
         return behavior;
     }
 
     /// <summary>
-    /// 操作のステージングファイルを消す
+    /// Deletes the operation's staging file.
     /// </summary>
-    /// <param name="operation">対象の操作</param>
+    /// <param name="operation">The target operation.</param>
     internal static void DeleteStaging(JournalOperation operation)
     {
         For(operation.Kind).DeleteOwnStaging(operation);
     }
 
     /// <summary>
-    /// Before / After を投影する
+    /// Projects Before / After.
     /// </summary>
-    /// <param name="operation">対象の操作</param>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="transactionId">ディレクトリ直下の検証に使うトランザクション ID</param>
-    /// <param name="projected">ここまで投影したパスの状態</param>
-    /// <param name="stamped">状態を付けた操作</param>
-    /// <param name="reason">拒んだ理由</param>
-    /// <returns>記録できたら <see langword="true"/></returns>
+    /// <param name="operation">The target operation.</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="transactionId">The transaction ID used to check direct children of directories.</param>
+    /// <param name="projected">The states of the paths projected so far.</param>
+    /// <param name="stamped">The operation with its states.</param>
+    /// <param name="reason">The reason it was rejected.</param>
+    /// <returns><see langword="true"/> if it was recorded.</returns>
     internal abstract bool TryProject(
         JournalOperation operation,
         IReadOnlyList<JournalOperation> operations,
@@ -92,32 +92,32 @@ internal abstract class OperationKind
         out OperationFailureReason reason);
 
     /// <summary>
-    /// Before と一致する操作を適用する（適用済みならステージングファイルを消して成功）
+    /// Applies an operation that matches Before (if already applied, deletes the staging file and succeeds).
     /// </summary>
-    /// <param name="operation">適用する操作</param>
-    /// <param name="changedLater">適用順であとの操作も変えるパスなら <see langword="true"/>（そのパスでは適用済みかどうかを判定しない）</param>
-    /// <param name="reason">飛ばした理由（成功時は使わない）</param>
-    /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
+    /// <param name="operation">The operation to apply.</param>
+    /// <param name="changedLater"><see langword="true"/> if a later operation in apply order also changes the path (that path is not used to decide whether it is applied).</param>
+    /// <param name="reason">The reason it was skipped (unused on success).</param>
+    /// <returns><see langword="true"/> if it was applied, or was already applied.</returns>
     internal abstract bool TryApply(
         JournalOperation operation,
         Func<string, bool> changedLater,
         out OperationFailureReason reason);
 
     /// <summary>
-    /// この操作のステージングファイルを消す
+    /// Deletes this operation's staging file.
     /// </summary>
-    /// <param name="operation">対象の操作</param>
+    /// <param name="operation">The target operation.</param>
     internal virtual void DeleteOwnStaging(JournalOperation operation)
     {
         StagingFile.TryDelete(operation.StagingPath);
     }
 
     /// <summary>
-    /// この操作が作ったディレクトリを中身ごと消す（作っていない種別は <see langword="true"/>）
+    /// Deletes the directory this operation created, with its contents (<see langword="true"/> for kinds that create nothing).
     /// </summary>
-    /// <param name="operation">対象の操作</param>
-    /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに <see langword="false"/> を返す</param>
-    /// <returns>消せたら、または消す対象が無ければ <see langword="true"/>（例外を投げるときは戻らない）</returns>
+    /// <param name="operation">The target operation.</param>
+    /// <param name="ignoreIoFailures">When <see langword="true"/>, returns <see langword="false"/> instead of throwing <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>.</param>
+    /// <returns><see langword="true"/> if it was deleted, or there was nothing to delete (does not return when it throws).</returns>
     internal virtual bool TryDeleteCreatedTree(JournalOperation operation, bool ignoreIoFailures)
     {
         return true;
@@ -185,7 +185,7 @@ internal abstract class OperationKind
         return apply(operation, out reason);
     }
 
-    // 適用済みかどうかは、あとの操作が変えないパスだけで判定する（どのパスもあとで変わるときは全部を見る）
+    // Decide whether it is applied only by paths that later operations do not change (when every path changes later, check them all).
     private static bool MatchesAfter(JournalOperation operation, Func<string, bool> changedLater)
     {
         if (operation.Kind != PendingChangeKind.Move || operation.NewPath is null)
@@ -239,7 +239,7 @@ internal abstract class OperationKind
             return false;
         }
 
-        // 残っている .txnew が Before と一致するなら未適用（Before と After が同じ時刻でも適用する）
+        // A remaining .txnew whose target matches Before is not applied (apply it even when Before and After have the same time).
         if (File.Exists(operation.StagingPath) && Matches(operation, after: false))
         {
             try
@@ -283,7 +283,7 @@ internal abstract class OperationKind
         }
     }
 
-    // Windows では読み取り専用のファイルは置き換えも削除もできないので、適用の前に拒む
+    // On Windows a read-only file can be neither replaced nor deleted, so reject it before apply.
     private static bool IsReadOnlyFile(string path)
     {
         try
@@ -538,8 +538,8 @@ internal abstract class OperationKind
 
         internal override Phase ApplyPhase => Phase.Nondestructive;
 
-        // Move の stagingPath は入れ替えの退避先（.txold）で、退避した元の移動先（利用者のファイルかディレクトリ）である
-        // 後始末で消すと、入れ替えの途中で止まったときに元の移動先が失われるので、消さない
+        // The stagingPath of a Move is the swap backup (.txold), which is the original destination that was moved aside (the user's file or directory).
+        // Deleting it during cleanup would lose the original destination when a swap stopped partway, so do not delete it.
         internal override void DeleteOwnStaging(JournalOperation operation)
         {
         }
@@ -560,7 +560,7 @@ internal abstract class OperationKind
             Func<string, bool> changedLater,
             out OperationFailureReason reason)
         {
-            // .txold への退避を挟む入れ替えは、途中の段階を .txold の有無で見分けるので、Before / After の照合を通さない
+            // A swap through a .txold backup tells the intermediate step from whether .txold exists, so it does not go through the Before / After check.
             if (operation.Overwrite && operation.StagingPath is not null)
             {
                 return TryReplaceWithBackup(operation, out reason);
@@ -599,7 +599,7 @@ internal abstract class OperationKind
                     return false;
                 }
 
-                // 入れ替えは、移動先が無いか、.txold へ退避するときだけ進める（移動先の種類は問わない）
+                // A swap proceeds only when the destination is missing or is moved aside to .txold (the kind of the destination does not matter).
                 if (destBefore.Exists && !(operation.Overwrite && operation.StagingPath is not null))
                 {
                     reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
@@ -618,22 +618,22 @@ internal abstract class OperationKind
                 return false;
             }
 
-            // ファイルの overwrite Move は、移動先がファイルか無いときだけ進める（入れ替えで .txold へ退避するときは種類を問わない）
+            // A file overwrite Move proceeds only when the destination is a file or missing (when a swap moves it aside to .txold, the kind does not matter).
             if (destBefore.Exists && !(operation.Overwrite && (destBefore.IsFile || operation.StagingPath is not null)))
             {
                 reason = operation.Overwrite ? OperationFailureReason.ReplacedByFile : OperationFailureReason.AlreadyExists;
                 return false;
             }
 
-            // 置き換えの Move の移動先の Before は、置き換えられる既存ファイル（無ければ不在）
+            // The Before of the destination of a replacing Move is the existing file being replaced (missing if none).
             projected[operation.Path] = PathState.Absent;
             projected[operation.NewPath] = before;
             stamped = operation.WithOutcome(before, PathState.Absent, destBefore, before);
             return true;
         }
 
-        // 入れ替え: (1) 移動先を .txold へ、(2) 移動元を移動先へ、(3) .txold を消す（落ちたあとは残っている段階から続ける）
-        // 移動元と移動先は、ファイルでもディレクトリでもよい
+        // Swap: (1) the destination to .txold, (2) the source to the destination, (3) delete .txold (after a crash, continue from the step that remains).
+        // The source and destination may be files or directories.
         private static bool TryReplaceWithBackup(JournalOperation operation, out OperationFailureReason reason)
         {
             reason = OperationFailureReason.BeforeAfterMismatch;
@@ -776,7 +776,7 @@ internal abstract class OperationKind
                 return false;
             }
 
-            // 置き換えの Move は、移動先のファイルが Before と一致したことを呼び出し側が確かめている
+            // For a replacing Move, the caller has confirmed that the destination file matches Before.
             if (Directory.Exists(destPath) || (!overwrite && File.Exists(destPath)))
             {
                 reason = OperationFailureReason.AlreadyExists;
@@ -918,7 +918,7 @@ internal abstract class OperationKind
                 return IoErrors.TryDelete(ignoreIoFailures, () => Directory.Delete(operation.Path, recursive: true));
             }
 
-            // 作る前後で落ちたので、このトランザクションが作ったとは言えない（空のときだけ消し、中身があれば残す）
+            // It crashed around the create, so it cannot say this transaction created it (delete only when empty; keep it if it has contents).
             if (Directory.EnumerateFileSystemEntries(operation.Path).Any())
             {
                 return true;

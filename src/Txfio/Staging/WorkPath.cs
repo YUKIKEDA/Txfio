@@ -5,19 +5,19 @@ using System.Text;
 namespace Txfio;
 
 /// <summary>
-/// ワークフォルダ内のパス正規化
+/// Normalizes paths in the work folder.
 /// </summary>
 internal static class WorkPath
 {
     /// <summary>
-    /// パスをワークフォルダ基準の絶対パスに正規化する
+    /// Normalizes a path to an absolute path based on the work folder.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="path">相対または絶対の対象パス</param>
-    /// <returns>正規化した絶対パス</returns>
-    /// <exception cref="ArgumentException">ワークフォルダの外側を指している</exception>
-    /// <exception cref="InvalidOperationException">対象自身、またはワークフォルダ自身を除く祖先がリパースポイントである</exception>
-    /// <exception cref="IOException">存在する要素の長い名前を取れない</exception>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="path">The relative or absolute target path.</param>
+    /// <returns>The normalized absolute path.</returns>
+    /// <exception cref="ArgumentException">The path points outside the work folder.</exception>
+    /// <exception cref="InvalidOperationException">The target itself, or an ancestor other than the work folder itself, is a reparse point.</exception>
+    /// <exception cref="IOException">The long name of an existing component cannot be obtained.</exception>
     internal static string ResolveInWorkFolder(string workFolder, string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -27,7 +27,7 @@ internal static class WorkPath
         string fullPath = ToLongPath(System.IO.Path.GetFullPath(combined));
         if (!IsInsideWorkFolder(workFolder, fullPath))
         {
-            throw new ArgumentException("パスはワークフォルダの内側である必要があります", nameof(path));
+            throw new ArgumentException("The path must be inside the work folder", nameof(path));
         }
 
         ThrowIfReparseInside(workFolder, fullPath);
@@ -35,47 +35,47 @@ internal static class WorkPath
     }
 
     /// <summary>
-    /// パスをワークフォルダの外の絶対パスに正規化する
+    /// Normalizes a path to an absolute path outside the work folder.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="path">絶対パス、または現在ディレクトリ基準の相対パス</param>
-    /// <returns>正規化した絶対パス</returns>
-    /// <exception cref="ArgumentException">ワークフォルダの内側を指している</exception>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="path">An absolute path, or a path relative to the current directory.</param>
+    /// <returns>The normalized absolute path.</returns>
+    /// <exception cref="ArgumentException">The path points inside the work folder.</exception>
     internal static string ResolveOutsideWorkFolder(string workFolder, string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string fullPath = System.IO.Path.GetFullPath(path);
         if (IsInsideWorkFolder(workFolder, fullPath))
         {
-            throw new ArgumentException("パスはワークフォルダの外側である必要があります", nameof(path));
+            throw new ArgumentException("The path must be outside the work folder", nameof(path));
         }
 
         return fullPath;
     }
 
     /// <summary>
-    /// メタデータフォルダそのもの、またはその配下かどうかを判定する
+    /// Returns whether a path is the metadata folder itself or under it.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="fullPath">正規化した絶対パス</param>
-    /// <returns>メタデータフォルダそのもの、またはその配下なら <see langword="true"/></returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="fullPath">The normalized absolute path.</param>
+    /// <returns><see langword="true"/> if it is the metadata folder itself or under it.</returns>
     internal static bool IsInMetadataFolder(string workFolder, string fullPath)
     {
         return PathMath.IsEqualOrUnder(MetadataNames.FolderPath(workFolder), fullPath);
     }
 
     /// <summary>
-    /// 対象ファイルと同じディレクトリの `.txnew` パスを返す
+    /// Returns the <c>.txnew</c> path in the same directory as the target file.
     /// </summary>
-    /// <param name="targetPath">対象ファイルの絶対パス</param>
-    /// <param name="transactionId">トランザクション ID</param>
-    /// <returns>ステージングファイルのパス</returns>
+    /// <param name="targetPath">The absolute path of the target file.</param>
+    /// <param name="transactionId">The transaction ID.</param>
+    /// <returns>The path of the staging file.</returns>
     internal static string StagingFilePath(string targetPath, Guid transactionId)
     {
         string? directory = System.IO.Path.GetDirectoryName(targetPath);
         if (string.IsNullOrEmpty(directory))
         {
-            throw new ArgumentException("対象パスの親ディレクトリを特定できません", nameof(targetPath));
+            throw new ArgumentException("The parent directory of the target path cannot be determined", nameof(targetPath));
         }
 
         string fileName = System.IO.Path.GetFileName(targetPath);
@@ -85,11 +85,11 @@ internal static class WorkPath
     }
 
     /// <summary>
-    /// ディレクトリの入れ替えで、既存の移動先を退避するパスを返す
+    /// Returns the path to move the existing destination aside to, when swapping a directory.
     /// </summary>
-    /// <param name="destPath">入れ替える移動先</param>
-    /// <param name="transactionId">トランザクション ID</param>
-    /// <returns>同じ親の `{名前}.{txid}.txold`</returns>
+    /// <param name="destPath">The destination being swapped.</param>
+    /// <param name="transactionId">The transaction ID.</param>
+    /// <returns><c>{name}.{txid}.txold</c> in the same parent.</returns>
     internal static string ReplacedDirectoryPath(string destPath, Guid transactionId)
     {
         string trimmed = System.IO.Path.TrimEndingDirectorySeparator(destPath);
@@ -97,21 +97,21 @@ internal static class WorkPath
     }
 
     /// <summary>
-    /// 再ステージのあいだ、元の `.txnew` を退避するパスを返す
+    /// Returns the path to back up the original <c>.txnew</c> to during a restage.
     /// </summary>
-    /// <param name="stagingPath">操作の `.txnew`</param>
-    /// <returns>`.txnew` に `.prev` を付けたパス</returns>
+    /// <param name="stagingPath">The operation's <c>.txnew</c>.</param>
+    /// <returns>The <c>.txnew</c> path with <c>.prev</c> appended.</returns>
     internal static string StagingBackupPath(string stagingPath)
     {
         return stagingPath + ".prev";
     }
 
     /// <summary>
-    /// このトランザクションの `.txnew` かどうかを判定する
+    /// Returns whether a path is a <c>.txnew</c> of this transaction.
     /// </summary>
-    /// <param name="path">調べるパス</param>
-    /// <param name="transactionId">トランザクション ID</param>
-    /// <returns>このトランザクションの `.txnew` なら <see langword="true"/></returns>
+    /// <param name="path">The path to check.</param>
+    /// <param name="transactionId">The transaction ID.</param>
+    /// <returns><see langword="true"/> if it is a <c>.txnew</c> of this transaction.</returns>
     internal static bool IsThisTransactionStagingFile(string path, Guid transactionId)
     {
         return path.EndsWith(
@@ -120,11 +120,11 @@ internal static class WorkPath
     }
 
     /// <summary>
-    /// 存在する要素を長い名前へ揃える（まだ無い末尾の名前はそのまま残す）
+    /// Normalizes existing components to their long names (trailing names that do not exist yet are kept as they are).
     /// </summary>
-    /// <param name="fullPath">絶対パス</param>
-    /// <returns>長い名前へ揃えた絶対パス</returns>
-    /// <exception cref="IOException">存在する要素の長い名前を取れない</exception>
+    /// <param name="fullPath">The absolute path.</param>
+    /// <returns>The absolute path with long names.</returns>
+    /// <exception cref="IOException">The long name of an existing component cannot be obtained.</exception>
     internal static string ToLongPath(string fullPath)
     {
         if (!OperatingSystem.IsWindows())
@@ -156,10 +156,10 @@ internal static class WorkPath
     }
 
     /// <summary>
-    /// パスがリパースポイント（シンボリックリンクやジャンクション）かどうかを判定する
+    /// Returns whether a path is a reparse point (a symbolic link or a junction).
     /// </summary>
-    /// <param name="path">調べるパス（存在しなければ例外）</param>
-    /// <returns>リパースポイントなら <see langword="true"/></returns>
+    /// <param name="path">The path to check (throws if it does not exist).</param>
+    /// <returns><see langword="true"/> if it is a reparse point.</returns>
     internal static bool IsReparsePoint(string path)
     {
         return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
@@ -211,7 +211,7 @@ internal static class WorkPath
 
             if (IsExistingReparsePoint(trimmed))
             {
-                throw new InvalidOperationException("リパースポイントは操作できません: " + trimmed);
+                throw new InvalidOperationException("A reparse point cannot be used: " + trimmed);
             }
 
             current = System.IO.Path.GetDirectoryName(trimmed);

@@ -1,39 +1,39 @@
 namespace Txfio;
 
 /// <summary>
-/// テストがトランザクションごとに渡す、失敗と途中停止
+/// Failures and partial stops that a test passes to each transaction.
 /// </summary>
 internal interface IFaultInjector
 {
     /// <summary>
-    /// <c>Committing</c> を書いた直後
+    /// Right after <c>Committing</c> is written.
     /// </summary>
     const string AfterCommitting = "AfterCommitting";
 
     /// <summary>
-    /// 適用順の各操作が成功した直後
+    /// Right after each operation in apply order succeeds.
     /// </summary>
     const string AfterApply = "AfterApply";
 
     /// <summary>
-    /// コミットを途中で止めたあと、またはロールバックを止めたあとは <see langword="true"/>（そのとき Dispose はロールバックしない）
+    /// Gets a value indicating whether a commit or a rollback was stopped partway (then Dispose does not roll back).
     /// </summary>
     bool ShouldSkipRollback { get; }
 
     /// <summary>
-    /// 指定した地点に達していれば、止めたことにして例外を投げる
+    /// Throws as a stop if the given point has been reached.
     /// </summary>
-    /// <param name="name">現在の地点</param>
+    /// <param name="name">The current point.</param>
     void CheckPoint(string name);
 
     /// <summary>
-    /// 次の適用に仕込んだ例外があれば、それを一度だけ投げる
+    /// Throws the exception armed for the next apply, once, if there is one.
     /// </summary>
     void ThrowIfApplyArmed();
 
     /// <summary>
-    /// 次に仕込んだ共有モードで開くとき、仕込んだ例外があればそれを投げる
+    /// Throws the armed exception, if any, when opening with the armed share mode.
     /// </summary>
-    /// <param name="share">開く共有モード</param>
+    /// <param name="share">The share mode to open with.</param>
     void ThrowIfOpenArmed(FileShare share);
 }

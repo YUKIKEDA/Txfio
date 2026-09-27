@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class ExternalChangeTests
 {
     /// <summary>
-    /// 既定では、ステージ後に中身だけ変わった Update を失敗にしない
+    /// By default, an Update whose content alone changed after staging does not fail.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges を渡さず Update したあと、本物の中身が変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で、ファイルはステージした内容</para>
+    /// <para>Given: an Update without detectExternalChanges, after which the real file's content changes.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and the file has the staged content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_既定では中身だけの変更を失敗にしないこと()
+    public async Task CommitAsync_ByDefaultContentOnlyChangeDoesNotFail()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -30,15 +30,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// サイズが違う Update は ExternalChange で Failed になり、本物を戻してからコミットできる
+    /// An Update whose size differs fails with ExternalChange, and can commit after the real file is restored.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true であり、Update したあと、本物のサイズが変わっている</para>
-    /// <para>手順: CommitAsync し、本物の内容と最終更新日時を戻してもう一度 CommitAsync する</para>
-    /// <para>期待: 1 回目は Failed で ExternalChange（本物は外部の内容のまま）、2 回目は Succeeded</para>
+    /// <para>Given: detectExternalChanges is true, and after an Update the real file's size changes.</para>
+    /// <para>When: CommitAsync runs, the real file's content and last write time are restored, and CommitAsync runs again.</para>
+    /// <para>Then: the first is Failed with ExternalChange (the real file keeps the external content), and the second is Succeeded.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_サイズが違うとExternalChangeで失敗し直してからコミットできること()
+    public async Task CommitAsync_DifferentSizeFailsWithExternalChangeAndCommitsAfterFix()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -67,15 +67,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// 最終更新日時だけ違っても ExternalChange になる
+    /// A difference only in the last write time is ExternalChange too.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true であり、Update したあと、本物の最終更新日時だけが進んでいる</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で ExternalChange、本物の内容は変わらない</para>
+    /// <para>Given: detectExternalChanges is true, and after an Update only the real file's last write time moves forward.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with ExternalChange, and the real file's content does not change.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_最終更新日時が違うとExternalChangeになること()
+    public async Task CommitAsync_DifferentLastWriteTimeIsExternalChange()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -92,15 +92,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// 同じサイズで同じ最終更新日時の書き換えは見逃す
+    /// A rewrite with the same size and the same last write time is missed.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true であり、Update したあと、同じ長さの別内容に書き換え、最終更新日時は元に戻してある</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で、ファイルはステージした内容</para>
+    /// <para>Given: detectExternalChanges is true, and after an Update the file is rewritten with different content of the same length, with the last write time restored.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and the file has the staged content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_同じサイズで同じ最終更新日時は見逃すこと()
+    public async Task CommitAsync_MissesSameSizeAndSameLastWriteTime()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -118,15 +118,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// 違った Update はすべて Operations に載る
+    /// Every differing Update is listed in Operations.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 2 ファイルを Update したあと、どちらもサイズが変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で両方 ExternalChange、本物は外部の内容のまま</para>
+    /// <para>Given: after two files are updated, both change size.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, both are ExternalChange, and the real files keep the external content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_違ったUpdateをすべて載せること()
+    public async Task CommitAsync_ListsEveryDifferingUpdate()
     {
         await using TempDirectory work = TempDirectory.Create();
         string first = System.IO.Path.Combine(work.Path, "a.txt");
@@ -149,15 +149,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// ファイルが無いときは Missing のままである
+    /// When the file is missing, it stays Missing.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update したあと、本物が消えている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で Missing</para>
+    /// <para>Given: after an Update, the real file is gone.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with Missing.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ファイルが無いときはMissingのままであること()
+    public async Task CommitAsync_MissingFileStaysMissing()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -173,15 +173,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// ディレクトリに変わったときは ReplacedByFile のままである
+    /// When it has become a directory, it stays ReplacedByFile.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update したあと、本物がディレクトリに変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で ReplacedByFile</para>
+    /// <para>Given: after an Update, the real file becomes a directory.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with ReplacedByFile.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ディレクトリに変わるとReplacedByFileのままであること()
+    public async Task CommitAsync_DirectoryStaysReplacedByFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -198,15 +198,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// Read の記録があるパスは、そのあと本物が変わってからステージしても記録を更新しない
+    /// For a path with a Read record, staging after the real file changes does not update the record.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ReadAsync のあと本物のサイズが変わり、そのあと Update している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で ExternalChange</para>
+    /// <para>Given: after ReadAsync, the real file's size changes, and then it is updated.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with ExternalChange.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Readの記録は再ステージで更新しないこと()
+    public async Task CommitAsync_RestageDoesNotUpdateReadRecord()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -226,15 +226,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// 実ファイルの Read は記録をその時点へ更新する
+    /// A Read of the real file updates the record to that moment.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Read のあと本物のサイズが変わり、もう一度 Read してから Update している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で、ファイルはステージした内容</para>
+    /// <para>Given: after a Read, the real file's size changes, then it is read again and updated.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and the file has the staged content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_実ファイルのReadは記録を更新すること()
+    public async Task CommitAsync_ReadOfRealFileUpdatesRecord()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -258,15 +258,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// このトランザクションのステージングファイル（.txnew）を読んでも、記録は更新しない
+    /// Reading this transaction's staging file (.txnew) does not update the record.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update のあと本物のサイズが変わり、ReadAsync は .txnew を読んでいる</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で ExternalChange、本物は外部の内容のまま</para>
+    /// <para>Given: after an Update, the real file's size changes, and ReadAsync reads the .txnew.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with ExternalChange, and the real file keeps the external content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_txnewのReadは記録を更新しないこと()
+    public async Task CommitAsync_ReadOfTxnewDoesNotUpdateRecord()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -288,15 +288,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// Read していない Update は、再ステージのたびに記録を更新する
+    /// An Update without a Read updates the record at each restage.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update のあと本物のサイズが変わり、もう一度 Update している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で、ファイルは再ステージした内容</para>
+    /// <para>Given: after an Update, the real file's size changes, and it is updated again.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and the file has the restaged content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_Readが無いUpdateは再ステージで記録を更新すること()
+    public async Task CommitAsync_UpdateWithoutReadUpdatesRecordOnRestage()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -313,15 +313,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// Move 先への Update を畳んだあと、元の実ファイルが違えば残った操作を ExternalChange にする
+    /// After folding an Update at a Move destination, the remaining operations are ExternalChange if the original real file differs.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move の先を Update したあと、移動元のサイズが変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で Add と Delete が ExternalChange、移動元は外部の内容のまま、移動先は無い</para>
+    /// <para>Given: after the Move destination is updated, the source's size changes.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, the Add and Delete are ExternalChange, the source keeps the external content, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_畳んだUpdateは元の実ファイルが違うと失敗すること()
+    public async Task CommitAsync_FoldedUpdateFailsWhenOriginalFileDiffers()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -343,15 +343,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// ステージ後に書き換えられたファイルの Delete は ExternalChange で Failed になる
+    /// A Delete of a file rewritten after staging fails with ExternalChange.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true であり、a.txt を Delete したあと、本物のサイズが変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed であり、理由は ExternalChange、a.txt は外部の内容のまま残る</para>
+    /// <para>Given: detectExternalChanges is true, and after a.txt is deleted the real file's size changes.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with the reason ExternalChange, and a.txt remains with the external content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_書き換えられたファイルのDeleteはExternalChangeで失敗すること()
+    public async Task CommitAsync_DeleteOfRewrittenFileFailsWithExternalChange()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -370,15 +370,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// ステージ後に書き換えられたファイルの Move は ExternalChange で Failed になる
+    /// A Move of a file rewritten after staging fails with ExternalChange.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true であり、Move(a.txt→b.txt) したあと、a.txt のサイズが変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed であり、理由は ExternalChange、a.txt は残り、b.txt は無い</para>
+    /// <para>Given: detectExternalChanges is true, and after Move(a.txt→b.txt) the size of a.txt changes.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with the reason ExternalChange, a.txt remains, and b.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_書き換えられたファイルのMoveはExternalChangeで失敗すること()
+    public async Task CommitAsync_MoveOfRewrittenFileFailsWithExternalChange()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -396,15 +396,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// 読んだあとで書き換えられたファイルの Delete も、読んだ時点と比べて Failed になる
+    /// A Delete of a file rewritten after it was read also fails, compared with the time it was read.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true であり、a.txt を読んだあと、本物のサイズが変わってから Delete している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed であり、理由は ExternalChange</para>
+    /// <para>Given: detectExternalChanges is true, a.txt is read, the real file's size changes, and then it is deleted.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with the reason ExternalChange.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_読んだあとで書き換えられたファイルのDeleteも失敗すること()
+    public async Task CommitAsync_DeleteOfFileRewrittenAfterReadFails()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -421,15 +421,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// Move のあと移動先を Delete して元の Delete に畳んでも、元のファイルの記録で比べる
+    /// Even when a Delete of the destination after a Move folds into a Delete of the source, the record of the original file is compared.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges が true であり、Move(a.txt→b.txt) のあと b.txt を Delete し（元の Delete に畳む）、a.txt のサイズが変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed であり、理由は ExternalChange、a.txt は残る</para>
+    /// <para>Given: detectExternalChanges is true, b.txt is deleted after Move(a.txt→b.txt) (folding into a Delete of the source), and the size of a.txt changes.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with the reason ExternalChange, and a.txt remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_畳んだDeleteも元のファイルの記録で比べること()
+    public async Task CommitAsync_FoldedDeleteComparesOriginalFileRecord()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -447,15 +447,15 @@ public sealed class ExternalChangeTests
     }
 
     /// <summary>
-    /// 既定では、ステージ後に書き換えられたファイルの Delete を失敗にしない
+    /// By default, a Delete of a file rewritten after staging does not fail.
     /// </summary>
     /// <remarks>
-    /// <para>前提: detectExternalChanges を渡さず a.txt を Delete したあと、本物のサイズが変わっている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded であり、a.txt は無い</para>
+    /// <para>Given: a.txt is deleted without detectExternalChanges, and then the real file's size changes.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and a.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_既定では書き換えられたファイルのDeleteを失敗にしないこと()
+    public async Task CommitAsync_ByDefaultDeleteOfRewrittenFileDoesNotFail()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");

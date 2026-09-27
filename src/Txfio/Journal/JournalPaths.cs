@@ -3,28 +3,28 @@ using System.Text.Json;
 namespace Txfio;
 
 /// <summary>
-/// ジャーナルに書くパスを、ワークフォルダからの相対パスと絶対パスのあいだで変える
+/// Converts journal paths between paths relative to the work folder and absolute paths.
 /// </summary>
 internal static class JournalPaths
 {
     /// <summary>
-    /// 書く前に、操作のパスと作成ディレクトリをワークフォルダからの相対パスにする
+    /// Before writing, makes the operation paths and created directories relative to the work folder.
     /// </summary>
-    /// <param name="document">絶対パスの文書</param>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>相対パスの文書</returns>
+    /// <param name="document">The document with absolute paths.</param>
+    /// <param name="workFolder">The work folder.</param>
+    /// <returns>The document with relative paths.</returns>
     internal static JournalDocument ToStored(JournalDocument document, string workFolder)
     {
         return Map(document, path => System.IO.Path.GetRelativePath(workFolder, path));
     }
 
     /// <summary>
-    /// 読んだあと、操作のパスと作成ディレクトリをワークフォルダと結合して絶対パスにする（絶対パスはそのまま使う）
+    /// After reading, combines the operation paths and created directories with the work folder to make absolute paths (absolute paths are used as they are).
     /// </summary>
-    /// <param name="document">読んだ文書（null ならそのまま返す）</param>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>絶対パスの文書</returns>
-    /// <exception cref="JsonException">結合した結果がワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下である</exception>
+    /// <param name="document">The document that was read (returned as is when <see langword="null"/>).</param>
+    /// <param name="workFolder">The work folder.</param>
+    /// <returns>The document with absolute paths.</returns>
+    /// <exception cref="JsonException">A combined path is outside the work folder, is the work folder itself, is the metadata folder, or is under the metadata folder.</exception>
     internal static JournalDocument? ToAbsolute(JournalDocument? document, string workFolder)
     {
         if (document is null)
@@ -45,7 +45,7 @@ internal static class JournalPaths
         string fullPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, path));
         if (!PathMath.IsUnder(workFolder, fullPath) || WorkPath.IsInMetadataFolder(workFolder, fullPath))
         {
-            throw new JsonException("ジャーナルのパスがワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下を指しています: " + path);
+            throw new JsonException("A journal path points outside the work folder, to the work folder itself, to the metadata folder, or under the metadata folder: " + path);
         }
 
         return fullPath;

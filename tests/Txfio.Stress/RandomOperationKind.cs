@@ -1,32 +1,32 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ランダム操作列で使う操作の種類
+/// The kinds of operations used in random sequences.
 /// </summary>
 internal enum RandomOperationKind
 {
     /// <summary>
-    /// 無いパスへの AddAsync
+    /// AddAsync on a missing path.
     /// </summary>
     Add,
 
     /// <summary>
-    /// あるパスへの UpdateAsync
+    /// UpdateAsync on an existing path.
     /// </summary>
     Update,
 
     /// <summary>
-    /// あるファイルの DeleteAsync
+    /// DeleteAsync of an existing file.
     /// </summary>
     Delete,
 
     /// <summary>
-    /// あるファイルから無いパスへの MoveAsync
+    /// MoveAsync from an existing file to a missing path.
     /// </summary>
     Move,
 
     /// <summary>
-    /// あるファイルの ReadAsync
+    /// ReadAsync of an existing file.
     /// </summary>
     Read,
 }

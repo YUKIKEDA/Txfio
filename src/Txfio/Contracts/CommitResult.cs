@@ -1,22 +1,22 @@
 namespace Txfio;
 
 /// <summary>
-/// <see cref="CommitReport.Result"/> の値
+/// The value of <see cref="CommitReport.Result"/>.
 /// </summary>
 public enum CommitResult
 {
     /// <summary>
-    /// 全操作が想定どおり適用された
+    /// Every operation was applied as expected.
     /// </summary>
     Succeeded = 0,
 
     /// <summary>
-    /// 一部操作で外部干渉があったが確定はした
+    /// Some operations met external interference, but the commit was finished.
     /// </summary>
     PartialConflict = 1,
 
     /// <summary>
-    /// コミット前検証で失敗し、実体には触れていない
+    /// The check before commit failed, and nothing on disk was touched.
     /// </summary>
     Failed = 2,
 }

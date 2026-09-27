@@ -3,15 +3,15 @@ namespace Txfio.Tests.Stress;
 public sealed class ArchiveOperationTests
 {
     /// <summary>
-    /// ZIP の作成、展開、取り込み、書き出しを含む列が、木のモデルと食い違わない
+    /// A sequence with ZIP create, extract, import, and export does not disagree with the tree model.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d には a.txt と sub/b.txt と空の empty があり、直下に a.txt もある。中身の長さは空から数 MB。外には a.txt と空ディレクトリを入れた in.zip がある</para>
-    /// <para>手順: 1 つのトランザクションでシードごとの操作列を打ち、Commit か Dispose する</para>
-    /// <para>期待: 作った ZIP を読み戻すと入れたファイルと一致し、展開と取り込みのあとのワークフォルダはモデルと一致し、拒否された手はモデルを変えず、Commit が Succeeded ならディスクはモデル、それ以外は開始前のままである。外へ書いた ZIP は破棄のあとにも残る</para>
+    /// <para>Given: d has a.txt, sub/b.txt, and an empty empty, and a.txt is also directly under the work folder. Content lengths range from empty to several MB. Outside there is in.zip with a.txt and an empty directory.</para>
+    /// <para>When: the sequence for each seed runs in one transaction, which then commits or is disposed.</para>
+    /// <para>Then: a created ZIP read back matches the files put in; after extract and import the work folder matches the model; rejected steps do not change the model; if Commit is Succeeded the disk matches the model, otherwise it is as before the start. A ZIP written outside remains after discard.</para>
     /// </remarks>
     [Fact]
-    public async Task ZIPの操作列_モデルと同じ結果になること()
+    public async Task ZipSequence_MatchesModel()
     {
         int baseSeed = StressSettings.Seed(1);
         int count = StressSettings.Iterations(40);
@@ -24,22 +24,22 @@ public sealed class ArchiveOperationTests
             {
                 (ArchiveScenario shrunk, string shrunkFailure) = await ArchiveRunner.ShrinkAsync(scenario, failure);
                 Assert.Fail(
-                    StressSettings.SeedVariable + "=" + scenario.Seed + " で約束が破れた（縮めた列）" + Environment.NewLine
+                    StressSettings.SeedVariable + "=" + scenario.Seed + " broke a promise (shrunk sequence)" + Environment.NewLine
                     + shrunk.Describe() + Environment.NewLine + shrunkFailure);
             }
         }
     }
 
     /// <summary>
-    /// 同じシードは、作成、展開、取り込み、書き出しを含む同じ列を作る
+    /// The same seed makes the same sequence, with create, extract, import, and export.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長さの上限は 4 MiB。d と a.txt は最初からある</para>
-    /// <para>手順: 同じシードで列を 2 つ作り、別のシードも多数見る</para>
-    /// <para>期待: 2 つの列は一致し、どの列にも作成、展開、取り込み、書き出しがある</para>
+    /// <para>Given: a length limit of 4 MiB. d and a.txt exist from the start.</para>
+    /// <para>When: two sequences are made with the same seed, and many other seeds are checked.</para>
+    /// <para>Then: the two sequences match, and every sequence has create, extract, import, and export.</para>
     /// </remarks>
     [Fact]
-    public void Generate_同じシードはZIPの列を作ること()
+    public void Generate_SameSeedMakesSameZipSequence()
     {
         ArchiveScenario left = ArchiveScenario.Generate(7, 10, StressContent.DefaultMaxBytes);
         ArchiveScenario right = ArchiveScenario.Generate(7, 10, StressContent.DefaultMaxBytes);

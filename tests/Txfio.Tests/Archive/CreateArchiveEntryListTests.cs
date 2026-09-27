@@ -6,15 +6,15 @@ namespace Txfio.Tests.Archive;
 public sealed class CreateArchiveEntryListTests
 {
     /// <summary>
-    /// 指定した名前で、リストの順に入れる
+    /// Adds entries under the given names, in list order.
     /// </summary>
     /// <remarks>
-    /// <para>前提: reports/x.csv と a.txt がある</para>
-    /// <para>手順: reports/x.csv を m/09.csv、a.txt を名前の省略で組にして CreateArchiveAsync し、コミットする</para>
-    /// <para>期待: エントリは m/09.csv、a.txt の順で、内容は元のファイルと同じ、未確定操作は Add の 1 件だった</para>
+    /// <para>Given: reports/x.csv and a.txt exist.</para>
+    /// <para>When: CreateArchiveAsync pairs reports/x.csv with m/09.csv and a.txt with no name, then commits.</para>
+    /// <para>Then: the entries are m/09.csv then a.txt, their content matches the source files, and the pending changes were one Add.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_指定した名前でリストの順に入れること()
+    public async Task CreateArchiveAsync_AddsEntriesUnderGivenNamesInListOrder()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "reports"));
@@ -37,15 +37,15 @@ public sealed class CreateArchiveEntryListTests
     }
 
     /// <summary>
-    /// 名前の省略は相対パスになり、ディレクトリの空文字はルートに置く
+    /// An omitted name becomes the relative path, and an empty string for a directory puts it at the root.
     /// </summary>
     /// <remarks>
-    /// <para>前提: reports/x.csv と、a.txt と空の empty を持つ tree がある</para>
-    /// <para>手順: reports/x.csv を省略、tree を省略、tree を空文字、tree を data\sub で組にして CreateArchiveAsync し、コミットする</para>
-    /// <para>期待: reports/x.csv、tree/a.txt、tree/empty/、a.txt、empty/、data/sub/a.txt、data/sub/empty/ が入る</para>
+    /// <para>Given: reports/x.csv, and tree with a.txt and an empty directory empty.</para>
+    /// <para>When: CreateArchiveAsync pairs reports/x.csv with no name, tree with no name, tree with an empty string, and tree with data\sub, then commits.</para>
+    /// <para>Then: the ZIP contains reports/x.csv, tree/a.txt, tree/empty/, a.txt, empty/, data/sub/a.txt, and data/sub/empty/.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_名前の省略は相対パスで空文字はルートになること()
+    public async Task CreateArchiveAsync_OmittedNameIsRelativePathAndEmptyNameIsRoot()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "reports"));
@@ -72,15 +72,15 @@ public sealed class CreateArchiveEntryListTests
     }
 
     /// <summary>
-    /// 同じ元を別の名前で 2 回入れられ、空のリストは空の ZIP になる
+    /// The same source can be added twice under different names, and an empty list makes an empty ZIP.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: a.txt を one.txt と two.txt で組にした ZIP と、空のリストの ZIP を作ってコミットする</para>
-    /// <para>期待: 前者は同じ内容のエントリが 2 つ、後者はエントリが無く、空の方の通知は 0 バイトの 1 回である</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: a ZIP pairing a.txt with one.txt and two.txt, and a ZIP from an empty list, are created and committed.</para>
+    /// <para>Then: the first has two entries with the same content, the second has no entries, and the empty one reports 0 bytes once.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_同じ元の2回と空のリストを許すこと()
+    public async Task CreateArchiveAsync_AllowsSameSourceTwiceAndEmptyList()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "alpha");
@@ -101,13 +101,13 @@ public sealed class CreateArchiveEntryListTests
     }
 
     /// <summary>
-    /// 渡したエントリ名が不正なら、ロックも ZIP も残さずに ArgumentException になる
+    /// An invalid entry name throws ArgumentException, leaving no lock and no ZIP.
     /// </summary>
-    /// <param name="entryName">ファイルに付けるエントリ名</param>
+    /// <param name="entryName">The entry name given to the file.</param>
     /// <remarks>
-    /// <para>前提: a.txt がある</para>
-    /// <para>手順: 不正な名前で CreateArchiveAsync する</para>
-    /// <para>期待: ArgumentException になり、未確定操作、ZIP、.txnew、ロックファイルのどれも無い</para>
+    /// <para>Given: a.txt exists.</para>
+    /// <para>When: CreateArchiveAsync is called with an invalid name.</para>
+    /// <para>Then: it throws ArgumentException, and there are no pending changes, no ZIP, no .txnew, and no lock files.</para>
     /// </remarks>
     [Theory]
     [InlineData("../evil.txt")]
@@ -117,7 +117,7 @@ public sealed class CreateArchiveEntryListTests
     [InlineData("x.txnew")]
     [InlineData("")]
     [InlineData("dir/")]
-    public async Task CreateArchiveAsync_不正なエントリ名はArgumentExceptionになること(string entryName)
+    public async Task CreateArchiveAsync_InvalidEntryNameThrowsArgumentException(string entryName)
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "alpha");
@@ -134,15 +134,15 @@ public sealed class CreateArchiveEntryListTests
     }
 
     /// <summary>
-    /// ディレクトリを歩いてできた名前がぶつかると、ZIP を残さずに ArgumentException になる
+    /// When names produced by walking a directory collide, it throws ArgumentException without leaving a ZIP.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を持つ tree と、b.txt がある</para>
-    /// <para>手順: tree を空文字（ルート）にし、b.txt を A.TXT として同じ ZIP に入れる</para>
-    /// <para>期待: ArgumentException になり、未確定操作も ZIP も .txnew も無い</para>
+    /// <para>Given: tree with a.txt, and b.txt exist.</para>
+    /// <para>When: tree is added with an empty string (the root), and b.txt as A.TXT, in the same ZIP.</para>
+    /// <para>Then: it throws ArgumentException, and there are no pending changes, no ZIP, and no .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_歩いてできた名前の重複はArgumentExceptionになること()
+    public async Task CreateArchiveAsync_DuplicateWalkedNameThrowsArgumentException()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -161,15 +161,15 @@ public sealed class CreateArchiveEntryListTests
     }
 
     /// <summary>
-    /// null、ステージ済みの要素、要素の配下への ZIP は拒否する
+    /// Rejects null, staged elements, and a ZIP under an element.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Update し、b.txt と、ディレクトリ tree がある</para>
-    /// <para>手順: null の列と null の要素、a.txt を含むリスト、tree の配下への ZIP を試す</para>
-    /// <para>期待: 順に ArgumentNullException が 2 つ、InvalidOperationException が 2 つで、未確定操作は Update の 1 件のままである</para>
+    /// <para>Given: a.txt is updated, and b.txt and a directory tree exist.</para>
+    /// <para>When: a null sequence, a null element, a list containing a.txt, and a ZIP under tree are tried.</para>
+    /// <para>Then: in order, two ArgumentNullExceptions and two InvalidOperationExceptions, and the pending changes stay one Update.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateArchiveAsync_nullとステージ済みと配下へのZIPを拒否すること()
+    public async Task CreateArchiveAsync_RejectsNullStagedAndZipUnderElement()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
@@ -196,15 +196,15 @@ public sealed class CreateArchiveEntryListTests
     }
 
     /// <summary>
-    /// 外への ZIP は ReadAsync と同じバイトを指定した名前で入れる
+    /// A ZIP outside contains the same bytes as ReadAsync under the given names.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Update し、b.txt は Add しただけで本物は無い</para>
-    /// <para>手順: a.txt を x.txt、b.txt を名前の省略で組にしてワークフォルダの外へ ExportArchiveAsync する</para>
-    /// <para>期待: ZIP の x.txt は Update の内容、b.txt は Add の内容で、未確定操作は 2 件のままである</para>
+    /// <para>Given: a.txt is updated, and b.txt is only added with no real file.</para>
+    /// <para>When: ExportArchiveAsync pairs a.txt with x.txt and b.txt with no name, outside the work folder.</para>
+    /// <para>Then: x.txt in the ZIP has the Update content, b.txt has the Add content, and the pending changes stay two.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportArchiveAsync_ステージング済みの内容を指定した名前で入れること()
+    public async Task ExportArchiveAsync_AddsStagedContentUnderGivenNames()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -231,15 +231,15 @@ public sealed class CreateArchiveEntryListTests
     }
 
     /// <summary>
-    /// 外への ZIP でも、不正な名前なら ZIP を残さない
+    /// A ZIP outside is not left behind when a name is invalid either.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt がある</para>
-    /// <para>手順: 両方を same.txt として ExportArchiveAsync する</para>
-    /// <para>期待: ArgumentException になり、外に ZIP は無い</para>
+    /// <para>Given: a.txt and b.txt exist.</para>
+    /// <para>When: ExportArchiveAsync adds both as same.txt.</para>
+    /// <para>Then: it throws ArgumentException, and there is no ZIP outside.</para>
     /// </remarks>
     [Fact]
-    public async Task ExportArchiveAsync_名前の重複はArgumentExceptionでZIPを残さないこと()
+    public async Task ExportArchiveAsync_DuplicateNameThrowsArgumentExceptionAndLeavesNoZip()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();

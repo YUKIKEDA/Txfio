@@ -5,15 +5,15 @@ namespace Txfio.Tests.Commit;
 public sealed class CommitReportTests
 {
     /// <summary>
-    /// 成功したコミットは操作一覧を空にする
+    /// A successful commit has an empty list of operations.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダで Add している</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Succeeded で Operations は空</para>
+    /// <para>Given: an Add in an empty work folder.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Succeeded, and Operations is empty.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_成功の操作一覧は空であること()
+    public async Task CommitAsync_SuccessHasEmptyOperations()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -26,15 +26,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// 検証で拒んだ操作はすべて載り、直したあと同じトランザクションでもう一度コミットできる
+    /// Every operation rejected by the check is listed, and after fixing, the same transaction can commit again.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt を Add したあと、どちらも外部で作られている</para>
-    /// <para>手順: CommitAsync し、外部のファイルを消してからもう一度 CommitAsync する</para>
-    /// <para>期待: 1 回目は Failed で両方 AlreadyExists、2 回目は Succeeded で対象は Add の内容</para>
+    /// <para>Given: after a.txt and b.txt are added, both are created externally.</para>
+    /// <para>When: CommitAsync runs, the external files are deleted, and CommitAsync runs again.</para>
+    /// <para>Then: the first is Failed with AlreadyExists for both, the second is Succeeded, and the targets have the Add content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_検証失敗のあと直して同じトランザクションでコミットできること()
+    public async Task CommitAsync_SameTransactionCommitsAfterFixingFailedCheck()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -68,15 +68,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// 移動先が既にある Move は移動先パスと AlreadyExists を載せる
+    /// A Move whose destination already exists lists the destination path and AlreadyExists.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Move したあと、移動先は外部で作られている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で NewPath は移動先、理由は AlreadyExists</para>
+    /// <para>Given: after a Move, the destination is created externally.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, NewPath is the destination, and the reason is AlreadyExists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_移動先が既にあるとNewPathと理由を載せること()
+    public async Task CommitAsync_ExistingDestinationListsNewPathAndReason()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
@@ -98,15 +98,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// ディレクトリがファイルにすり替わると ReplacedByFile になる
+    /// A directory swapped for a file is ReplacedByFile.
     /// </summary>
     /// <remarks>
-    /// <para>前提: CreateDirectory したあと、そのパスをファイルにしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で理由は ReplacedByFile</para>
+    /// <para>Given: after CreateDirectory, the path is made a file.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, and the reason is ReplacedByFile.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ファイルにすり替わるとReplacedByFileになること()
+    public async Task CommitAsync_SwappedForFileIsReplacedByFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
@@ -124,15 +124,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// ファイルがディレクトリにすり替わると ReplacedByFile になる
+    /// A file swapped for a directory is ReplacedByFile.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update、ファイルの Delete、ファイルの Move の対象を、それぞれディレクトリにしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で 3 件とも Rejected、理由は ReplacedByFile</para>
+    /// <para>Given: the targets of an Update, a file Delete, and a file Move are each made a directory.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, all three are Rejected, and the reason is ReplacedByFile.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ディレクトリにすり替わるとReplacedByFileになること()
+    public async Task CommitAsync_SwappedForDirectoryIsReplacedByFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         string updated = System.IO.Path.Combine(work.Path, "a.txt");
@@ -169,15 +169,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// 消したファイルは Missing、直下に予定外の子があるディレクトリは DirectoryPreconditions になる
+    /// A deleted file is Missing, and a directory with an unexpected direct child is DirectoryPreconditions.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update の対象を消し、空ディレクトリの Delete の直下へ外部でファイルが足されている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で、Update は Missing、Delete は DirectoryPreconditions</para>
+    /// <para>Given: the Update target is deleted, and a file is added externally directly under an empty directory scheduled for Delete.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed; the Update is Missing, and the Delete is DirectoryPreconditions.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_対象が無いと直下条件は理由が分かれること()
+    public async Task CommitAsync_MissingTargetAndDirectChildrenHaveDifferentReasons()
     {
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
@@ -204,15 +204,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// Delete の適用が共有違反なら PartialConflict で、同じインスタンスではやり直せない
+    /// A sharing violation when applying a Delete is PartialConflict, and the same instance cannot retry.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Delete したあと、対象ファイルを共有なしで開いたままにしている</para>
-    /// <para>手順: CommitAsync し、同じトランザクションでもう一度 CommitAsync する</para>
-    /// <para>期待: PartialConflict で理由は SharingViolation、2 回目は InvalidOperationException</para>
+    /// <para>Given: after a Delete, the target file is kept open without sharing.</para>
+    /// <para>When: CommitAsync runs, then CommitAsync runs again on the same transaction.</para>
+    /// <para>Then: PartialConflict with the reason SharingViolation; the second call throws InvalidOperationException.</para>
     /// </remarks>
-    [WindowsFact("開いているファイルを消せないのは Windows の挙動（Linux の unlink は開いたハンドルを気にしない）")]
-    public async Task CommitAsync_共有違反はPartialConflictで同じインスタンスではやり直せないこと()
+    [WindowsFact("An open file cannot be deleted on Windows (Linux unlink ignores open handles)")]
+    public async Task CommitAsync_SharingViolationIsPartialConflictAndCannotRetry()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -229,19 +229,19 @@ public sealed class CommitReportTests
         Assert.Equal(OperationFailureReason.SharingViolation, operation.Reason);
         Assert.Equal(PendingChangeKind.Delete, operation.Kind);
         InvalidOperationException again = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CommitAsync());
-        Assert.Equal("このトランザクションは既にコミット済みです", again.Message);
+        Assert.Equal("This transaction has already been committed", again.Message);
     }
 
     /// <summary>
-    /// .txnew をファイルとして読めない検証失敗は IoFailure になる
+    /// A check failure because .txnew cannot be read as a file is IoFailure.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add と Update のあと、両方の .txnew は消されている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed でどちらも Rejected かつ IoFailure、Update の対象は元の内容のまま</para>
+    /// <para>Given: after an Add and an Update, both .txnew files are deleted.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed, both are Rejected with IoFailure, and the Update target keeps its original content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_txnewが読めないとIoFailureになること()
+    public async Task CommitAsync_UnreadableTxnewIsIoFailure()
     {
         await using TempDirectory work = TempDirectory.Create();
         string updated = System.IO.Path.Combine(work.Path, "b.txt");
@@ -272,15 +272,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// 読み取り専用のファイルへの Update は、検証で ReadOnly として拒み、属性を外せばやり直せる
+    /// An Update of a read-only file is rejected by the check as ReadOnly, and can be retried after clearing the attribute.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Update したあと、a.txt を読み取り専用にしている</para>
-    /// <para>手順: CommitAsync し、属性を外してからもう一度 CommitAsync する</para>
-    /// <para>期待: 1 回目は Failed で理由は ReadOnly、扱いは Rejected、a.txt は元の内容であり、2 回目は Succeeded で新しい内容</para>
+    /// <para>Given: after an Update, a.txt is made read-only.</para>
+    /// <para>When: CommitAsync runs, the attribute is cleared, and CommitAsync runs again.</para>
+    /// <para>Then: the first is Failed with the reason ReadOnly and disposition Rejected, and a.txt keeps its original content; the second is Succeeded with the new content.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_読み取り専用へのUpdateはReadOnlyで拒みやり直せること()
+    public async Task CommitAsync_UpdateOfReadOnlyFileIsRejectedAndCanRetry()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -309,15 +309,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// 読み取り専用のファイルの Delete は、検証で ReadOnly として拒む
+    /// A Delete of a read-only file is rejected by the check as ReadOnly.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Delete したあと、a.txt を読み取り専用にしている</para>
-    /// <para>手順: CommitAsync する</para>
-    /// <para>期待: Failed で理由は ReadOnly、a.txt は残る</para>
+    /// <para>Given: after a.txt is deleted, a.txt is made read-only.</para>
+    /// <para>When: CommitAsync runs.</para>
+    /// <para>Then: Failed with the reason ReadOnly, and a.txt remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_読み取り専用のDeleteはReadOnlyで拒むこと()
+    public async Task CommitAsync_DeleteOfReadOnlyFileIsRejected()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -340,15 +340,15 @@ public sealed class CommitReportTests
     }
 
     /// <summary>
-    /// 読み取り専用のファイルでも Move は拒まない
+    /// A Move is not rejected even for a read-only file.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 読み取り専用の a.txt がある</para>
-    /// <para>手順: Move(a.txt→b.txt) して CommitAsync する</para>
-    /// <para>期待: Succeeded で b.txt がある</para>
+    /// <para>Given: a read-only a.txt exists.</para>
+    /// <para>When: Move(a.txt→b.txt), then CommitAsync.</para>
+    /// <para>Then: Succeeded, and b.txt exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_読み取り専用でもMoveは拒まないこと()
+    public async Task CommitAsync_MoveOfReadOnlyFileIsNotRejected()
     {
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");

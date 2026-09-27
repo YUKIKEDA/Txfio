@@ -3,7 +3,7 @@ using System.Text;
 namespace Txfio;
 
 /// <content>
-/// 文字列の読み書き
+/// Text reads and writes.
 /// </content>
 internal sealed partial class Transaction
 {
@@ -193,7 +193,7 @@ internal sealed partial class Transaction
             cancellationToken).ConfigureAwait(false);
     }
 
-    // 姿の中身のあとに書き足す（中身があれば、StreamWriter は位置が 0 でないので BOM を書かない）
+    // Write after the content of the view (when there is content, StreamWriter is not at position 0, so it writes no BOM).
     private async Task AppendEncodedAsync(
         string path,
         Encoding encoding,

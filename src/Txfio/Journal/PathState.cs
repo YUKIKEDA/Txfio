@@ -3,16 +3,16 @@ using System.Text.Json.Serialization;
 namespace Txfio;
 
 /// <summary>
-/// パスの存在と、ファイルならサイズ・最終更新日時
+/// Whether a path exists, and for a file, its size and last write time.
 /// </summary>
 internal sealed class PathState
 {
     /// <summary>
-    /// 存在の有無と、ファイルならサイズ・最終更新日時を指定する
+    /// Initializes a new instance of the <see cref="PathState"/> class with existence, and for a file, the size and last write time.
     /// </summary>
-    /// <param name="exists">パスがあるなら <see langword="true"/></param>
-    /// <param name="length">ファイルのサイズ（ディレクトリと不在は null）</param>
-    /// <param name="lastWriteTimeUtc">ファイルの最終更新日時（UTC、ディレクトリと不在は null）</param>
+    /// <param name="exists"><see langword="true"/> if the path exists.</param>
+    /// <param name="length">The file size (<see langword="null"/> for a directory or a missing path).</param>
+    /// <param name="lastWriteTimeUtc">The last write time of the file (UTC; <see langword="null"/> for a directory or a missing path).</param>
     [JsonConstructor]
     public PathState(bool exists, long? length = null, DateTime? lastWriteTimeUtc = null)
     {
@@ -22,42 +22,42 @@ internal sealed class PathState
     }
 
     /// <summary>
-    /// パスがあるかどうか
+    /// Gets a value indicating whether the path exists.
     /// </summary>
     public bool Exists { get; }
 
     /// <summary>
-    /// ファイルのサイズ（ディレクトリと不在は null）
+    /// Gets the file size (<see langword="null"/> for a directory or a missing path).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? Length { get; }
 
     /// <summary>
-    /// ファイルの最終更新日時（UTC、ディレクトリと不在は null）
+    /// Gets the last write time of the file (UTC; <see langword="null"/> for a directory or a missing path).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTime? LastWriteTimeUtc { get; }
 
     /// <summary>
-    /// パスが無い状態
+    /// Gets the state of a missing path.
     /// </summary>
     internal static PathState Absent { get; } = new PathState(exists: false);
 
     /// <summary>
-    /// ディレクトリとして存在するかどうか
+    /// Gets a value indicating whether it exists as a directory.
     /// </summary>
     internal bool IsDirectory => Exists && Length is null && LastWriteTimeUtc is null;
 
     /// <summary>
-    /// ファイルとして存在するかどうか
+    /// Gets a value indicating whether it exists as a file.
     /// </summary>
     internal bool IsFile => Exists && Length is not null && LastWriteTimeUtc is not null;
 
     /// <summary>
-    /// ディスク上のパスをファイル・ディレクトリ・不在として読む
+    /// Reads a path on disk as a file, a directory, or missing.
     /// </summary>
-    /// <param name="path">対象パス</param>
-    /// <returns>そのパスの状態</returns>
+    /// <param name="path">The target path.</param>
+    /// <returns>The state of that path.</returns>
     internal static PathState Capture(string path)
     {
         if (File.Exists(path))
@@ -75,10 +75,10 @@ internal sealed class PathState
     }
 
     /// <summary>
-    /// ディスク上のパスがこの状態と完全一致するかを判定する
+    /// Returns whether the path on disk matches this state exactly.
     /// </summary>
-    /// <param name="path">対象パス</param>
-    /// <returns>一致すれば <see langword="true"/></returns>
+    /// <param name="path">The target path.</param>
+    /// <returns><see langword="true"/> if it matches.</returns>
     internal bool Matches(string path)
     {
         if (File.Exists(path))
@@ -101,10 +101,10 @@ internal sealed class PathState
     }
 
     /// <summary>
-    /// 別の状態と存在・サイズ・最終更新日時が同じかを判定する
+    /// Returns whether another state has the same existence, size, and last write time.
     /// </summary>
-    /// <param name="other">比較する状態</param>
-    /// <returns>同じなら <see langword="true"/></returns>
+    /// <param name="other">The state to compare.</param>
+    /// <returns><see langword="true"/> if they are the same.</returns>
     internal bool SameAs(PathState other)
     {
         return Exists == other.Exists

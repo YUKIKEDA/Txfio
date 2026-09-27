@@ -5,7 +5,7 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// <see cref="StressWriter"/> を動かす子プロセス
+/// A child process that runs <see cref="StressWriter"/>.
 /// </summary>
 internal sealed class StressProcess : IAsyncDisposable
 {
@@ -21,18 +21,18 @@ internal sealed class StressProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子プロセスを起動する。開始ファイルができるまでは何もしない
+    /// Starts a child process. It does nothing until the start file appears.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="child">子の番号</param>
-    /// <param name="transactions">繰り返すトランザクション数</param>
-    /// <param name="seed">子の乱数のシード</param>
-    /// <param name="files">奪い合うファイルの数</param>
-    /// <param name="retry">ロック競合のあとやり直すなら true</param>
-    /// <param name="logFile">結果を書く記録ファイル</param>
-    /// <param name="startFile">できるまで待つ開始ファイル</param>
-    /// <param name="command">子プロセスの起動コマンド</param>
-    /// <returns>起動した子プロセス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="child">The child number.</param>
+    /// <param name="transactions">The number of transactions to repeat.</param>
+    /// <param name="seed">The seed for the child's random source.</param>
+    /// <param name="files">The number of files competed for.</param>
+    /// <param name="retry">true to retry after lock contention.</param>
+    /// <param name="logFile">The log file that receives the results.</param>
+    /// <param name="startFile">The start file to wait for.</param>
+    /// <param name="command">The start-up command of the child process.</param>
+    /// <returns>The started child process.</returns>
     public static StressProcess Start(
         string workFolder,
         int child,
@@ -87,15 +87,15 @@ internal sealed class StressProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// クラッシュ耐久の子プロセスを起動する。開始ファイルができるまでは何もしない
+    /// Starts a crash stress child process. It does nothing until the start file appears.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="transactions">繰り返すトランザクション数</param>
-    /// <param name="maxBytes">1 ファイルの長さ</param>
-    /// <param name="logFile">成功したトランザクションの番号を書く記録</param>
-    /// <param name="intentFile">これから始めるトランザクションの番号を書くファイル</param>
-    /// <param name="startFile">できるまで待つ開始ファイル</param>
-    /// <returns>起動した子プロセス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="transactions">The number of transactions to repeat.</param>
+    /// <param name="maxBytes">The length of one file.</param>
+    /// <param name="logFile">The log that receives the numbers of transactions that succeeded.</param>
+    /// <param name="intentFile">The file that receives the number of the transaction about to start.</param>
+    /// <param name="startFile">The start file to wait for.</param>
+    /// <returns>The started child process.</returns>
     public static StressProcess StartCrash(
         string workFolder,
         int transactions,
@@ -144,9 +144,9 @@ internal sealed class StressProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子プロセスを殺して終了を待つ
+    /// Kills the child process and waits for it to exit.
     /// </summary>
-    /// <returns>終了したこと</returns>
+    /// <returns>A task that completes when it has exited.</returns>
     public async Task KillAsync()
     {
         if (!_process.HasExited)
@@ -157,10 +157,10 @@ internal sealed class StressProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子プロセスの終了を待ち、終了コード 0 でなければ失敗にする
+    /// Waits for the child process to exit, and fails unless the exit code is 0.
     /// </summary>
-    /// <param name="timeout">待つ上限</param>
-    /// <returns>終了したこと</returns>
+    /// <param name="timeout">How long to wait.</param>
+    /// <returns>A task that completes when it has exited.</returns>
     public async Task WaitForSuccessAsync(TimeSpan timeout)
     {
         using CancellationTokenSource cancel = new CancellationTokenSource(timeout);
@@ -170,12 +170,12 @@ internal sealed class StressProcess : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            Assert.Fail("子プロセスが時間内に終わらなかった: " + ErrorText());
+            Assert.Fail("The child process did not finish in time: " + ErrorText());
         }
 
         if (_process.ExitCode != 0)
         {
-            Assert.Fail($"子プロセスが終了コード {_process.ExitCode} で終わった: " + ErrorText());
+            Assert.Fail($"The child process exited with code {_process.ExitCode}: " + ErrorText());
         }
     }
 

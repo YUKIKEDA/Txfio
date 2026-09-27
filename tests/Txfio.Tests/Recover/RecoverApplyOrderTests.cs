@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverApplyOrderTests
 {
     /// <summary>
-    /// Committing で Update が Move より先に書いてあっても、Recover は Move してから Update する
+    /// Even if a Committing journal lists the Update before the Move, Recover moves first and then updates.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の journal が Update(B) のあと Move(A→B) の順である</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で先は Update の内容、元も journal も .txnew も無い</para>
+    /// <para>Given: a Committing journal with Update(B) followed by Move(A→B).</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, the destination has the Update content, and there is no source, no journal, and no .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_CommittingでUpdateが先でもMoveしてからUpdateすること()
+    public async Task RecoverAsync_MovesBeforeUpdateEvenWhenUpdateIsListedFirst()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverApplyOrderFiles leftover = await LeftoverApplyOrderFiles.WriteUpdateThenMoveAsync(

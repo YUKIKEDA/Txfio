@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverMoveTests
 {
     /// <summary>
-    /// 未コミット Move の Recover は元を残す
+    /// Recover of an uncommitted Move keeps the source.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、Move の journal と元ファイルが残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledBack で journal は消え、元は残り、先は無い</para>
+    /// <para>Given: no live transaction, and a Move journal and its source file remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledBack, the journal is deleted, the source remains, and the destination does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_未コミットのMoveは元を残してRolledBackになること()
+    public async Task RecoverAsync_UncommittedMoveKeepsSourceAndRollsBack()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverMoveFiles leftover = await LeftoverMoveFiles.WriteMoveAsync(
@@ -31,15 +31,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// Committing の Move 残骸は Recover が移動を完了する
+    /// Recover finishes the leftovers of a Committing Move.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 生きたトランザクションは無く、Committing の Move journal と元が残っている</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で先の内容があり、元も journal も無い</para>
+    /// <para>Given: no live transaction, and a Committing Move journal and its source remain.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, the destination has the content, and neither the source nor the journal exists.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_CommittingのMoveを完了してRolledForwardになること()
+    public async Task RecoverAsync_FinishesCommittingMoveAndRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverMoveFiles leftover = await LeftoverMoveFiles.WriteMoveAsync(
@@ -57,15 +57,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// Committing で既に移動済みなら Recover は完了扱いで journal を消す
+    /// If a Committing Move has already been applied, Recover treats it as done and deletes the journal.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Committing の Move journal があり、元は無く先だけある</para>
-    /// <para>手順: RecoverAsync する</para>
-    /// <para>期待: RolledForward で journal は無く先は残る</para>
+    /// <para>Given: a Committing Move journal, with no source and only the destination.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, there is no journal, and the destination remains.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_既に移動済みのCommittingはRolledForwardになること()
+    public async Task RecoverAsync_AlreadyMovedCommittingRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         LeftoverMoveFiles leftover = await LeftoverMoveFiles.WriteMoveAsync(
@@ -84,15 +84,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move を Committing の直後に止めても、Recover が置き換えを終える
+    /// Even if a replacing Move is stopped right after Committing, Recover finishes the replacement.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
-    /// <para>手順: Committing の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward であり、b.txt は旧 a.txt の中身、a.txt は無い</para>
+    /// <para>Given: a.txt and b.txt exist, and Move(a.txt→b.txt, overwrite: true) is scheduled.</para>
+    /// <para>When: the commit is stopped right after Committing and disposed, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, b.txt has the old content of a.txt, and a.txt does not exist.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_置き換えのMoveを完了すること()
+    public async Task RecoverAsync_FinishesReplacingMove()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
@@ -112,15 +112,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// 置き換えの Move を適用し終えてから落ちても、Recover は RolledForward になる
+    /// Even if a crash happens after a replacing Move is applied, Recover is RolledForward.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と b.txt があり、Move(a.txt→b.txt, overwrite: true) を予約した</para>
-    /// <para>手順: 適用の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward であり、飛ばした操作は無く、b.txt は旧 a.txt の中身</para>
+    /// <para>Given: a.txt and b.txt exist, and Move(a.txt→b.txt, overwrite: true) is scheduled.</para>
+    /// <para>When: the commit is stopped right after apply and disposed, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, no operation is skipped, and b.txt has the old content of a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_適用済みの置き換えのMoveはRolledForwardになること()
+    public async Task RecoverAsync_AppliedReplacingMoveRollsForward()
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "new");
@@ -140,15 +140,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// ディレクトリの入れ替えを Committing の直後に止めても、Recover が入れ替えを終える
+    /// Even if a directory swap is stopped right after Committing, Recover finishes the swap.
     /// </summary>
     /// <remarks>
-    /// <para>前提: site/old.txt と build/new.txt があり、Move(build→site, overwrite: true) を予約した</para>
-    /// <para>手順: Committing の直後に止めて Dispose し、RecoverAsync する</para>
-    /// <para>期待: RolledForward であり、site には new.txt だけがあり、.txold は無い</para>
+    /// <para>Given: site/old.txt and build/new.txt exist, and Move(build→site, overwrite: true) is scheduled.</para>
+    /// <para>When: the commit is stopped right after Committing and disposed, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, site has only new.txt, and there is no .txold.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ディレクトリの入れ替えを完了すること()
+    public async Task RecoverAsync_FinishesDirectorySwap()
     {
         await using TempDirectory work = TempDirectory.Create();
         string site = System.IO.Path.Combine(work.Path, "site");
@@ -170,15 +170,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// 移動先を .txold へ退けたところで落ちても、Recover は続きから入れ替える
+    /// Even if a crash happens right after the destination is moved aside to .txold, Recover continues the swap.
     /// </summary>
     /// <remarks>
-    /// <para>前提: site/old.txt と build/new.txt があり、Move(build→site, overwrite: true) を Committing の直後に止めた</para>
-    /// <para>手順: site を site.{txid}.txold へ手で移してから RecoverAsync する</para>
-    /// <para>期待: RolledForward であり、site には new.txt だけがあり、build も .txold も無い</para>
+    /// <para>Given: site/old.txt and build/new.txt exist, and Move(build→site, overwrite: true) is stopped right after Committing.</para>
+    /// <para>When: site is moved to site.{txid}.txold by hand, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, site has only new.txt, and neither build nor .txold exists.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_退避のあとで落ちた入れ替えを続けること()
+    public async Task RecoverAsync_ContinuesSwapThatCrashedAfterBackup()
     {
         await using TempDirectory work = TempDirectory.Create();
         string site = System.IO.Path.Combine(work.Path, "site");
@@ -205,15 +205,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// 入れ替えを手で済ませたあとの Recover は、移動元配下の Add も済んだとみなし RolledForward になる
+    /// Recover after the swap was done by hand treats the Adds under the source as done too, and is RolledForward.
     /// </summary>
     /// <remarks>
-    /// <para>前提: site/old.txt と、外の incoming/a.txt があり、incoming を site.new へ Import し、Move(site.new→site, overwrite: true) を予約した</para>
-    /// <para>手順: 最初の適用（Add）の直後に止め、入れ替えを手で済ませてから RecoverAsync する</para>
-    /// <para>期待: RolledForward であり、飛ばした操作は無く、site には a.txt だけがある</para>
+    /// <para>Given: site/old.txt and an external incoming/a.txt exist, incoming is imported to site.new, and Move(site.new→site, overwrite: true) is scheduled.</para>
+    /// <para>When: the commit is stopped right after the first apply (the Add), the swap is done by hand, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, no operation is skipped, and site has only a.txt.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_入れ替え済みなら移動元の配下のAddも済んだとみなすこと()
+    public async Task RecoverAsync_TreatsAddsUnderSourceAsDoneWhenSwapIsDone()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
@@ -243,15 +243,15 @@ public sealed class RecoverMoveTests
     }
 
     /// <summary>
-    /// ディレクトリをファイルで入れ替える途中、移動先を .txold へ退避したあとで落ちても、Recover が続きから入れ替える
+    /// Even if a crash happens while a file swaps out a directory, right after the destination is moved aside to .txold, Recover continues the swap.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt と、子を持つディレクトリ d があり、Move(a.txt→d, overwrite: true) を Committing の直後に止めた</para>
-    /// <para>手順: d を d.{txid}.txold へ手で移してから RecoverAsync する</para>
-    /// <para>期待: RolledForward であり、d は a.txt の中身のファイルになり、.txold は無い</para>
+    /// <para>Given: a.txt and a directory d with children exist, and Move(a.txt→d, overwrite: true) is stopped right after Committing.</para>
+    /// <para>When: d is moved to d.{txid}.txold by hand, and RecoverAsync runs.</para>
+    /// <para>Then: RolledForward, d becomes a file with the content of a.txt, and there is no .txold.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_ディレクトリをファイルで入れ替える途中から続けること()
+    public async Task RecoverAsync_ContinuesFileSwappingOutDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "d");

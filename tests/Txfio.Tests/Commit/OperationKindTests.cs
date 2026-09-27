@@ -3,15 +3,15 @@ namespace Txfio.Tests.Commit;
 public sealed class OperationKindTests
 {
     /// <summary>
-    /// すべての操作種別に実装があり、未知の種別は黙って飛ばさず例外を投げる
+    /// Every operation kind has an implementation, and an unknown kind throws instead of being skipped silently.
     /// </summary>
     /// <remarks>
-    /// <para>前提: PendingChangeKind の定義済みの値と、定義に無い値 99</para>
-    /// <para>手順: それぞれで OperationKind.For を呼ぶ</para>
-    /// <para>期待: 定義済みの値はその種別の実装を返し、99 は InvalidOperationException を投げる</para>
+    /// <para>Given: the defined values of PendingChangeKind, and an undefined value 99.</para>
+    /// <para>When: OperationKind.For is called with each.</para>
+    /// <para>Then: defined values return the implementation for that kind, and 99 throws InvalidOperationException.</para>
     /// </remarks>
     [Fact]
-    public void For_定義済みは実装を返し未知の種別は例外を投げること()
+    public void For_ReturnsImplementationForDefinedKindsAndThrowsForUnknown()
     {
         foreach (PendingChangeKind kind in Enum.GetValues<PendingChangeKind>())
         {

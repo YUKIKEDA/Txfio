@@ -3,9 +3,9 @@ using System.IO.Compression;
 namespace Txfio;
 
 /// <summary>
-/// 検証済みのエントリ 1 つの展開予定
+/// The plan to extract one checked entry.
 /// </summary>
-/// <param name="Entry">ZIP のエントリ</param>
-/// <param name="RelativePath">展開先からの相対パス</param>
-/// <param name="IsDirectory">ディレクトリエントリなら <see langword="true"/></param>
+/// <param name="Entry">The ZIP entry.</param>
+/// <param name="RelativePath">The path relative to the destination.</param>
+/// <param name="IsDirectory"><see langword="true"/> for a directory entry.</param>
 internal sealed record ArchiveEntryPlan(ZipArchiveEntry Entry, string RelativePath, bool IsDirectory);

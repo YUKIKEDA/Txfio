@@ -5,15 +5,15 @@ namespace Txfio.Tests.Staging;
 public sealed class AddUpdateTests
 {
     /// <summary>
-    /// Add すると対象と同じ場所に .txnew ができ、対象パスはまだ無い
+    /// An Add creates a .txnew next to the target, and the target path does not exist yet.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 空のワークフォルダがある</para>
-    /// <para>手順: AddAsync する</para>
-    /// <para>期待: pending は Add 1 件で、.txnew があり対象ファイルは無い</para>
+    /// <para>Given: an empty work folder.</para>
+    /// <para>When: AddAsync is called.</para>
+    /// <para>Then: one pending Add, the .txnew exists, and the target file does not.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_コミット前は対象パスを作らずtxnewだけがあること()
+    public async Task AddAsync_OnlyTxnewExistsBeforeCommit()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -31,15 +31,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 未コミット Dispose は .txnew を消し、対象パスは作らない
+    /// Dispose without commit deletes the .txnew and does not create the target path.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add した直後である</para>
-    /// <para>手順: Commit せず Dispose する</para>
-    /// <para>期待: 対象も .txnew も残らない</para>
+    /// <para>Given: right after an Add.</para>
+    /// <para>When: the transaction is disposed without Commit.</para>
+    /// <para>Then: neither the target nor the .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_未コミットDisposeでtxnewが消えること()
+    public async Task AddAsync_DisposeWithoutCommitDeletesTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -54,15 +54,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 既存ファイルへの Add はその場で失敗する
+    /// An Add to an existing file fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスにファイルがある</para>
-    /// <para>手順: AddAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は対象で、.txnew は無い</para>
+    /// <para>Given: a file exists at the target path.</para>
+    /// <para>When: AddAsync is called.</para>
+    /// <para>Then: ExternalConflictException, Path is the target, and there is no .txnew.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_既存ファイルだとExternalConflictExceptionになること()
+    public async Task AddAsync_ExistingFileThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -76,15 +76,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 既存ディレクトリへの Add はその場で失敗する
+    /// An Add to an existing directory fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスに空ディレクトリがある</para>
-    /// <para>手順: AddAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は対象で、.txnew も操作も無く、ディレクトリは残る</para>
+    /// <para>Given: an empty directory exists at the target path.</para>
+    /// <para>When: AddAsync is called.</para>
+    /// <para>Then: ExternalConflictException, Path is the target, there is no .txnew and no operation, and the directory remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    public async Task AddAsync_ExistingDirectoryThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "d");
@@ -99,15 +99,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 既存ディレクトリへの Update はその場で失敗する
+    /// An Update of an existing directory fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスに空ディレクトリがある</para>
-    /// <para>手順: UpdateAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は対象で、.txnew も操作も無い</para>
+    /// <para>Given: an empty directory exists at the target path.</para>
+    /// <para>When: UpdateAsync is called.</para>
+    /// <para>Then: ExternalConflictException, Path is the target, and there is no .txnew and no operation.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_既存ディレクトリだとExternalConflictExceptionになること()
+    public async Task UpdateAsync_ExistingDirectoryThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "d");
@@ -121,15 +121,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 無いファイルへの Update はその場で失敗する
+    /// An Update of a missing file fails immediately.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 対象パスにファイルが無い</para>
-    /// <para>手順: UpdateAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は対象である</para>
+    /// <para>Given: no file exists at the target path.</para>
+    /// <para>When: UpdateAsync is called.</para>
+    /// <para>Then: ExternalConflictException, and Path is the target.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_無いファイルだとExternalConflictExceptionになること()
+    public async Task UpdateAsync_MissingFileThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -139,15 +139,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 親ディレクトリが無いパスは自動作成しない
+    /// A path whose parent directory does not exist is not created automatically.
     /// </summary>
     /// <remarks>
-    /// <para>前提: サブフォルダが無い</para>
-    /// <para>手順: その配下へ AddAsync する</para>
-    /// <para>期待: ExternalConflictException になり、Path は親ディレクトリである</para>
+    /// <para>Given: a subfolder does not exist.</para>
+    /// <para>When: AddAsync is called on a path under it.</para>
+    /// <para>Then: ExternalConflictException, and Path is the parent directory.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_親ディレクトリが無いとExternalConflictExceptionになること()
+    public async Task AddAsync_MissingParentThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -157,15 +157,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// ワークフォルダの外は拒否する
+    /// A path outside the work folder is rejected.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ワークフォルダの外にパスがある</para>
-    /// <para>手順: その絶対パスへ AddAsync する</para>
-    /// <para>期待: ArgumentException になる</para>
+    /// <para>Given: a path outside the work folder.</para>
+    /// <para>When: AddAsync is called with that absolute path.</para>
+    /// <para>Then: ArgumentException.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_ワークフォルダの外だとArgumentExceptionになること()
+    public async Task AddAsync_OutsideWorkFolderThrowsArgumentException()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory other = TempDirectory.Create();
@@ -176,15 +176,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 同一パスへの再 Add は .txnew を上書きし、pending は 1 件のまま
+    /// Adding the same path again overwrites the .txnew, and the pending changes stay one.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 同じパスを既に Add している</para>
-    /// <para>手順: 別内容で再度 AddAsync する</para>
-    /// <para>期待: pending は 1 件で、.txnew の内容は後者、.prev は残らない</para>
+    /// <para>Given: the same path has already been added.</para>
+    /// <para>When: AddAsync is called again with different content.</para>
+    /// <para>Then: one pending change, the .txnew has the later content, and no .prev remains.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_同一パスの再ステージは上書きして1件のままであること()
+    public async Task AddAsync_RestageOfSamePathOverwritesAndStaysOne()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -201,15 +201,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// Add したパスへの Update は Add のまま内容だけ入れ替える
+    /// An Update of an added path keeps the Add and replaces only the content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 同じパスを Add している（対象パスはまだ無い）</para>
-    /// <para>手順: UpdateAsync する</para>
-    /// <para>期待: pending の種類は Add のままで、.txnew は新しい内容</para>
+    /// <para>Given: the same path has been added (the target path does not exist yet).</para>
+    /// <para>When: UpdateAsync is called.</para>
+    /// <para>Then: the pending kind stays Add, and the .txnew has the new content.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_未コミットのAddに対してはAddのまま上書きすること()
+    public async Task UpdateAsync_OverwritesUncommittedAddAndStaysAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -226,15 +226,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 呼び出し側の Stream は Dispose しない
+    /// The caller's Stream is not disposed.
     /// </summary>
     /// <remarks>
-    /// <para>前提: MemoryStream を渡す</para>
-    /// <para>手順: AddAsync する</para>
-    /// <para>期待: 呼び出し後も Stream を読める</para>
+    /// <para>Given: a MemoryStream is passed.</para>
+    /// <para>When: AddAsync is called.</para>
+    /// <para>Then: the Stream can still be read after the call.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_呼び出し側のStreamをDisposeしないこと()
+    public async Task AddAsync_DoesNotDisposeCallerStream()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -245,15 +245,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 同一パスの再ステージで journal 書き込みに失敗しても .txnew は元の内容のまま
+    /// Even if writing the journal fails during a restage of the same path, the .txnew keeps its original content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: Add したあと、journal を排他ロックしている</para>
-    /// <para>手順: 同じパスへ再度 AddAsync する</para>
-    /// <para>期待: IOException になり、pending は Add 1 件で、.txnew の内容は前者</para>
+    /// <para>Given: after an Add, the journal is locked exclusively.</para>
+    /// <para>When: AddAsync is called again on the same path.</para>
+    /// <para>Then: IOException, one pending Add, and the .txnew has the earlier content.</para>
     /// </remarks>
     [Fact]
-    public async Task AddAsync_再ステージでjournal書き込みに失敗するとtxnewは元の内容のままであること()
+    public async Task AddAsync_RestageJournalWriteFailureKeepsOriginalTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         string workPath = work.Path;
@@ -280,15 +280,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 再ステージの書き込みに失敗すると .txnew は元の内容に戻る
+    /// If writing a restage fails, the .txnew goes back to its original content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Add している</para>
-    /// <para>手順: 進捗が例外を投げる Update で同じパスを再ステージする</para>
-    /// <para>期待: InvalidOperationException になり、.txnew の内容は Add のままで、.prev は残らない</para>
+    /// <para>Given: a.txt is added.</para>
+    /// <para>When: the same path is restaged with an Update whose progress throws.</para>
+    /// <para>Then: InvalidOperationException, the .txnew keeps the Add content, and no .prev remains.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_再ステージの書き込みに失敗するとtxnewは元の内容に戻ること()
+    public async Task UpdateAsync_RestageWriteFailureRestoresTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -306,15 +306,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 再ステージを取り消すと .txnew は元の内容に戻る
+    /// Canceling a restage puts the .txnew back to its original content.
     /// </summary>
     /// <remarks>
-    /// <para>前提: a.txt を Add しており、最初の通知で取り消しトークンが取り消される</para>
-    /// <para>手順: そのトークンで同じパスを Update する</para>
-    /// <para>期待: OperationCanceledException になり、.txnew の内容は Add のままで、.prev は残らない</para>
+    /// <para>Given: a.txt is added, and the cancellation token is canceled at the first progress report.</para>
+    /// <para>When: the same path is updated with that token.</para>
+    /// <para>Then: OperationCanceledException, the .txnew keeps the Add content, and no .prev remains.</para>
     /// </remarks>
     [Fact]
-    public async Task UpdateAsync_再ステージを取り消すとtxnewは元の内容に戻ること()
+    public async Task UpdateAsync_CancelingRestageRestoresTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -332,15 +332,15 @@ public sealed class AddUpdateTests
     }
 
     /// <summary>
-    /// 大きい再ステージの退避は、コピーせず同じファイルのまま戻る
+    /// The backup of a large restage is restored as the same file, without a copy.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 1MiB の a.txt を Add しており、.txnew の作成時刻をずらしてある</para>
-    /// <para>手順: 進捗が例外を投げる Update で同じパスを再ステージする</para>
-    /// <para>期待: InvalidOperationException になり、.txnew の内容と作成時刻は Add のままで、.prev は残らない</para>
+    /// <para>Given: a 1 MiB a.txt is added, and the creation time of its .txnew is shifted.</para>
+    /// <para>When: the same path is restaged with an Update whose progress throws.</para>
+    /// <para>Then: InvalidOperationException, the .txnew keeps the Add content and creation time, and no .prev remains.</para>
     /// </remarks>
-    [WindowsFact("ファイルの作成時刻は移すと残る")]
-    public async Task UpdateAsync_大きい再ステージの退避は同じファイルのまま戻ること()
+    [WindowsFact("A file keeps its creation time when moved")]
+    public async Task UpdateAsync_LargeRestageBackupIsRestoredAsSameFile()
     {
         await using TempDirectory work = TempDirectory.Create();
         byte[] original = new byte[1024 * 1024];

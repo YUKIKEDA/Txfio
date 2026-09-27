@@ -1,22 +1,22 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ワークフォルダの内外をまたぐランダム列の操作種別
+/// The operation kinds of random sequences that cross the work folder boundary.
 /// </summary>
 internal enum TransferKind
 {
     /// <summary>
-    /// ワークフォルダの中から中へコピーする
+    /// Copies from inside to inside the work folder.
     /// </summary>
     Copy,
 
     /// <summary>
-    /// ワークフォルダの外から中へ取り込む
+    /// Imports from outside into the work folder.
     /// </summary>
     Import,
 
     /// <summary>
-    /// ワークフォルダの中から外へ書き出す
+    /// Exports from inside the work folder to outside.
     /// </summary>
     Export,
 }
