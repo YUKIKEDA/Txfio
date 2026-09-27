@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 文字列の列が比べる、コミット後のファイルのテキスト
+/// The text of files after commit that string sequences compare against.
 /// </summary>
 internal sealed class TextModel
 {
@@ -14,7 +14,7 @@ internal sealed class TextModel
     private readonly HashSet<string> _directories;
 
     /// <summary>
-    /// 空のモデルを作る
+    /// Initializes a new instance of the <see cref="TextModel"/> class as an empty model.
     /// </summary>
     public TextModel()
     {
@@ -29,7 +29,7 @@ internal sealed class TextModel
     }
 
     /// <summary>
-    /// ファイルの相対パス
+    /// Gets the relative paths of the files.
     /// </summary>
     public IEnumerable<string> Files
     {
@@ -40,7 +40,7 @@ internal sealed class TextModel
     }
 
     /// <summary>
-    /// ディレクトリの相対パス
+    /// Gets the relative paths of the directories.
     /// </summary>
     public IEnumerable<string> Directories
     {
@@ -51,10 +51,10 @@ internal sealed class TextModel
     }
 
     /// <summary>
-    /// 行の配列を、WriteAllLines と同じ改行でつなぐ
+    /// Joins lines with the same line breaks as WriteAllLines.
     /// </summary>
-    /// <param name="lines">行</param>
-    /// <returns>つないだテキスト</returns>
+    /// <param name="lines">The lines.</param>
+    /// <returns>The joined text.</returns>
     public static string JoinLines(IReadOnlyList<string> lines)
     {
         StringBuilder text = new StringBuilder();
@@ -67,10 +67,10 @@ internal sealed class TextModel
     }
 
     /// <summary>
-    /// ReadAllLines と同じ規則で行に分ける
+    /// Splits text into lines by the same rules as ReadAllLines.
     /// </summary>
-    /// <param name="text">テキスト</param>
-    /// <returns>行</returns>
+    /// <param name="text">The text.</param>
+    /// <returns>The lines.</returns>
     public static string[] SplitLines(string text)
     {
         List<string> lines = new List<string>();
@@ -88,50 +88,50 @@ internal sealed class TextModel
     }
 
     /// <summary>
-    /// テキストを BOM 無し UTF-8 にする
+    /// Encodes text as UTF-8 without a BOM.
     /// </summary>
-    /// <param name="text">テキスト</param>
-    /// <returns>バイト列</returns>
+    /// <param name="text">The text.</param>
+    /// <returns>The bytes.</returns>
     public static byte[] Encode(string text)
     {
         return _utf8.GetBytes(text);
     }
 
     /// <summary>
-    /// ファイルがあるか
+    /// Returns whether the file exists.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>ファイルのとき true</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>true for a file.</returns>
     public bool IsFile(string path)
     {
         return _files.ContainsKey(path);
     }
 
     /// <summary>
-    /// ディレクトリか
+    /// Returns whether it is a directory.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>ディレクトリのとき true</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>true for a directory.</returns>
     public bool IsDirectory(string path)
     {
         return _directories.Contains(path);
     }
 
     /// <summary>
-    /// ファイルのテキスト
+    /// The text of a file.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>テキスト</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>The text.</returns>
     public string Text(string path)
     {
         return _files[path];
     }
 
     /// <summary>
-    /// 親がワークフォルダか、モデル上のディレクトリか
+    /// Returns whether the parent is the work folder or a directory in the model.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>親があるとき true</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>true when the parent exists.</returns>
     public bool ParentIsDirectory(string path)
     {
         string parent = DirectoryTree.Parent(path);
@@ -139,9 +139,9 @@ internal sealed class TextModel
     }
 
     /// <summary>
-    /// 同じテキストのモデルを作る
+    /// Makes a model with the same text.
     /// </summary>
-    /// <returns>複製</returns>
+    /// <returns>The copy.</returns>
     public TextModel Clone()
     {
         return new TextModel(
@@ -150,40 +150,40 @@ internal sealed class TextModel
     }
 
     /// <summary>
-    /// 空のディレクトリを足す
+    /// Adds an empty directory.
     /// </summary>
-    /// <param name="path">相対パス</param>
+    /// <param name="path">The relative path.</param>
     public void AddDirectory(string path)
     {
         _directories.Add(path);
     }
 
     /// <summary>
-    /// ファイルのテキストを置く
+    /// Places the text of a file.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <param name="text">テキスト</param>
+    /// <param name="path">The relative path.</param>
+    /// <param name="text">The text.</param>
     public void PutFile(string path, string text)
     {
         _files[path] = text;
     }
 
     /// <summary>
-    /// 書き込みか追記か JSON の書き込みが通るか。親があり、対象がディレクトリでないとき true
+    /// Returns whether a write, append, or JSON write passes. true when the parent exists and the target is not a directory.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>通るとき true</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>true when it passes.</returns>
     public bool CanWrite(string path)
     {
         return ParentIsDirectory(path) && !_directories.Contains(path);
     }
 
     /// <summary>
-    /// いまのテキストが、その JSON を既定の設定で書いたものと一致するか
+    /// Returns whether the current text matches that JSON written with the default settings.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <param name="value">比べる値</param>
-    /// <returns>一致するとき true</returns>
+    /// <param name="path">The relative path.</param>
+    /// <param name="value">The value to compare.</param>
+    /// <returns>true when they match.</returns>
     public bool IsJson(string path, StressJsonValue value)
     {
         return IsFile(path) && Text(path) == JsonSerializer.Serialize(value);

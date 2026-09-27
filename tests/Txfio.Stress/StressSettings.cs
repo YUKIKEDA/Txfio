@@ -3,71 +3,71 @@ using System.Globalization;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 耐久テストの規模を環境変数から読む
+/// Reads the size of stress tests from environment variables.
 /// </summary>
 /// <remarks>
-/// 既定は明示的な実行で短く終わる小ささにする。長く、または大きく回すときだけ環境変数で変える
+/// The defaults are small enough to finish quickly in an explicit run. Change them with environment variables only to run longer or larger.
 /// </remarks>
 internal static class StressSettings
 {
     /// <summary>
-    /// 乱数の元になるシード
+    /// The seed for the random source.
     /// </summary>
     public const string SeedVariable = "TXFIO_STRESS_SEED";
 
     /// <summary>
-    /// ランダム操作列の本数、または子プロセスごとのトランザクション数
+    /// The number of random sequences, or the number of transactions per child process.
     /// </summary>
     public const string IterationsVariable = "TXFIO_STRESS_ITERATIONS";
 
     /// <summary>
-    /// 同時に動かす子プロセスの数
+    /// The number of child processes run at the same time.
     /// </summary>
     public const string ProcessesVariable = "TXFIO_STRESS_PROCESSES";
 
     /// <summary>
-    /// 子プロセスが奪い合うファイルの数
+    /// The number of files child processes compete for.
     /// </summary>
     public const string FilesVariable = "TXFIO_STRESS_FILES";
 
     /// <summary>
-    /// ランダム操作列が書くファイルの長さの上限（バイト）
+    /// The length limit (bytes) of files random sequences write.
     /// </summary>
     public const string MaxBytesVariable = "TXFIO_STRESS_MAX_BYTES";
 
     /// <summary>
-    /// 環境変数のシード。無ければ既定値
+    /// The seed from the environment variable, or the default when it is not set.
     /// </summary>
-    /// <param name="defaultValue">環境変数が無いときの値</param>
-    /// <returns>シード</returns>
+    /// <param name="defaultValue">The value when the environment variable is not set.</param>
+    /// <returns>The seed.</returns>
     public static int Seed(int defaultValue) => Read(SeedVariable, defaultValue);
 
     /// <summary>
-    /// 環境変数の回数。無ければ既定値
+    /// The count from the environment variable, or the default when it is not set.
     /// </summary>
-    /// <param name="defaultValue">環境変数が無いときの値</param>
-    /// <returns>回数</returns>
+    /// <param name="defaultValue">The value when the environment variable is not set.</param>
+    /// <returns>The count.</returns>
     public static int Iterations(int defaultValue) => Read(IterationsVariable, defaultValue);
 
     /// <summary>
-    /// 環境変数のプロセス数。無ければ既定値
+    /// The process count from the environment variable, or the default when it is not set.
     /// </summary>
-    /// <param name="defaultValue">環境変数が無いときの値</param>
-    /// <returns>プロセス数</returns>
+    /// <param name="defaultValue">The value when the environment variable is not set.</param>
+    /// <returns>The process count.</returns>
     public static int Processes(int defaultValue) => Read(ProcessesVariable, defaultValue);
 
     /// <summary>
-    /// 環境変数のファイル数。無ければ既定値
+    /// The file count from the environment variable, or the default when it is not set.
     /// </summary>
-    /// <param name="defaultValue">環境変数が無いときの値</param>
-    /// <returns>ファイル数</returns>
+    /// <param name="defaultValue">The value when the environment variable is not set.</param>
+    /// <returns>The file count.</returns>
     public static int Files(int defaultValue) => Read(FilesVariable, defaultValue);
 
     /// <summary>
-    /// 環境変数の長さの上限。無ければ既定値
+    /// The length limit from the environment variable, or the default when it is not set.
     /// </summary>
-    /// <param name="defaultValue">環境変数が無いときの値</param>
-    /// <returns>バイト数</returns>
+    /// <param name="defaultValue">The value when the environment variable is not set.</param>
+    /// <returns>The number of bytes.</returns>
     public static int MaxBytes(int defaultValue) => Read(MaxBytesVariable, defaultValue);
 
     private static int Read(string name, int defaultValue)

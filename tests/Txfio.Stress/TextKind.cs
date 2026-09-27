@@ -1,47 +1,47 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 文字列と JSON のランダム列で使う操作の種類
+/// The kinds of operations used in random text and JSON sequences.
 /// </summary>
 internal enum TextKind
 {
     /// <summary>
-    /// WriteAllTextAsync
+    /// WriteAllTextAsync.
     /// </summary>
     WriteText,
 
     /// <summary>
-    /// WriteAllLinesAsync
+    /// WriteAllLinesAsync.
     /// </summary>
     WriteLines,
 
     /// <summary>
-    /// AppendAllTextAsync
+    /// AppendAllTextAsync.
     /// </summary>
     AppendText,
 
     /// <summary>
-    /// AppendAllLinesAsync
+    /// AppendAllLinesAsync.
     /// </summary>
     AppendLines,
 
     /// <summary>
-    /// ReadAllTextAsync
+    /// ReadAllTextAsync.
     /// </summary>
     ReadText,
 
     /// <summary>
-    /// ReadAllLinesAsync
+    /// ReadAllLinesAsync.
     /// </summary>
     ReadLines,
 
     /// <summary>
-    /// WriteAsJsonAsync
+    /// WriteAsJsonAsync.
     /// </summary>
     WriteJson,
 
     /// <summary>
-    /// ReadFromJsonAsync
+    /// ReadFromJsonAsync.
     /// </summary>
     ReadJson,
 }

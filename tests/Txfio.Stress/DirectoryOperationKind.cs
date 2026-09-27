@@ -1,42 +1,42 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ディレクトリのランダム列で使う操作の種類
+/// The kinds of operations used in random directory sequences.
 /// </summary>
 internal enum DirectoryOperationKind
 {
     /// <summary>
-    /// 無いパスへの CreateDirectoryAsync
+    /// CreateDirectoryAsync on a missing path.
     /// </summary>
     CreateDirectory,
 
     /// <summary>
-    /// 無いパスへの AddAsync
+    /// AddAsync on a missing path.
     /// </summary>
     Add,
 
     /// <summary>
-    /// あるファイルへの UpdateAsync
+    /// UpdateAsync on an existing file.
     /// </summary>
     Update,
 
     /// <summary>
-    /// ファイル、または空ディレクトリの DeleteAsync
+    /// DeleteAsync of a file or an empty directory.
     /// </summary>
     Delete,
 
     /// <summary>
-    /// ディレクトリの DeleteTreeAsync
+    /// DeleteTreeAsync of a directory.
     /// </summary>
     DeleteTree,
 
     /// <summary>
-    /// 上書きしない MoveAsync
+    /// MoveAsync without overwrite.
     /// </summary>
     Move,
 
     /// <summary>
-    /// あるファイルの ReadAsync
+    /// ReadAsync of an existing file.
     /// </summary>
     Read,
 }

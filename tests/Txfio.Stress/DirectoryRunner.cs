@@ -4,17 +4,17 @@ using Txfio.Tests.Support;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ディレクトリの操作列を本物のトランザクションとメモリ上の木の両方に打ち、食い違いを探す
+/// Runs a directory sequence on both a real transaction and an in-memory tree, looking for disagreements.
 /// </summary>
 internal static class DirectoryRunner
 {
     private const int MaxShrinkRuns = 300;
 
     /// <summary>
-    /// 操作列を 1 回実行し、約束が破れていればその説明を返す
+    /// Runs a sequence once, and returns a description if a promise is broken.
     /// </summary>
-    /// <param name="scenario">実行する操作列</param>
-    /// <returns>約束が守られていれば null、破れていればその説明</returns>
+    /// <param name="scenario">The sequence to run.</param>
+    /// <returns><see langword="null"/> if the promises hold, otherwise a description of the break.</returns>
     public static async Task<string?> RunAsync(DirectoryScenario scenario)
     {
         await using TempDirectory work = TempDirectory.Create();
@@ -28,18 +28,18 @@ internal static class DirectoryRunner
         }
         catch (Exception exception)
         {
-            failure = "想定外の例外: " + exception;
+            failure = "Unexpected exception: " + exception;
         }
 
-        return failure is null ? null : failure + Environment.NewLine + "実行した手:" + Environment.NewLine + trace;
+        return failure is null ? null : failure + Environment.NewLine + "Steps run:" + Environment.NewLine + trace;
     }
 
     /// <summary>
-    /// 失敗した操作列から手を 1 つずつ外し、まだ失敗する最小の列まで縮める
+    /// Removes steps one at a time from a failed sequence, shrinking it to the smallest one that still fails.
     /// </summary>
-    /// <param name="scenario">失敗した操作列</param>
-    /// <param name="failure">その失敗の説明</param>
-    /// <returns>縮めた操作列とその失敗の説明</returns>
+    /// <param name="scenario">The failed sequence.</param>
+    /// <param name="failure">The description of that failure.</param>
+    /// <returns>The shrunk sequence and its failure description.</returns>
     public static async Task<(DirectoryScenario Scenario, string Failure)> ShrinkAsync(DirectoryScenario scenario, string failure)
     {
         int runs = 0;
@@ -108,7 +108,7 @@ internal static class DirectoryRunner
                         trace.Append("  ").Append(i).Append(": ok ").Append(operation).AppendLine();
                         if (mismatchRead is not null)
                         {
-                            return $"手 {i} の ReadAsync がモデルと違う: {mismatchRead}";
+                            return $"Step {i}: ReadAsync differs from the model: {mismatchRead}";
                         }
 
                         continue;
@@ -126,14 +126,14 @@ internal static class DirectoryRunner
                     string pendingAfter = DescribePending(tx);
                     if (pendingAfter != pendingBefore)
                     {
-                        return $"手 {i} は拒否されたのに予約が変わった: 前 [{pendingBefore}]、後 [{pendingAfter}]";
+                        return $"Step {i} was rejected but the schedule changed: before [{pendingBefore}], after [{pendingAfter}]";
                     }
                 }
 
                 string? mismatch = await CompareViewAsync(workFolder, tx, model);
                 if (mismatch is not null)
                 {
-                    return $"手 {i} のあとの姿がモデルと違う: {mismatch}";
+                    return $"Step {i}: the view afterwards differs from the model: {mismatch}";
                 }
             }
 
@@ -146,7 +146,7 @@ internal static class DirectoryRunner
                     trace.Append("  Commit -> ").Append(report.Result).AppendLine();
                     if (report.Result == CommitResult.PartialConflict)
                     {
-                        return "外から変えていないのに PartialConflict になった";
+                        return "PartialConflict without any external change";
                     }
 
                     if (report.Result == CommitResult.Succeeded)
@@ -246,10 +246,10 @@ internal static class DirectoryRunner
 
         if (expected.Length == actual.Length)
         {
-            return path + " は長さ " + StressContent.Describe(expected) + " で内容が違う";
+            return path + " has length " + StressContent.Describe(expected) + " and different content";
         }
 
-        return path + " は期待 " + StressContent.Describe(expected) + "、実際 " + StressContent.Describe(actual);
+        return path + " expected " + StressContent.Describe(expected) + ", actual " + StressContent.Describe(actual);
     }
 
     private static async Task<string?> CompareEntriesAsync(string workFolder, ITransaction tx, DirectoryTree model, string directory)
@@ -268,14 +268,14 @@ internal static class DirectoryRunner
         IReadOnlyList<(string Path, bool IsDirectory)> expected = model.Children(directory);
         if (actual.Count != expected.Count)
         {
-            return directory + " の直下の件数が違う: 期待 " + expected.Count + "、実際 " + actual.Count;
+            return directory + " has a different number of direct children: expected " + expected.Count + ", actual " + actual.Count;
         }
 
         for (int i = 0; i < expected.Count; i++)
         {
             if (actual[i].Path != expected[i].Path || actual[i].IsDirectory != expected[i].IsDirectory)
             {
-                return directory + " の直下が違う: 期待 " + expected[i].Path + "、実際 " + actual[i].Path;
+                return directory + " has different direct children: expected " + expected[i].Path + ", actual " + actual[i].Path;
             }
         }
 
@@ -315,7 +315,7 @@ internal static class DirectoryRunner
         {
             if (!actual.IsDirectory(directory))
             {
-                return "終わったあとにディレクトリが無い: " + directory;
+                return "Directory missing at the end: " + directory;
             }
         }
 
@@ -323,7 +323,7 @@ internal static class DirectoryRunner
         {
             if (!expected.IsDirectory(directory))
             {
-                return "終わったあとにディレクトリが余分: " + directory;
+                return "Extra directory at the end: " + directory;
             }
         }
 
@@ -331,13 +331,13 @@ internal static class DirectoryRunner
         {
             if (!actual.IsFile(file))
             {
-                return "終わったあとにファイルが無い: " + file + "（" + StressContent.Describe(expected.File(file)) + "）";
+                return "File missing at the end: " + file + " (" + StressContent.Describe(expected.File(file)) + ")";
             }
 
             byte[] found = actual.File(file);
             if (!expected.File(file).AsSpan().SequenceEqual(found))
             {
-                return "終わったあとのファイルが違う: " + file + " は期待 " + StressContent.Describe(expected.File(file)) + "、実際 " + StressContent.Describe(found);
+                return "File differs at the end: " + file + " expected " + StressContent.Describe(expected.File(file)) + ", actual " + StressContent.Describe(found);
             }
         }
 
@@ -345,14 +345,14 @@ internal static class DirectoryRunner
         {
             if (!expected.IsFile(file))
             {
-                return "終わったあとにファイルが余分: " + file + "（" + StressContent.Describe(actual.File(file)) + "）";
+                return "Extra file at the end: " + file + " (" + StressContent.Describe(actual.File(file)) + ")";
             }
         }
 
         string metadata = System.IO.Path.Combine(workFolder, ".txfio");
         if (Directory.Exists(metadata) && Directory.EnumerateFiles(metadata, "tx-*.journal").Any())
         {
-            return "終わったあとにジャーナルが残った";
+            return "A journal remained at the end";
         }
 
         return null;

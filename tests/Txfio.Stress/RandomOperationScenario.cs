@@ -3,12 +3,12 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 1 トランザクション分のランダム操作列と、開始時のファイル
+/// A random sequence for one transaction, and the files at the start.
 /// </summary>
-/// <param name="Seed">この列を作ったシード</param>
-/// <param name="InitialFiles">開始前にディスクへ置くファイル（相対パスからバイト列）</param>
-/// <param name="Operations">順に打つ操作</param>
-/// <param name="Commit">最後に Commit するなら true、Dispose だけなら false</param>
+/// <param name="Seed">The seed that made this sequence.</param>
+/// <param name="InitialFiles">The files placed on disk before the start (relative path to bytes).</param>
+/// <param name="Operations">The operations to run in order.</param>
+/// <param name="Commit">true to Commit at the end, false to only Dispose.</param>
 internal sealed record RandomOperationScenario(
     int Seed,
     IReadOnlyDictionary<string, byte[]> InitialFiles,
@@ -16,22 +16,22 @@ internal sealed record RandomOperationScenario(
     bool Commit)
 {
     /// <summary>
-    /// 操作の対象にするパス。ルートと、いつもある <c>sub</c> の下
+    /// The paths that operations target. At the root and under <c>sub</c>, which always exists.
     /// </summary>
     public static readonly IReadOnlyList<string> Paths = new[] { "a.txt", "b.txt", "c.txt", "sub/a.txt", "sub/b.txt" };
 
     /// <summary>
-    /// いつもあるサブディレクトリ
+    /// The subdirectory that always exists.
     /// </summary>
     public const string SubDirectory = "sub";
 
     /// <summary>
-    /// シードから操作列を作る。各手は、それまでの手がすべてモデルどおり通った前提で打てるものを選ぶ
+    /// Makes a sequence from a seed. Each step is chosen so it can be made, assuming every earlier step passed as the model says.
     /// </summary>
-    /// <param name="seed">シード</param>
-    /// <param name="maxOperations">操作数の上限</param>
-    /// <param name="maxBytes">1 ファイルの長さの上限</param>
-    /// <returns>作った操作列</returns>
+    /// <param name="seed">The seed.</param>
+    /// <param name="maxOperations">The maximum number of operations.</param>
+    /// <param name="maxBytes">The maximum length of one file.</param>
+    /// <returns>The sequence that was made.</returns>
     public static RandomOperationScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);
@@ -59,9 +59,9 @@ internal sealed record RandomOperationScenario(
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形の操作列
+    /// A readable form of the sequence for failure reports.
     /// </summary>
-    /// <returns>開始時のファイル、操作、終わり方を並べた文字列</returns>
+    /// <returns>A string with the starting files, the operations, and how it ends.</returns>
     public string Describe()
     {
         StringBuilder text = new StringBuilder();

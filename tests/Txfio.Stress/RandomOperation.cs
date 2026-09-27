@@ -1,19 +1,19 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ランダム操作列の 1 手
+/// One step of a random sequence.
 /// </summary>
-/// <param name="Kind">操作の種類</param>
-/// <param name="Path">対象の相対パス</param>
-/// <param name="NewPath">Move の移動先。Move 以外は null</param>
-/// <param name="Content">Add と Update で書くバイト列。それ以外は null</param>
+/// <param name="Kind">The operation kind.</param>
+/// <param name="Path">The target relative path.</param>
+/// <param name="NewPath">The Move destination. <see langword="null"/> except for Move.</param>
+/// <param name="Content">The bytes written by Add and Update. <see langword="null"/> otherwise.</param>
 internal sealed record RandomOperation(RandomOperationKind Kind, string Path, string? NewPath, byte[]? Content)
 {
     /// <summary>
-    /// モデルの上でこの手を打てるか。Add は無いパス、それ以外はあるパスが対象
+    /// Returns whether this step can be made on the model. Add targets a missing path; the others target an existing path.
     /// </summary>
-    /// <param name="model">相対パスから内容への辞書</param>
-    /// <returns>打てるとき true</returns>
+    /// <param name="model">A dictionary from relative path to content.</param>
+    /// <returns>true when it can be made.</returns>
     public bool CanApply(IReadOnlyDictionary<string, byte[]> model)
     {
         return Kind switch
@@ -25,9 +25,9 @@ internal sealed record RandomOperation(RandomOperationKind Kind, string Path, st
     }
 
     /// <summary>
-    /// モデルにこの手を反映する。Read は何も変えない
+    /// Applies this step to the model. Read changes nothing.
     /// </summary>
-    /// <param name="model">相対パスから内容への辞書</param>
+    /// <param name="model">A dictionary from relative path to content.</param>
     public void ApplyTo(Dictionary<string, byte[]> model)
     {
         switch (Kind)

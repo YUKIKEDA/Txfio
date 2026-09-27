@@ -6,15 +6,15 @@ namespace Txfio.Tests.Stress;
 public sealed class CrashStressTests
 {
     /// <summary>
-    /// 大きい Add / Update と ZIP の途中で子を殺しても、Recover のあとディスクは記録かその 1 件先と一致する
+    /// Even when the child is killed during large Add / Update and ZIP operations, after Recover the disk matches the log or one step past it.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 子は 4 MiB の Add、Update、ZIP の作成、展開を番号順に繰り返す。コミットが成功した番号だけを記録し、始める直前の番号は別ファイルに書く。製品コードに終了地点は無い</para>
-    /// <para>手順: 子が最初の番号を書いたら少し待ってプロセスを殺し、RecoverAsync する</para>
-    /// <para>期待: ジャーナルは残らず、ディスクは記録済みの番号までか、記録の次の 1 件を足したところまでと一致する</para>
+    /// <para>Given: the child repeats 4 MiB Add, Update, ZIP create, and extract in numbered order. Only numbers whose commit succeeded are logged, and the number about to start is written to a separate file. The product code has no exit points.</para>
+    /// <para>When: after the child writes the first number, the parent waits a little, kills the process, and runs RecoverAsync.</para>
+    /// <para>Then: no journal remains, and the disk matches either up to the logged number or the log plus the next one.</para>
     /// </remarks>
     [Fact]
-    public async Task コミット途中で子を殺すと_Recoverのあと記録かその1件先とディスクが一致すること()
+    public async Task KillingChildDuringCommit_DiskMatchesLogOrOneStepPastAfterRecover()
     {
         int maxBytes = StressSettings.MaxBytes(StressContent.DefaultMaxBytes);
         int transactions = 8;
@@ -56,7 +56,7 @@ public sealed class CrashStressTests
             matched = await MatchesAsync(work, ahead, maxBytes);
         }
 
-        Assert.True(matched is null, matched + " 記録 [" + string.Join(",", logged) + "] 意図 " + (intent?.ToString(CultureInfo.InvariantCulture) ?? "無し"));
+        Assert.True(matched is null, matched + " log [" + string.Join(",", logged) + "] intent " + (intent?.ToString(CultureInfo.InvariantCulture) ?? "none"));
     }
 
     private static async Task WaitForIntentAsync(string intentFile)
@@ -115,7 +115,7 @@ public sealed class CrashStressTests
             CommitReport report = await tx.CommitAsync();
             if (report.Result != CommitResult.Succeeded)
             {
-                return "再生の " + index + " が " + report.Result;
+                return "Replay " + index + " is " + report.Result;
             }
         }
 
@@ -130,7 +130,7 @@ public sealed class CrashStressTests
         {
             if (!actual.IsDirectory(directory))
             {
-                return "ディレクトリが無い: " + directory;
+                return "Directory missing: " + directory;
             }
         }
 
@@ -138,7 +138,7 @@ public sealed class CrashStressTests
         {
             if (!expected.IsDirectory(directory))
             {
-                return "ディレクトリが余分: " + directory;
+                return "Extra directory: " + directory;
             }
         }
 
@@ -146,7 +146,7 @@ public sealed class CrashStressTests
         {
             if (!actual.IsFile(file) || !expected.File(file).AsSpan().SequenceEqual(actual.File(file)))
             {
-                return "ファイルが違う: " + file;
+                return "File differs: " + file;
             }
         }
 
@@ -154,7 +154,7 @@ public sealed class CrashStressTests
         {
             if (!expected.IsFile(file))
             {
-                return "ファイルが余分: " + file;
+                return "Extra file: " + file;
             }
         }
 

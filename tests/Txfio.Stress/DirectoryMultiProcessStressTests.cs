@@ -14,29 +14,29 @@ public sealed class DirectoryMultiProcessStressTests
     }
 
     /// <summary>
-    /// 少数のディレクトリを複数プロセスが待たずに奪い合っても、成功した記録の再生とディスクが一致する
+    /// Even when several processes compete for a few directories without waiting, replaying the successful records matches the disk.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d0 には長さの帯から選んだ a.bin があり、d1 は空である。プロセス数、トランザクション数、ディレクトリ数、シードは環境変数で変えられる</para>
-    /// <para>手順: 子プロセスを同時に走らせ、ディレクトリの作成、空の削除、木の削除、上書きしない Move を Commit か Dispose で繰り返す。ロック競合はやり直さない</para>
-    /// <para>期待: 失敗は競合か破棄か Failed だけでディスクに残らず、Succeeded を時刻順に再生した木とディスクが一致し、ジャーナルは残らない</para>
+    /// <para>Given: d0 has a.bin with a length chosen from the bands, and d1 is empty. The process count, transaction count, directory count, and seed can be changed with environment variables.</para>
+    /// <para>When: child processes run at the same time, repeating directory create, delete of an empty directory, delete of a tree, and Move without overwrite, with Commit or Dispose. Lock contention is not retried.</para>
+    /// <para>Then: failures are only contention, discard, or Failed and leave nothing on disk; replaying Succeeded in time order gives a tree that matches the disk; and no journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task 複数プロセスのディレクトリ競合_成功した記録とディスクが一致すること()
+    public async Task MultiProcessDirectoryContention_RecordsMatchDisk()
     {
         await RunAndVerifyAsync(StressSettings.Files(4), retry: false);
     }
 
     /// <summary>
-    /// 多めのディレクトリを複数プロセスがリトライしながら奪い合っても、成功した記録の再生とディスクが一致する
+    /// Even when several processes compete for more directories with retries, replaying the successful records matches the disk.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d0 には長さの帯から選んだ a.bin があり、d1 は空である。ディレクトリ数は待たない版より多い</para>
-    /// <para>手順: 子プロセスを同時に走らせ、ロック競合なら少し待ってその時点のディスクを見てやり直す（上限あり）</para>
-    /// <para>期待: 待たない場合と同じ約束が守られ、上限まで競合し続けたトランザクションは無い</para>
+    /// <para>Given: d0 has a.bin with a length chosen from the bands, and d1 is empty. There are more directories than in the no-wait version.</para>
+    /// <para>When: child processes run at the same time; on lock contention they wait a little, look at the disk at that time, and retry (up to a limit).</para>
+    /// <para>Then: the same promises as without waiting hold, and no transaction stays in contention up to the limit.</para>
     /// </remarks>
     [Fact]
-    public async Task 複数プロセスがリトライするディレクトリ競合_成功した記録とディスクが一致すること()
+    public async Task MultiProcessDirectoryContentionWithRetry_RecordsMatchDisk()
     {
         await RunAndVerifyAsync(StressSettings.Files(16), retry: true);
     }
@@ -96,7 +96,7 @@ public sealed class DirectoryMultiProcessStressTests
         {
             if (!actual.IsDirectory(directory))
             {
-                return "ディレクトリが無い: " + directory;
+                return "Directory missing: " + directory;
             }
         }
 
@@ -104,7 +104,7 @@ public sealed class DirectoryMultiProcessStressTests
         {
             if (!expected.IsDirectory(directory))
             {
-                return "ディレクトリが余分: " + directory;
+                return "Extra directory: " + directory;
             }
         }
 
@@ -112,7 +112,7 @@ public sealed class DirectoryMultiProcessStressTests
         {
             if (!actual.IsFile(file) || !expected.File(file).AsSpan().SequenceEqual(actual.File(file)))
             {
-                return "ファイルが違う: " + file;
+                return "File differs: " + file;
             }
         }
 
@@ -120,7 +120,7 @@ public sealed class DirectoryMultiProcessStressTests
         {
             if (!expected.IsFile(file))
             {
-                return "ファイルが余分: " + file;
+                return "Extra file: " + file;
             }
         }
 
@@ -138,7 +138,7 @@ public sealed class DirectoryMultiProcessStressTests
         int processes = StressSettings.Processes(3);
         int transactions = StressSettings.Iterations(15);
         int maxBytes = StressSettings.MaxBytes(StressContent.DefaultMaxBytes);
-        Assert.True(directories >= 2, StressSettings.FilesVariable + " は 2 以上にする");
+        Assert.True(directories >= 2, StressSettings.FilesVariable + " must be 2 or more");
         byte[] content = StressContent.Create(new Random(seed), maxBytes);
         await using TempDirectory temp = TempDirectory.Create();
         string work = System.IO.Path.Combine(temp.Path, "work");
@@ -206,18 +206,18 @@ public sealed class DirectoryMultiProcessStressTests
             nameof(InvalidOperationException),
         };
         DirectoryStressRecord? unexpected = records.FirstOrDefault(record => !allowed.Contains(record.Outcome));
-        Assert.True(unexpected is null, "想定外の結果 " + unexpected + "（" + summary + "）");
-        Assert.True(records.Any(record => record.Outcome == nameof(CommitResult.Succeeded)), "Succeeded が 1 件も無い（" + summary + "）");
+        Assert.True(unexpected is null, "Unexpected result " + unexpected + " (" + summary + ")");
+        Assert.True(records.Any(record => record.Outcome == nameof(CommitResult.Succeeded)), "No Succeeded at all (" + summary + ")");
         if (retry)
         {
             Assert.True(
                 records.All(record => record.Outcome != nameof(LockContentionException)),
-                StressWriter.MaxAttempts + " 回やり直しても競合したトランザクションがある（" + summary + "）");
+                StressWriter.MaxAttempts + " retries still left a transaction in contention (" + summary + ")");
         }
 
         DirectoryTree expected = Replay(records, content);
         string? mismatch = await CompareAsync(work, expected);
-        Assert.True(mismatch is null, "最終状態が違う（" + summary + "） " + mismatch);
+        Assert.True(mismatch is null, "The final state differs (" + summary + ") " + mismatch);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work, ".txfio"), "tx-*.journal"));
         Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work)).Result);
     }

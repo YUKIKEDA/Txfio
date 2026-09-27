@@ -1,30 +1,30 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ランダム操作列を比べるメモリ上のモデル。「コミット後の姿」を持つ
+/// The in-memory model that random sequences compare against. It holds the post-commit view.
 /// </summary>
 internal sealed class RandomOperationModel
 {
     private readonly Dictionary<string, byte[]> _files;
 
     /// <summary>
-    /// 開始時のファイルからモデルを作る
+    /// Initializes a new instance of the <see cref="RandomOperationModel"/> class from the files at the start.
     /// </summary>
-    /// <param name="initialFiles">相対パスから内容への辞書</param>
+    /// <param name="initialFiles">A dictionary from relative path to content.</param>
     public RandomOperationModel(IReadOnlyDictionary<string, byte[]> initialFiles)
     {
         _files = new Dictionary<string, byte[]>(initialFiles, StringComparer.Ordinal);
     }
 
     /// <summary>
-    /// コミットしたときにあるはずのファイル（相対パスから内容）。ReadAsync もこの内容を返す
+    /// Gets the files that should exist after commit (relative path to content). ReadAsync returns this content too.
     /// </summary>
     public IReadOnlyDictionary<string, byte[]> Files => _files;
 
     /// <summary>
-    /// 通った操作をモデルに反映する
+    /// Applies a passed operation to the model.
     /// </summary>
-    /// <param name="operation">通った操作</param>
+    /// <param name="operation">The operation that passed.</param>
     public void Apply(RandomOperation operation)
     {
         operation.ApplyTo(_files);

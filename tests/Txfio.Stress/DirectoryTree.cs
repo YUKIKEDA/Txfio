@@ -1,14 +1,14 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ディレクトリ列が比べる、コミット後のファイルとディレクトリ
+/// The files and directories after commit that directory sequences compare against.
 /// </summary>
 internal sealed class DirectoryTree
 {
     private readonly Dictionary<string, byte[]?> _nodes;
 
     /// <summary>
-    /// 空の木を作る。ワークフォルダ自身はここに入れない
+    /// Initializes a new instance of the <see cref="DirectoryTree"/> class as an empty tree. The work folder itself is not included.
     /// </summary>
     public DirectoryTree()
     {
@@ -21,7 +21,7 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// ファイルの相対パス
+    /// Gets the relative paths of the files.
     /// </summary>
     public IEnumerable<string> Files
     {
@@ -32,7 +32,7 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// ディレクトリの相対パス
+    /// Gets the relative paths of the directories.
     /// </summary>
     public IEnumerable<string> Directories
     {
@@ -43,10 +43,10 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// 親の相対パス。直下がワークフォルダなら空文字
+    /// The relative path of the parent. An empty string when it is directly under the work folder.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>親</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>The parent.</returns>
     public static string Parent(string path)
     {
         int slash = path.LastIndexOf('/');
@@ -54,31 +54,31 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// パスがディレクトリの配下か。ディレクトリ自身は含まない
+    /// Returns whether a path is under a directory. The directory itself is not included.
     /// </summary>
-    /// <param name="path">調べるパス</param>
-    /// <param name="directory">ディレクトリ</param>
-    /// <returns>配下のとき true</returns>
+    /// <param name="path">The path to check.</param>
+    /// <param name="directory">The directory.</param>
+    /// <returns>true when it is under the directory.</returns>
     public static bool IsUnder(string path, string directory)
     {
         return path.StartsWith(directory + "/", StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// 相対パスがあるか
+    /// Returns whether the relative path exists.
     /// </summary>
-    /// <param name="path">相対パス。空文字はワークフォルダ自身</param>
-    /// <returns>あるとき true</returns>
+    /// <param name="path">The relative path. An empty string is the work folder itself.</param>
+    /// <returns>true when it exists.</returns>
     public bool Contains(string path)
     {
         return path.Length == 0 || _nodes.ContainsKey(path);
     }
 
     /// <summary>
-    /// ディレクトリか。空文字のワークフォルダ自身はディレクトリ
+    /// Returns whether it is a directory. The work folder itself, an empty string, is a directory.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>ディレクトリのとき true</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>true for a directory.</returns>
     public bool IsDirectory(string path)
     {
         if (path.Length == 0)
@@ -90,40 +90,40 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// ファイルか
+    /// Returns whether it is a file.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <returns>ファイルのとき true</returns>
+    /// <param name="path">The relative path.</param>
+    /// <returns>true for a file.</returns>
     public bool IsFile(string path)
     {
         return _nodes.TryGetValue(path, out byte[]? content) && content is not null;
     }
 
     /// <summary>
-    /// 直下がなにも無いディレクトリか
+    /// Returns whether a directory has no direct children.
     /// </summary>
-    /// <param name="path">ディレクトリの相対パス</param>
-    /// <returns>空のとき true</returns>
+    /// <param name="path">The relative path of the directory.</param>
+    /// <returns>true when it is empty.</returns>
     public bool IsEmpty(string path)
     {
         return IsDirectory(path) && Children(path).Count == 0;
     }
 
     /// <summary>
-    /// ファイルの中身
+    /// The content of a file.
     /// </summary>
-    /// <param name="path">ファイルの相対パス</param>
-    /// <returns>バイト列</returns>
+    /// <param name="path">The relative path of the file.</param>
+    /// <returns>The bytes.</returns>
     public byte[] File(string path)
     {
         return _nodes[path]!;
     }
 
     /// <summary>
-    /// 直下の相対パスと、ディレクトリかどうか
+    /// The relative paths of the direct children, and whether each is a directory.
     /// </summary>
-    /// <param name="directory">親。空文字はワークフォルダ自身</param>
-    /// <returns>名前順の直下</returns>
+    /// <param name="directory">The parent. An empty string is the work folder itself.</param>
+    /// <returns>The direct children in name order.</returns>
     public IReadOnlyList<(string Path, bool IsDirectory)> Children(string directory)
     {
         List<(string Path, bool IsDirectory)> children = new List<(string Path, bool IsDirectory)>();
@@ -140,46 +140,46 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// 同じ中身の木を作る
+    /// Makes a tree with the same content.
     /// </summary>
-    /// <returns>複製</returns>
+    /// <returns>The copy.</returns>
     public DirectoryTree Clone()
     {
         return new DirectoryTree(new Dictionary<string, byte[]?>(_nodes, StringComparer.Ordinal));
     }
 
     /// <summary>
-    /// 空のディレクトリを足す
+    /// Adds an empty directory.
     /// </summary>
-    /// <param name="path">相対パス</param>
+    /// <param name="path">The relative path.</param>
     public void AddDirectory(string path)
     {
         _nodes[path] = null;
     }
 
     /// <summary>
-    /// ファイルを置く。同じパスがあれば中身を置き換える
+    /// Places a file. If the same path exists, replaces its content.
     /// </summary>
-    /// <param name="path">相対パス</param>
-    /// <param name="content">中身</param>
+    /// <param name="path">The relative path.</param>
+    /// <param name="content">The content.</param>
     public void PutFile(string path, byte[] content)
     {
         _nodes[path] = content;
     }
 
     /// <summary>
-    /// ファイルか空ディレクトリを 1 件外す
+    /// Removes one file or empty directory.
     /// </summary>
-    /// <param name="path">相対パス</param>
+    /// <param name="path">The relative path.</param>
     public void Remove(string path)
     {
         _nodes.Remove(path);
     }
 
     /// <summary>
-    /// ディレクトリとその配下を外す
+    /// Removes a directory and everything under it.
     /// </summary>
-    /// <param name="path">ディレクトリの相対パス</param>
+    /// <param name="path">The relative path of the directory.</param>
     public void RemoveTree(string path)
     {
         List<string> paths = PathsUnder(path);
@@ -191,10 +191,10 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// ファイルまたはディレクトリを、配下ごと移動先へ移す
+    /// Moves a file or directory, with everything under it, to the destination.
     /// </summary>
-    /// <param name="source">移動元</param>
-    /// <param name="destination">移動先</param>
+    /// <param name="source">The source.</param>
+    /// <param name="destination">The destination.</param>
     public void Move(string source, string destination)
     {
         List<string> paths = PathsUnder(source);
@@ -233,11 +233,11 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// 別の木のファイルまたはディレクトリを、配下ごとコピー先へ置く
+    /// Places a file or directory from another tree, with everything under it, at the destination.
     /// </summary>
-    /// <param name="sourceTree">コピー元の木</param>
-    /// <param name="source">コピー元の相対パス</param>
-    /// <param name="destination">コピー先の相対パス</param>
+    /// <param name="sourceTree">The source tree.</param>
+    /// <param name="source">The relative path of the source.</param>
+    /// <param name="destination">The relative path of the destination.</param>
     public void CopySubtree(DirectoryTree sourceTree, string source, string destination)
     {
         if (sourceTree.IsFile(source))
@@ -262,11 +262,11 @@ internal sealed class DirectoryTree
     }
 
     /// <summary>
-    /// 別の木のディレクトリだけを、配下ごとコピー先へ置く
+    /// Places only the directories from another tree, with everything under them, at the destination.
     /// </summary>
-    /// <param name="sourceTree">コピー元の木</param>
-    /// <param name="source">コピー元の相対パス</param>
-    /// <param name="destination">コピー先の相対パス</param>
+    /// <param name="sourceTree">The source tree.</param>
+    /// <param name="source">The relative path of the source.</param>
+    /// <param name="destination">The relative path of the destination.</param>
     public void CopyDirectories(DirectoryTree sourceTree, string source, string destination)
     {
         AddDirectory(destination);

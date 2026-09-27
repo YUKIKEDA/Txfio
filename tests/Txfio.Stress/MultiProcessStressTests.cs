@@ -17,29 +17,29 @@ public sealed class MultiProcessStressTests
     }
 
     /// <summary>
-    /// 少数のファイルを複数プロセスが待たずに奪い合っても、最後に Commit したトランザクションの結果だけが残る
+    /// Even when several processes compete for a few files without waiting, only the result of the last committed transaction remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 4 つのファイルのうち f0 と f1 だけがある。プロセス数、トランザクション数、ファイル数、シードは環境変数で変えられる</para>
-    /// <para>手順: 子プロセスを同時に走らせ、それぞれが 1〜3 パスへの Add / Update / Delete を Commit か Dispose で繰り返す。ロック競合はやり直さない</para>
-    /// <para>期待: 失敗は LockContentionException か ExternalConflictException か Failed だけで、各パスは Commit 直前の時刻が最後の Succeeded の結果になり、.txnew とジャーナルは残らず、RecoverAsync は何もしない</para>
+    /// <para>Given: of four files, only f0 and f1 exist. The process count, transaction count, file count, and seed can be changed with environment variables.</para>
+    /// <para>When: child processes run at the same time, each repeating Add / Update / Delete on 1 to 3 paths with Commit or Dispose. Lock contention is not retried.</para>
+    /// <para>Then: failures are only LockContentionException, ExternalConflictException, or Failed; each path has the result of the last Succeeded by the time just before Commit; no .txnew or journal remains; and RecoverAsync does nothing.</para>
     /// </remarks>
     [Fact]
-    public async Task 複数プロセスの同時更新_最後にコミットした結果だけが残ること()
+    public async Task MultiProcessConcurrentUpdates_OnlyLastCommitRemains()
     {
         await RunAndVerifyAsync(StressSettings.Files(4), retry: false);
     }
 
     /// <summary>
-    /// 多めのファイルを複数プロセスがリトライしながら更新しても、最後に Commit したトランザクションの結果だけが残る
+    /// Even when several processes update more files with retries, only the result of the last committed transaction remains.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 16 のファイルのうち f0 と f1 だけがある。プロセス数、トランザクション数、ファイル数、シードは環境変数で変えられる</para>
-    /// <para>手順: 子プロセスを同時に走らせ、ロック競合なら少し待って同じパスの組をやり直す（上限あり）</para>
-    /// <para>期待: 待たない場合と同じ約束が守られ、上限まで競合し続けたトランザクションは無い</para>
+    /// <para>Given: of 16 files, only f0 and f1 exist. The process count, transaction count, file count, and seed can be changed with environment variables.</para>
+    /// <para>When: child processes run at the same time; on lock contention they wait a little and retry the same set of paths (up to a limit).</para>
+    /// <para>Then: the same promises as without waiting hold, and no transaction stays in contention up to the limit.</para>
     /// </remarks>
     [Fact]
-    public async Task 複数プロセスがリトライする同時更新_最後にコミットした結果だけが残ること()
+    public async Task MultiProcessConcurrentUpdatesWithRetry_OnlyLastCommitRemains()
     {
         await RunAndVerifyAsync(StressSettings.Files(16), retry: true);
     }
@@ -86,7 +86,7 @@ public sealed class MultiProcessStressTests
         int seed = StressSettings.Seed(1);
         int processes = StressSettings.Processes(3);
         int transactions = StressSettings.Iterations(15);
-        Assert.True(files >= 2, StressSettings.FilesVariable + " は 2 以上にする");
+        Assert.True(files >= 2, StressSettings.FilesVariable + " must be 2 or more");
         await using TempDirectory temp = TempDirectory.Create();
         string work = System.IO.Path.Combine(temp.Path, "work");
         string logs = System.IO.Path.Combine(temp.Path, "logs");
@@ -135,13 +135,13 @@ public sealed class MultiProcessStressTests
         Assert.Equal(processes * transactions, records.Count);
         string[] allowed = { nameof(CommitResult.Succeeded), nameof(CommitResult.Failed), "Disposed", nameof(LockContentionException), nameof(ExternalConflictException) };
         StressRecord? unexpected = records.FirstOrDefault(record => !allowed.Contains(record.Outcome));
-        Assert.True(unexpected is null, $"想定外の結果 {unexpected}（{summary}）");
-        Assert.True(records.Any(record => record.Outcome == nameof(CommitResult.Succeeded)), "Succeeded が 1 件も無い（" + summary + "）");
+        Assert.True(unexpected is null, $"Unexpected result {unexpected} ({summary})");
+        Assert.True(records.Any(record => record.Outcome == nameof(CommitResult.Succeeded)), "No Succeeded at all (" + summary + ")");
         if (retry)
         {
             Assert.True(
                 records.All(record => record.Outcome != nameof(LockContentionException)),
-                $"{StressWriter.MaxAttempts} 回やり直しても競合したトランザクションがある（{summary}）");
+                $"{StressWriter.MaxAttempts} retries still left a transaction in contention ({summary})");
         }
 
         SortedDictionary<string, string> expected = ExpectedFiles(records);
@@ -157,7 +157,7 @@ public sealed class MultiProcessStressTests
 
         Assert.True(
             Format(expected) == Format(actual),
-            $"最終状態が違う（{summary}）{Environment.NewLine}期待 [{Format(expected)}]{Environment.NewLine}実際 [{Format(actual)}]");
+            $"The final state differs ({summary}){Environment.NewLine}expected [{Format(expected)}]{Environment.NewLine}actual [{Format(actual)}]");
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work, ".txfio"), "tx-*.journal"));
         Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work)).Result);
     }

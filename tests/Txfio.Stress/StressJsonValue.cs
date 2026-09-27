@@ -1,9 +1,9 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// JSON の列が往復する小さな値
+/// A small value that JSON sequences round-trip.
 /// </summary>
-/// <param name="Id">数値</param>
-/// <param name="Name">短い文字列</param>
-/// <param name="Flag">真偽</param>
+/// <param name="Id">A number.</param>
+/// <param name="Name">A short string.</param>
+/// <param name="Flag">A Boolean.</param>
 internal sealed record StressJsonValue(int Id, string Name, bool Flag);

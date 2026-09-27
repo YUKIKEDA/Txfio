@@ -3,15 +3,15 @@ namespace Txfio.Tests.Stress;
 public sealed class RandomOperationTests
 {
     /// <summary>
-    /// ランダムな Add / Update / Delete / Move / Read の列が、大きさの違う中身でもモデルと食い違わない
+    /// Random sequences of Add / Update / Delete / Move / Read do not disagree with the model, even with content of different sizes.
     /// </summary>
     /// <remarks>
-    /// <para>前提: ルートと <c>sub</c> の下の少数のパスに、シードで決めたファイルがある。中身の長さは空、数バイト、数十 KB、数 MB からシードが選び、本数とシードと長さの上限は環境変数で変えられる</para>
-    /// <para>手順: 1 つのトランザクションでシードごとの操作列を打ち、Commit か Dispose する</para>
-    /// <para>期待: 各手はモデルどおりに反映されるか InvalidOperationException で拒否され、途中の ReadAsync はモデルのバイト列と一致し、Commit が Succeeded ならディスクはモデル、それ以外は開始前のままで、ジャーナルと .txnew は残らない</para>
+    /// <para>Given: a few paths at the root and under <c>sub</c> have files decided by the seed. Content lengths are chosen by the seed from empty, a few bytes, tens of KB, and several MB, and the count, seed, and length limit can be changed with environment variables.</para>
+    /// <para>When: the sequence for each seed runs in one transaction, which then commits or is disposed.</para>
+    /// <para>Then: each step is applied as the model says or rejected with InvalidOperationException; ReadAsync along the way matches the model's bytes; if Commit is Succeeded the disk matches the model, otherwise it is as before the start; and no journal or .txnew remains.</para>
     /// </remarks>
     [Fact]
-    public async Task ランダムな操作列_モデルと同じ結果になること()
+    public async Task RandomSequence_MatchesModel()
     {
         int baseSeed = StressSettings.Seed(1);
         int count = StressSettings.Iterations(40);
@@ -24,22 +24,22 @@ public sealed class RandomOperationTests
             {
                 (RandomOperationScenario shrunk, string shrunkFailure) = await RandomOperationRunner.ShrinkAsync(scenario, failure);
                 Assert.Fail(
-                    $"{StressSettings.SeedVariable}={scenario.Seed} で約束が破れた（縮めた列）{Environment.NewLine}"
+                    $"{StressSettings.SeedVariable}={scenario.Seed} broke a promise (shrunk sequence){Environment.NewLine}"
                     + shrunk.Describe() + Environment.NewLine + shrunkFailure);
             }
         }
     }
 
     /// <summary>
-    /// 同じシードは同じバイト列を作り、既定の上限では長さが四つの帯に入る
+    /// The same seed makes the same bytes, and with the default limit the lengths fall into four bands.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長さの上限は 4 MiB</para>
-    /// <para>手順: 同じシードで列を 2 つ作り、別のシードも多数作って長さを見る</para>
-    /// <para>期待: 2 つの列の中身は一致し、長さは空、32 バイト以下、16 KiB から 64 KiB、1 MiB から 4 MiB のいずれかで、四つの帯がどれも現れる</para>
+    /// <para>Given: a length limit of 4 MiB.</para>
+    /// <para>When: two sequences are made with the same seed, and many other seeds are made to check lengths.</para>
+    /// <para>Then: the contents of the two sequences match, each length is empty, 32 bytes or less, 16 KiB to 64 KiB, or 1 MiB to 4 MiB, and all four bands appear.</para>
     /// </remarks>
     [Fact]
-    public void Generate_同じシードは同じ長さになり既定の帯に入ること()
+    public void Generate_SameSeedMakesSameLengthsInDefaultBands()
     {
         const int maxOperations = 10;
         RandomOperationScenario left = RandomOperationScenario.Generate(7, maxOperations, StressContent.DefaultMaxBytes);
@@ -74,7 +74,7 @@ public sealed class RandomOperationTests
                 }
                 else
                 {
-                    Assert.Fail(length + " バイトは帯の外");
+                    Assert.Fail(length + " bytes is outside the band");
                 }
             }
         }
@@ -83,15 +83,15 @@ public sealed class RandomOperationTests
     }
 
     /// <summary>
-    /// 上限が 1 MiB 未満なら数 MB の帯は出ず、上限を 4 MiB より上げるとその値まで届く
+    /// With a limit under 1 MiB the several-MB band does not appear, and with a limit above 4 MiB lengths reach that value.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 低い上限は 1 MiB 未満、高い上限は 4 MiB より大きい</para>
-    /// <para>手順: それぞれの上限で列を作る</para>
-    /// <para>期待: 低い上限では 1 MiB 以上が無く、高い上限では 4 MiB を超える長さがあり、どちらも上限は超えない</para>
+    /// <para>Given: a low limit under 1 MiB, and a high limit above 4 MiB.</para>
+    /// <para>When: a sequence is made with each limit.</para>
+    /// <para>Then: the low limit has nothing of 1 MiB or more, the high limit has a length above 4 MiB, and neither exceeds its limit.</para>
     /// </remarks>
     [Fact]
-    public void Generate_上限で数MBの帯の有無が変わること()
+    public void Generate_LimitDecidesSeveralMegabyteBand()
     {
         const int maxOperations = 10;
         int belowMegabyte = (1024 * 1024) - 1;

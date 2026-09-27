@@ -3,15 +3,15 @@ namespace Txfio.Tests.Stress;
 public sealed class OverwriteOperationTests
 {
     /// <summary>
-    /// 移動先を置き換える Move を含む列が、木のモデルと食い違わない
+    /// A sequence with Moves that replace their destination does not disagree with the tree model.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d と e は最初からあり、ほかのディレクトリとファイルはシードで置く。列の最初は、置けるなら置き換えの Move である</para>
-    /// <para>手順: 1 つのトランザクションでシードごとの操作列を打ち、Commit か Dispose する</para>
-    /// <para>期待: 置き換えのあと移動先は移動元の木であり、続きで移動元と移動先を触る手は拒否されてモデルを変えず、Commit が Succeeded ならディスクはモデルで .txold は残らず、それ以外は開始前のままである</para>
+    /// <para>Given: d and e exist from the start, and other directories and files are placed by the seed. The sequence starts with a replacing Move when one can be made.</para>
+    /// <para>When: the sequence for each seed runs in one transaction, which then commits or is disposed.</para>
+    /// <para>Then: after the replacement the destination is the source's tree; later steps touching the source or destination are rejected without changing the model; if Commit is Succeeded the disk matches the model and no .txold remains; otherwise it is as before the start.</para>
     /// </remarks>
     [Fact]
-    public async Task 上書きMoveの操作列_モデルと同じ結果になること()
+    public async Task OverwriteMoveSequence_MatchesModel()
     {
         int baseSeed = StressSettings.Seed(1);
         int count = StressSettings.Iterations(40);
@@ -24,22 +24,22 @@ public sealed class OverwriteOperationTests
             {
                 (DirectoryScenario shrunk, string shrunkFailure) = await DirectoryRunner.ShrinkAsync(scenario, failure);
                 Assert.Fail(
-                    $"{StressSettings.SeedVariable}={scenario.Seed} で約束が破れた（縮めた列）{Environment.NewLine}"
+                    $"{StressSettings.SeedVariable}={scenario.Seed} broke a promise (shrunk sequence){Environment.NewLine}"
                     + shrunk.Describe() + Environment.NewLine + shrunkFailure);
             }
         }
     }
 
     /// <summary>
-    /// 同じシードは置き換えを含む同じ列を作る
+    /// The same seed makes the same sequence, including a replacement.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長さの上限は 4 MiB。d と e は最初からある</para>
-    /// <para>手順: 同じシードで列を 2 つ作り、別のシードも多数見る</para>
-    /// <para>期待: 2 つの列は一致し、どの列にも置き換えの Move が 1 手ある</para>
+    /// <para>Given: a length limit of 4 MiB. d and e exist from the start.</para>
+    /// <para>When: two sequences are made with the same seed, and many other seeds are checked.</para>
+    /// <para>Then: the two sequences match, and every sequence has one replacing Move.</para>
     /// </remarks>
     [Fact]
-    public void Generate_同じシードは置き換えを含む同じ列を作ること()
+    public void Generate_SameSeedMakesSameSequenceWithReplacement()
     {
         DirectoryScenario left = OverwriteScenario.Generate(7, 10, StressContent.DefaultMaxBytes);
         DirectoryScenario right = OverwriteScenario.Generate(7, 10, StressContent.DefaultMaxBytes);

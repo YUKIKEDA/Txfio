@@ -1,15 +1,15 @@
 namespace Txfio.Tests;
 
 /// <summary>
-/// 耐久テストの子プロセスの入口
+/// The entry point of the stress test child processes.
 /// </summary>
 public static class Program
 {
     /// <summary>
-    /// 引数があるときだけ、子プロセスとして耐久テストのトランザクションを繰り返す
+    /// Only when there are arguments, repeats stress test transactions as a child process.
     /// </summary>
-    /// <param name="args"><c>dotnet test</c> からは呼ばれない起動引数</param>
-    /// <returns>終了コード</returns>
+    /// <param name="args">Start-up arguments (not passed from <c>dotnet test</c>).</param>
+    /// <returns>The exit code.</returns>
     public static Task<int> Main(string[] args)
     {
         if (args.Length == 0)

@@ -3,15 +3,15 @@ namespace Txfio.Tests.Stress;
 public sealed class TransferOperationTests
 {
     /// <summary>
-    /// ファイルとディレクトリの Copy、Import、Export を含む列が、木のモデルと食い違わない
+    /// A sequence with Copy, Import, and Export of files and directories does not disagree with the tree model.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d と e と a.txt は最初からあり、外にはファイルとディレクトリがある。ファイルの長さは空、数バイト、数十 KB、数 MB からシードが選ぶ</para>
-    /// <para>手順: 1 つのトランザクションでシードごとの操作列を打ち、Commit か Dispose したあと RecoverAsync する</para>
-    /// <para>期待: 通る手はモデルどおりに反映され、拒否される手はモデルを変えず、途中の ReadAsync と GetEntriesAsync はモデルと一致し、Commit が Succeeded ならワークフォルダはモデル、それ以外は開始前のままである。外へ書き出したものはコピー時点の内容のまま、破棄のあとにも RecoverAsync のあとにも残る</para>
+    /// <para>Given: d, e, and a.txt exist from the start, and outside there are files and directories. File lengths are chosen by the seed from empty, a few bytes, tens of KB, and several MB.</para>
+    /// <para>When: the sequence for each seed runs in one transaction, which then commits or is disposed, and then RecoverAsync runs.</para>
+    /// <para>Then: steps that pass are applied as the model says, rejected steps do not change the model, ReadAsync and GetEntriesAsync along the way match the model, and if Commit is Succeeded the work folder matches the model, otherwise it is as before the start. What was exported keeps its content from copy time, and remains after discard and after RecoverAsync.</para>
     /// </remarks>
     [Fact]
-    public async Task コピーと取り込みと書き出しの列_モデルと同じ結果になること()
+    public async Task CopyImportExportSequence_MatchesModel()
     {
         int baseSeed = StressSettings.Seed(1);
         int count = StressSettings.Iterations(40);
@@ -24,22 +24,22 @@ public sealed class TransferOperationTests
             {
                 (TransferScenario shrunk, string shrunkFailure) = await TransferRunner.ShrinkAsync(scenario, failure);
                 Assert.Fail(
-                    StressSettings.SeedVariable + "=" + scenario.Seed + " で約束が破れた（縮めた列）" + Environment.NewLine
+                    StressSettings.SeedVariable + "=" + scenario.Seed + " broke a promise (shrunk sequence)" + Environment.NewLine
                     + shrunk.Describe() + Environment.NewLine + shrunkFailure);
             }
         }
     }
 
     /// <summary>
-    /// 同じシードは、ファイルとディレクトリの Copy、Import、Export を含む同じ列を作る
+    /// The same seed makes the same sequence, including Copy, Import, and Export of files and directories.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長さの上限は 4 MiB。外にはファイル in-file とディレクトリ in-dir がある</para>
-    /// <para>手順: 同じシードで列を 2 つ作り、別のシードも多数見る</para>
-    /// <para>期待: 2 つの列は一致し、どの列にもファイルとディレクトリの Copy、Import、Export がある</para>
+    /// <para>Given: a length limit of 4 MiB. Outside there is a file in-file and a directory in-dir.</para>
+    /// <para>When: two sequences are made with the same seed, and many other seeds are checked.</para>
+    /// <para>Then: the two sequences match, and every sequence has Copy, Import, and Export of files and directories.</para>
     /// </remarks>
     [Fact]
-    public void Generate_同じシードはコピーと取り込みと書き出しを含む同じ列を作ること()
+    public void Generate_SameSeedMakesSameSequenceWithCopyImportExport()
     {
         TransferScenario left = TransferScenario.Generate(7, 10, StressContent.DefaultMaxBytes);
         TransferScenario right = TransferScenario.Generate(7, 10, StressContent.DefaultMaxBytes);

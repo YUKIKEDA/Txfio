@@ -4,24 +4,24 @@ using Txfio.Tests.Support;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ランダム操作列を本物のトランザクションとメモリ上のモデルの両方に打ち、食い違いを探す
+/// Runs a random sequence on both a real transaction and an in-memory model, looking for disagreements.
 /// </summary>
 internal static class RandomOperationRunner
 {
     /// <summary>
-    /// 縮小で試す実行の上限
+    /// The limit on runs tried while shrinking.
     /// </summary>
     private const int MaxShrinkRuns = 300;
 
     /// <summary>
-    /// 操作列を 1 回実行し、約束が破れていればその説明を返す
+    /// Runs a sequence once, and returns a description if a promise is broken.
     /// </summary>
     /// <remarks>
-    /// 各手は、モデルどおりに反映されるか、<see cref="InvalidOperationException"/> で拒否されるかのどちらかでなければならない。
-    /// 拒否された手はモデルを変えず、予約の一覧と読める内容も変えない。拒否でモデルとずれた手のあとは、モデルで打てない手を飛ばす
+    /// Each step must either be applied as the model says, or be rejected with <see cref="InvalidOperationException"/>.
+    /// A rejected step changes neither the model, the scheduled list, nor the readable content. After a step rejected against the model, steps the model cannot make are skipped.
     /// </remarks>
-    /// <param name="scenario">実行する操作列</param>
-    /// <returns>約束が守られていれば null、破れていればその説明</returns>
+    /// <param name="scenario">The sequence to run.</param>
+    /// <returns><see langword="null"/> if the promises hold, otherwise a description of the break.</returns>
     public static async Task<string?> RunAsync(RandomOperationScenario scenario)
     {
         await using TempDirectory work = TempDirectory.Create();
@@ -40,18 +40,18 @@ internal static class RandomOperationRunner
         }
         catch (Exception exception)
         {
-            failure = "想定外の例外: " + exception;
+            failure = "Unexpected exception: " + exception;
         }
 
-        return failure is null ? null : failure + Environment.NewLine + "実行した手:" + Environment.NewLine + trace;
+        return failure is null ? null : failure + Environment.NewLine + "Steps run:" + Environment.NewLine + trace;
     }
 
     /// <summary>
-    /// 失敗した操作列から手を 1 つずつ外し、まだ失敗する最小の列まで縮める
+    /// Removes steps one at a time from a failed sequence, shrinking it to the smallest one that still fails.
     /// </summary>
-    /// <param name="scenario">失敗した操作列</param>
-    /// <param name="failure">その失敗の説明</param>
-    /// <returns>縮めた操作列とその失敗の説明</returns>
+    /// <param name="scenario">The failed sequence.</param>
+    /// <param name="failure">The description of that failure.</param>
+    /// <returns>The shrunk sequence and its failure description.</returns>
     public static async Task<(RandomOperationScenario Scenario, string Failure)> ShrinkAsync(
         RandomOperationScenario scenario,
         string failure)
@@ -108,7 +108,7 @@ internal static class RandomOperationRunner
                         trace.Append("  ").Append(i).Append(": ok ").Append(operation).AppendLine();
                         if (mismatchRead is not null)
                         {
-                            return $"手 {i} の ReadAsync がモデルと違う: {mismatchRead}";
+                            return $"Step {i}: ReadAsync differs from the model: {mismatchRead}";
                         }
 
                         continue;
@@ -125,14 +125,14 @@ internal static class RandomOperationRunner
                     string pendingAfter = DescribePending(tx);
                     if (pendingAfter != pendingBefore)
                     {
-                        return $"手 {i} は拒否されたのに予約が変わった: 前 [{pendingBefore}]、後 [{pendingAfter}]";
+                        return $"Step {i} was rejected but the schedule changed: before [{pendingBefore}], after [{pendingAfter}]";
                     }
                 }
 
                 string? mismatch = await CompareReadsAsync(tx, model);
                 if (mismatch is not null)
                 {
-                    return $"手 {i} のあとの ReadAsync がモデルと違う: {mismatch}";
+                    return $"Step {i}: ReadAsync afterwards differs from the model: {mismatch}";
                 }
             }
 
@@ -145,7 +145,7 @@ internal static class RandomOperationRunner
                     trace.Append("  Commit -> ").Append(report.Result).AppendLine();
                     if (report.Result == CommitResult.PartialConflict)
                     {
-                        return "外から変えていないのに PartialConflict になった";
+                        return "PartialConflict without any external change";
                     }
 
                     if (report.Result == CommitResult.Succeeded)
@@ -235,7 +235,7 @@ internal static class RandomOperationRunner
         string? mismatch = FirstMismatch(expected, actual);
         if (mismatch is not null)
         {
-            return "終わったあとのディスクが違う: " + mismatch;
+            return "The disk differs at the end: " + mismatch;
         }
 
         string[] directories = Directory.EnumerateDirectories(workFolder)
@@ -245,13 +245,13 @@ internal static class RandomOperationRunner
             .ToArray();
         if (directories.Length != 1 || directories[0] != RandomOperationScenario.SubDirectory)
         {
-            return "終わったあとのディレクトリが違う: [" + string.Join(", ", directories) + "]";
+            return "The directories differ at the end: [" + string.Join(", ", directories) + "]";
         }
 
         string metadata = System.IO.Path.Combine(workFolder, ".txfio");
         if (Directory.Exists(metadata) && Directory.EnumerateFiles(metadata, "tx-*.journal").Any())
         {
-            return "終わったあとにジャーナルが残った";
+            return "A journal remained at the end";
         }
 
         return null;
@@ -278,7 +278,7 @@ internal static class RandomOperationRunner
         {
             if (!actual.TryGetValue(file.Key, out byte[]? found))
             {
-                return file.Key + " が無い（期待 " + StressContent.Describe(file.Value) + "）";
+                return file.Key + " is missing (expected " + StressContent.Describe(file.Value) + ")";
             }
 
             if (!SameContent(file.Value, found))
@@ -291,7 +291,7 @@ internal static class RandomOperationRunner
         {
             if (!expected.ContainsKey(path))
             {
-                return path + " が余分（" + StressContent.Describe(actual[path]) + "）";
+                return path + " is extra (" + StressContent.Describe(actual[path]) + ")";
             }
         }
 
@@ -304,10 +304,10 @@ internal static class RandomOperationRunner
     {
         if (expected.Length == actual.Length)
         {
-            return path + " は長さ " + StressContent.Describe(expected) + " で内容が違う";
+            return path + " has length " + StressContent.Describe(expected) + " and different content";
         }
 
-        return path + " は期待 " + StressContent.Describe(expected) + "、実際 " + StressContent.Describe(actual);
+        return path + " expected " + StressContent.Describe(expected) + ", actual " + StressContent.Describe(actual);
     }
 
     private static string FullPath(string workFolder, string relative)

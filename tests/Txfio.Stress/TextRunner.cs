@@ -4,17 +4,17 @@ using Txfio.Tests.Support;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 文字列と JSON の列を本物のトランザクションとメモリ上のテキストの両方に打ち、食い違いを探す
+/// Runs a text and JSON sequence on both a real transaction and in-memory text, looking for disagreements.
 /// </summary>
 internal static class TextRunner
 {
     private const int MaxShrinkRuns = 300;
 
     /// <summary>
-    /// 操作列を 1 回実行し、約束が破れていればその説明を返す
+    /// Runs a sequence once, and returns a description if a promise is broken.
     /// </summary>
-    /// <param name="scenario">実行する操作列</param>
-    /// <returns>約束が守られていれば null、破れていればその説明</returns>
+    /// <param name="scenario">The sequence to run.</param>
+    /// <returns><see langword="null"/> if the promises hold, otherwise a description of the break.</returns>
     public static async Task<string?> RunAsync(TextScenario scenario)
     {
         await using TempDirectory work = TempDirectory.Create();
@@ -28,18 +28,18 @@ internal static class TextRunner
         }
         catch (Exception exception)
         {
-            failure = "想定外の例外: " + exception;
+            failure = "Unexpected exception: " + exception;
         }
 
-        return failure is null ? null : failure + Environment.NewLine + "実行した手:" + Environment.NewLine + trace;
+        return failure is null ? null : failure + Environment.NewLine + "Steps run:" + Environment.NewLine + trace;
     }
 
     /// <summary>
-    /// 失敗した操作列から手を 1 つずつ外し、まだ失敗する最小の列まで縮める
+    /// Removes steps one at a time from a failed sequence, shrinking it to the smallest one that still fails.
     /// </summary>
-    /// <param name="scenario">失敗した操作列</param>
-    /// <param name="failure">その失敗の説明</param>
-    /// <returns>縮めた操作列とその失敗の説明</returns>
+    /// <param name="scenario">The failed sequence.</param>
+    /// <param name="failure">The description of that failure.</param>
+    /// <returns>The shrunk sequence and its failure description.</returns>
     public static async Task<(TextScenario Scenario, string Failure)> ShrinkAsync(TextScenario scenario, string failure)
     {
         int runs = 0;
@@ -84,7 +84,7 @@ internal static class TextRunner
                     try
                     {
                         await ApplyAsync(tx, operation);
-                        return "手 " + i + " は拒否されるはずだったが通った: " + operation;
+                        return "Step " + i + " should have been rejected but passed: " + operation;
                     }
                     catch (Exception exception) when (exception is ExternalConflictException or UnsupportedOperationException or InvalidOperationException)
                     {
@@ -100,12 +100,12 @@ internal static class TextRunner
                         trace.Append("  ").Append(i).Append(": ok ").Append(operation).AppendLine();
                         if (mismatch is not null)
                         {
-                            return "手 " + i + " の読み戻しがモデルと違う: " + mismatch;
+                            return "Step " + i + ": reading back differs from the model: " + mismatch;
                         }
                     }
                     catch (Exception exception) when (exception is ExternalConflictException or UnsupportedOperationException or InvalidOperationException or JsonException)
                     {
-                        return "手 " + i + " は通るはずだったが失敗した: " + operation + " (" + exception.Message + ")";
+                        return "Step " + i + " should have passed but failed: " + operation + " (" + exception.Message + ")";
                     }
                 }
             }
@@ -119,7 +119,7 @@ internal static class TextRunner
                     trace.Append("  Commit -> ").Append(report.Result).AppendLine();
                     if (report.Result == CommitResult.PartialConflict)
                     {
-                        return "外から変えていないのに PartialConflict になった";
+                        return "PartialConflict without any external change";
                     }
 
                     if (report.Result == CommitResult.Succeeded)
@@ -167,7 +167,7 @@ internal static class TextRunner
                     StressJsonValue? actual = await tx.ReadFromJsonAsync<StressJsonValue>(operation.Path);
                     if (actual is null || !actual.Equals(operation.Json))
                     {
-                        return operation.Path + " の JSON が書いた値と違う";
+                        return operation.Path + " JSON differs from the value written";
                     }
 
                     return null;
@@ -187,7 +187,7 @@ internal static class TextRunner
                     StressJsonValue? actual = await tx.ReadFromJsonAsync<StressJsonValue>(operation.Path);
                     if (actual is null || !actual.Equals(operation.Json))
                     {
-                        return operation.Path + " の JSON が書いた値と違う";
+                        return operation.Path + " JSON differs from the value written";
                     }
                 }
 
@@ -246,21 +246,21 @@ internal static class TextRunner
             return null;
         }
 
-        return path + " は期待 " + expected.Length + " 文字、実際 " + actual.Length + " 文字";
+        return path + " expected " + expected.Length + " characters, actual " + actual.Length + " characters";
     }
 
     private static string? SameLines(string path, string[] expected, string[] actual)
     {
         if (expected.Length != actual.Length)
         {
-            return path + " の行数は期待 " + expected.Length + "、実際 " + actual.Length;
+            return path + " line count expected " + expected.Length + ", actual " + actual.Length;
         }
 
         for (int i = 0; i < expected.Length; i++)
         {
             if (expected[i] != actual[i])
             {
-                return path + " の " + i + " 行目が違う";
+                return path + ": line " + i + " differs";
             }
         }
 
@@ -286,7 +286,7 @@ internal static class TextRunner
         {
             if (!Directory.Exists(FullPath(workFolder, directory)))
             {
-                return "終わったあとにディレクトリが無い: " + directory;
+                return "Directory missing at the end: " + directory;
             }
         }
 
@@ -295,14 +295,14 @@ internal static class TextRunner
             string full = FullPath(workFolder, file);
             if (!File.Exists(full))
             {
-                return "終わったあとにファイルが無い: " + file;
+                return "File missing at the end: " + file;
             }
 
             byte[] actual = await File.ReadAllBytesAsync(full);
             byte[] encoded = TextModel.Encode(expected.Text(file));
             if (!encoded.AsSpan().SequenceEqual(actual))
             {
-                return "終わったあとのファイルが違う: " + file + " は期待 " + encoded.Length + " バイト、実際 " + actual.Length + " バイト";
+                return "File differs at the end: " + file + " expected " + encoded.Length + " bytes, actual " + actual.Length + " bytes";
             }
         }
 
@@ -316,14 +316,14 @@ internal static class TextRunner
 
             if (!expected.IsFile(relative))
             {
-                return "終わったあとにファイルが余分: " + relative;
+                return "Extra file at the end: " + relative;
             }
         }
 
         string metadata = System.IO.Path.Combine(workFolder, ".txfio");
         if (Directory.Exists(metadata) && Directory.EnumerateFiles(metadata, "tx-*.journal").Any())
         {
-            return "終わったあとにジャーナルが残った";
+            return "A journal remained at the end";
         }
 
         return null;

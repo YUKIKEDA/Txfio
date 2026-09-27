@@ -1,17 +1,17 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 移動先を置き換える Move を含む操作列を作る
+/// Makes sequences that include Moves that replace their destination.
 /// </summary>
 internal static class OverwriteScenario
 {
     /// <summary>
-    /// シードから操作列を作る。最初の 1 手は、置けるなら置き換えの Move にする
+    /// Makes a sequence from a seed. The first step is a replacing Move when one can be made.
     /// </summary>
-    /// <param name="seed">シード</param>
-    /// <param name="maxOperations">操作数の上限</param>
-    /// <param name="maxBytes">1 ファイルの長さの上限</param>
-    /// <returns>作った操作列</returns>
+    /// <param name="seed">The seed.</param>
+    /// <param name="maxOperations">The maximum number of operations.</param>
+    /// <param name="maxBytes">The maximum length of one file.</param>
+    /// <returns>The sequence that was made.</returns>
     public static DirectoryScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);

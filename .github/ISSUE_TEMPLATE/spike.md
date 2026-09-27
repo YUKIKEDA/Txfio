@@ -19,7 +19,7 @@ labels: ["type:spike"]
 
 ## Out of scope
 
-- Production implementationのマージ（原則）
+- Merging a production implementation (as a rule)
 
 ## Related
 

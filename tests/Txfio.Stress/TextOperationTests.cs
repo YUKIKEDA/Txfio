@@ -3,15 +3,15 @@ namespace Txfio.Tests.Stress;
 public sealed class TextOperationTests
 {
     /// <summary>
-    /// 文字列と JSON の読み書きを含む列が、テキストのモデルと食い違わない
+    /// A sequence with text and JSON reads and writes does not disagree with the text model.
     /// </summary>
     /// <remarks>
-    /// <para>前提: d と e と a.txt は最初からある。テキストの長さは空、数文字、数十 KB からシードが選ぶ。数 MB は長さの上限を既定より上げたときだけ使う</para>
-    /// <para>手順: 1 つのトランザクションでシードごとの操作列を打ち、Commit か Dispose する</para>
-    /// <para>期待: 書き込みと追記のあと読み戻しはモデルと一致し、JSON は書いた値と一致し、拒否された手はモデルを変えず、Commit が Succeeded ならディスクのバイト列はモデル、それ以外は開始前のままである</para>
+    /// <para>Given: d, e, and a.txt exist from the start. Text lengths are chosen by the seed from empty, a few characters, and tens of KB. Several MB is used only when the length limit is raised above the default.</para>
+    /// <para>When: the sequence for each seed runs in one transaction, which then commits or is disposed.</para>
+    /// <para>Then: reading back after writes and appends matches the model, JSON matches the value written, rejected steps do not change the model, and if Commit is Succeeded the bytes on disk match the model, otherwise they are as before the start.</para>
     /// </remarks>
     [Fact]
-    public async Task 文字列とJSONの操作列_モデルと同じ結果になること()
+    public async Task TextAndJsonSequence_MatchesModel()
     {
         int baseSeed = StressSettings.Seed(1);
         int count = StressSettings.Iterations(40);
@@ -24,22 +24,22 @@ public sealed class TextOperationTests
             {
                 (TextScenario shrunk, string shrunkFailure) = await TextRunner.ShrinkAsync(scenario, failure);
                 Assert.Fail(
-                    StressSettings.SeedVariable + "=" + scenario.Seed + " で約束が破れた（縮めた列）" + Environment.NewLine
+                    StressSettings.SeedVariable + "=" + scenario.Seed + " broke a promise (shrunk sequence)" + Environment.NewLine
                     + shrunk.Describe() + Environment.NewLine + shrunkFailure);
             }
         }
     }
 
     /// <summary>
-    /// 同じシードは、文字列と JSON の各 API を含む同じ列を作る
+    /// The same seed makes the same sequence, including every text and JSON API.
     /// </summary>
     /// <remarks>
-    /// <para>前提: 長さの上限は 4 MiB だが、この列のテキストは数十 KB までである</para>
-    /// <para>手順: 同じシードで列を 2 つ作り、別のシードも多数見る</para>
-    /// <para>期待: 2 つの列は一致し、どの列にも Write、Read、Append、行、JSON の書き込みと読み戻しがある</para>
+    /// <para>Given: a length limit of 4 MiB, but the text in this sequence is at most tens of KB.</para>
+    /// <para>When: two sequences are made with the same seed, and many other seeds are checked.</para>
+    /// <para>Then: the two sequences match, and every sequence has Write, Read, Append, lines, and JSON writes and reads.</para>
     /// </remarks>
     [Fact]
-    public void Generate_同じシードは文字列とJSONを含む同じ列を作ること()
+    public void Generate_SameSeedMakesSameSequenceWithTextAndJson()
     {
         TextScenario left = TextScenario.Generate(7, 12, StressContent.DefaultMaxBytes);
         TextScenario right = TextScenario.Generate(7, 12, StressContent.DefaultMaxBytes);

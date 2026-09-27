@@ -5,25 +5,25 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 多プロセスの耐久テストが起動する子プロセスで、共有のファイルへトランザクションを繰り返す
+/// In a child process started by the multi-process stress test, repeats transactions on shared files.
 /// </summary>
 public static class StressWriter
 {
     /// <summary>
-    /// 起動コマンド
+    /// The start-up command.
     /// </summary>
     public const string Command = "stress-writer";
 
     /// <summary>
-    /// リトライする子が、ロック競合で 1 つのトランザクションを試す回数の上限
+    /// How many times a retrying child tries one transaction under lock contention.
     /// </summary>
     public const int MaxAttempts = 50;
 
     /// <summary>
-    /// 子プロセスが奪い合うファイルの相対パス
+    /// The relative paths of the files the child processes compete for.
     /// </summary>
-    /// <param name="count">ファイルの数</param>
-    /// <returns><c>f0.txt</c> から順に並べたパス</returns>
+    /// <param name="count">The number of files.</param>
+    /// <returns>The paths in order from <c>f0.txt</c>.</returns>
     public static IReadOnlyList<string> Paths(int count)
     {
         return Enumerable.Range(0, count)
@@ -32,15 +32,15 @@ public static class StressWriter
     }
 
     /// <summary>
-    /// 開始ファイルができたら、トランザクションを決まった数だけ繰り返し、1 件ごとに記録ファイルへ 1 行書く
+    /// Once the start file appears, repeats a fixed number of transactions, writing one line per transaction to the log file.
     /// </summary>
     /// <remarks>
-    /// 行はタブ区切りで、トークン、結果、Commit 直前の時刻、試した回数、操作（<c>パス=種類</c> をセミコロンで連結）である。
-    /// 時刻はパスのロックを持ったまま取るので、同じパスに触れたトランザクションのあいだでは適用の順に並ぶ。
-    /// リトライする子は、ロック競合のあと少し待って同じパスの組をやり直す。Add / Update / Delete はやり直すたびにディスクを見て決め直す
+    /// Lines are tab-separated: token, result, time just before Commit, number of attempts, and operations (<c>path=kind</c> joined with semicolons).
+    /// The time is taken while holding the path locks, so transactions that touched the same path are ordered by apply.
+    /// A retrying child waits a little after lock contention and retries the same set of paths. Add / Update / Delete are decided again from the disk at each retry.
     /// </remarks>
-    /// <param name="args">コマンド、ワークフォルダ、子の番号、トランザクション数、シード、ファイル数、リトライするか（1 か 0）、記録ファイル、開始ファイル</param>
-    /// <returns>最後まで回れば 0、引数が足りなければ 2、想定外の例外なら 1</returns>
+    /// <param name="args">The command, work folder, child number, transaction count, seed, file count, whether to retry (1 or 0), log file, and start file.</param>
+    /// <returns>0 if it runs to the end, 2 if arguments are missing, 1 on an unexpected exception.</returns>
     public static async Task<int> RunAsync(string[] args)
     {
         if (args.Length != 9)

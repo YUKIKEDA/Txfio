@@ -1,27 +1,27 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ZIP のランダム列で使う操作の種類
+/// The kinds of operations used in random ZIP sequences.
 /// </summary>
 internal enum ArchiveKind
 {
     /// <summary>
-    /// ワークフォルダ内の CreateArchiveAsync
+    /// CreateArchiveAsync inside the work folder.
     /// </summary>
     Create,
 
     /// <summary>
-    /// ワークフォルダ内の ExtractArchiveAsync
+    /// ExtractArchiveAsync inside the work folder.
     /// </summary>
     Extract,
 
     /// <summary>
-    /// 外の ZIP を取り込む ImportArchiveAsync
+    /// ImportArchiveAsync, which imports an external ZIP.
     /// </summary>
     Import,
 
     /// <summary>
-    /// 外へ ZIP を書く ExportArchiveAsync
+    /// ExportArchiveAsync, which writes a ZIP outside.
     /// </summary>
     Export,
 }

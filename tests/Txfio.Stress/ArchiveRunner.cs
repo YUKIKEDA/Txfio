@@ -5,17 +5,17 @@ using Txfio.Tests.Support;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// ZIP の列を本物のトランザクションとメモリ上の木の両方に打ち、食い違いを探す
+/// Runs a ZIP sequence on both a real transaction and an in-memory tree, looking for disagreements.
 /// </summary>
 internal static class ArchiveRunner
 {
     private const int MaxShrinkRuns = 300;
 
     /// <summary>
-    /// 操作列を 1 回実行し、約束が破れていればその説明を返す
+    /// Runs a sequence once, and returns a description if a promise is broken.
     /// </summary>
-    /// <param name="scenario">実行する操作列</param>
-    /// <returns>約束が守られていれば null、破れていればその説明</returns>
+    /// <param name="scenario">The sequence to run.</param>
+    /// <returns><see langword="null"/> if the promises hold, otherwise a description of the break.</returns>
     public static async Task<string?> RunAsync(ArchiveScenario scenario)
     {
         await using TempDirectory work = TempDirectory.Create();
@@ -31,18 +31,18 @@ internal static class ArchiveRunner
         }
         catch (Exception exception)
         {
-            failure = "想定外の例外: " + exception;
+            failure = "Unexpected exception: " + exception;
         }
 
-        return failure is null ? null : failure + Environment.NewLine + "実行した手:" + Environment.NewLine + trace;
+        return failure is null ? null : failure + Environment.NewLine + "Steps run:" + Environment.NewLine + trace;
     }
 
     /// <summary>
-    /// 失敗した操作列から手を 1 つずつ外し、まだ失敗する最小の列まで縮める
+    /// Removes steps one at a time from a failed sequence, shrinking it to the smallest one that still fails.
     /// </summary>
-    /// <param name="scenario">失敗した操作列</param>
-    /// <param name="failure">その失敗の説明</param>
-    /// <returns>縮めた操作列とその失敗の説明</returns>
+    /// <param name="scenario">The failed sequence.</param>
+    /// <param name="failure">The description of that failure.</param>
+    /// <returns>The shrunk sequence and its failure description.</returns>
     public static async Task<(ArchiveScenario Scenario, string Failure)> ShrinkAsync(ArchiveScenario scenario, string failure)
     {
         int runs = 0;
@@ -89,7 +89,7 @@ internal static class ArchiveRunner
                     try
                     {
                         await ApplyAsync(tx, outsideRoot, operation);
-                        return "手 " + i + " は拒否されるはずだったが通った: " + operation;
+                        return "Step " + i + " should have been rejected but passed: " + operation;
                     }
                     catch (Exception exception) when (exception is InvalidOperationException or ExternalConflictException)
                     {
@@ -98,7 +98,7 @@ internal static class ArchiveRunner
                         string pendingAfter = DescribePending(tx);
                         if (pendingAfter != pendingBefore)
                         {
-                            return "手 " + i + " は拒否されたのに予約が変わった: 前 [" + pendingBefore + "]、後 [" + pendingAfter + "]";
+                            return "Step " + i + " was rejected but the schedule changed: before [" + pendingBefore + "], after [" + pendingAfter + "]";
                         }
                     }
                 }
@@ -112,19 +112,19 @@ internal static class ArchiveRunner
                         string? archive = await CaptureArchiveAsync(tx, outsideRoot, world, operation);
                         if (archive is not null)
                         {
-                            return "手 " + i + " の ZIP がモデルと違う: " + archive;
+                            return "Step " + i + ": the ZIP differs from the model: " + archive;
                         }
                     }
                     catch (Exception exception) when (exception is InvalidOperationException or ExternalConflictException)
                     {
-                        return "手 " + i + " は通るはずだったが拒否された: " + operation + " (" + exception.Message + ")";
+                        return "Step " + i + " should have passed but was rejected: " + operation + " (" + exception.Message + ")";
                     }
                 }
 
                 string? mismatch = await CompareViewAsync(workFolder, tx, world.Commit);
                 if (mismatch is not null)
                 {
-                    return "手 " + i + " のあとの姿がモデルと違う: " + mismatch;
+                    return "Step " + i + ": the view afterwards differs from the model: " + mismatch;
                 }
             }
 
@@ -137,7 +137,7 @@ internal static class ArchiveRunner
                     trace.Append("  Commit -> ").Append(report.Result).AppendLine();
                     if (report.Result == CommitResult.PartialConflict)
                     {
-                        return "外から変えていないのに PartialConflict になった";
+                        return "PartialConflict without any external change";
                     }
 
                     if (report.Result == CommitResult.Succeeded)
@@ -235,14 +235,14 @@ internal static class ArchiveRunner
             string full = FullPath(outsideRoot, path);
             if (!File.Exists(full))
             {
-                return "書き出した ZIP が残っていない: " + path;
+                return "The exported ZIP is gone: " + path;
             }
 
             byte[] bytes = await File.ReadAllBytesAsync(full);
             string? mismatch = await CompareZipBytesAsync(bytes, world.ExportEntries(path));
             if (mismatch is not null)
             {
-                return path + " の " + mismatch;
+                return path + ": " + mismatch;
             }
         }
 
@@ -274,14 +274,14 @@ internal static class ArchiveRunner
         {
             if (!actual.TryGetValue(pair.Key, out byte[]? found))
             {
-                return "エントリが無い: " + pair.Key;
+                return "Entry missing: " + pair.Key;
             }
 
             if (pair.Value is null)
             {
                 if (found is not null)
                 {
-                    return pair.Key + " はディレクトリではなかった";
+                    return pair.Key + " was not a directory";
                 }
 
                 continue;
@@ -289,7 +289,7 @@ internal static class ArchiveRunner
 
             if (found is null || !pair.Value.AsSpan().SequenceEqual(found))
             {
-                return pair.Key + " の中身が違う";
+                return pair.Key + " has different content";
             }
         }
 
@@ -297,7 +297,7 @@ internal static class ArchiveRunner
         {
             if (!expected.ContainsKey(key))
             {
-                return "エントリが余分: " + key;
+                return "Extra entry: " + key;
             }
         }
 
@@ -325,7 +325,7 @@ internal static class ArchiveRunner
             byte[] actual = await ReadAsync(tx, path);
             if (!expected.AsSpan().SequenceEqual(actual))
             {
-                return path + " は期待 " + StressContent.Describe(expected) + "、実際 " + StressContent.Describe(actual);
+                return path + " expected " + StressContent.Describe(expected) + ", actual " + StressContent.Describe(actual);
             }
         }
 
@@ -363,14 +363,14 @@ internal static class ArchiveRunner
         IReadOnlyList<(string Path, bool IsDirectory)> expected = model.Children(directory);
         if (actual.Count != expected.Count)
         {
-            return directory + " の直下の件数が違う: 期待 " + expected.Count + "、実際 " + actual.Count;
+            return directory + " has a different number of direct children: expected " + expected.Count + ", actual " + actual.Count;
         }
 
         for (int i = 0; i < expected.Count; i++)
         {
             if (actual[i].Path != expected[i].Path || actual[i].IsDirectory != expected[i].IsDirectory)
             {
-                return directory + " の直下が違う: 期待 " + expected[i].Path + "、実際 " + actual[i].Path;
+                return directory + " has different direct children: expected " + expected[i].Path + ", actual " + actual[i].Path;
             }
         }
 
@@ -410,7 +410,7 @@ internal static class ArchiveRunner
         {
             if (!actual.IsDirectory(directory))
             {
-                return "終わったあとにディレクトリが無い: " + directory;
+                return "Directory missing at the end: " + directory;
             }
         }
 
@@ -418,7 +418,7 @@ internal static class ArchiveRunner
         {
             if (!expected.IsDirectory(directory))
             {
-                return "終わったあとにディレクトリが余分: " + directory;
+                return "Extra directory at the end: " + directory;
             }
         }
 
@@ -426,12 +426,12 @@ internal static class ArchiveRunner
         {
             if (!actual.IsFile(file))
             {
-                return "終わったあとにファイルが無い: " + file;
+                return "File missing at the end: " + file;
             }
 
             if (!expected.File(file).AsSpan().SequenceEqual(actual.File(file)))
             {
-                return "終わったあとのファイルが違う: " + file;
+                return "File differs at the end: " + file;
             }
         }
 
@@ -439,14 +439,14 @@ internal static class ArchiveRunner
         {
             if (!expected.IsFile(file))
             {
-                return "終わったあとにファイルが余分: " + file;
+                return "Extra file at the end: " + file;
             }
         }
 
         string metadata = System.IO.Path.Combine(root, ".txfio");
         if (Directory.Exists(metadata) && Directory.EnumerateFiles(metadata, "tx-*.journal").Any())
         {
-            return "終わったあとにジャーナルが残った";
+            return "A journal remained at the end";
         }
 
         return null;

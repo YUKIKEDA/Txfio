@@ -1,13 +1,13 @@
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 文字列と JSON の 1 手
+/// One text or JSON step.
 /// </summary>
-/// <param name="Kind">操作の種類</param>
-/// <param name="Path">対象の相対パス</param>
-/// <param name="Text">WriteAllText と AppendAllText の文字列。それ以外は null</param>
-/// <param name="Lines">行の操作の行。それ以外は null</param>
-/// <param name="Json">JSON の操作の値。それ以外は null</param>
+/// <param name="Kind">The operation kind.</param>
+/// <param name="Path">The target relative path.</param>
+/// <param name="Text">The string of WriteAllText and AppendAllText. <see langword="null"/> otherwise.</param>
+/// <param name="Lines">The lines of line operations. <see langword="null"/> otherwise.</param>
+/// <param name="Json">The value of JSON operations. <see langword="null"/> otherwise.</param>
 internal sealed record TextOperation(
     TextKind Kind,
     string Path,
@@ -16,10 +16,10 @@ internal sealed record TextOperation(
     StressJsonValue? Json)
 {
     /// <summary>
-    /// いまのモデルでこの手を打てるか
+    /// Returns whether this step can be made on the current model.
     /// </summary>
-    /// <param name="model">コミット後のテキスト</param>
-    /// <returns>打てるとき true</returns>
+    /// <param name="model">The text after commit.</param>
+    /// <returns>true when it can be made.</returns>
     public bool CanApply(TextModel model)
     {
         switch (Kind)
@@ -39,9 +39,9 @@ internal sealed record TextOperation(
     }
 
     /// <summary>
-    /// メモリ上のテキストへこの手を反映する。読み取りは何もしない
+    /// Applies this step to the in-memory text. Reads do nothing.
     /// </summary>
-    /// <param name="model">コミット後のテキスト</param>
+    /// <param name="model">The text after commit.</param>
     public void ApplyTo(TextModel model)
     {
         switch (Kind)
@@ -65,15 +65,15 @@ internal sealed record TextOperation(
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形。中身は長さだけ出す
+    /// A readable form for failure reports. Content is shown only as its length.
     /// </summary>
-    /// <returns>種類とパスと長さ</returns>
+    /// <returns>The kind, path, and length.</returns>
     public override string ToString()
     {
         string detail = Kind switch
         {
-            TextKind.WriteText or TextKind.AppendText => (Text ?? string.Empty).Length + " 文字",
-            TextKind.WriteLines or TextKind.AppendLines => (Lines is null ? 0 : Lines.Length) + " 行",
+            TextKind.WriteText or TextKind.AppendText => (Text ?? string.Empty).Length + " characters",
+            TextKind.WriteLines or TextKind.AppendLines => (Lines is null ? 0 : Lines.Length) + " lines",
             TextKind.WriteJson or TextKind.ReadJson => "json",
             _ => "read",
         };

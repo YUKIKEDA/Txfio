@@ -3,12 +3,12 @@ using System.Text;
 namespace Txfio.Tests.Stress;
 
 /// <summary>
-/// 1 トランザクション分のディレクトリ操作列と、開始時の木
+/// A directory sequence for one transaction, and the tree at the start.
 /// </summary>
-/// <param name="Seed">この列を作ったシード</param>
-/// <param name="Initial">開始前にディスクへ置く木</param>
-/// <param name="Operations">順に打つ操作</param>
-/// <param name="Commit">最後に Commit するなら true、Dispose だけなら false</param>
+/// <param name="Seed">The seed that made this sequence.</param>
+/// <param name="Initial">The tree placed on disk before the start.</param>
+/// <param name="Operations">The operations to run in order.</param>
+/// <param name="Commit">true to Commit at the end, false to only Dispose.</param>
 internal sealed record DirectoryScenario(
     int Seed,
     DirectoryTree Initial,
@@ -16,7 +16,7 @@ internal sealed record DirectoryScenario(
     bool Commit)
 {
     /// <summary>
-    /// いつもあるディレクトリ
+    /// The directories that always exist.
     /// </summary>
     public static readonly IReadOnlyList<string> RootDirectories = new[] { "d", "e" };
 
@@ -25,12 +25,12 @@ internal sealed record DirectoryScenario(
     internal static readonly IReadOnlyList<string> FilePaths = new[] { "a.txt", "d/a.txt", "e/b.txt", "d/c/a.txt", "e/c/b.txt", "f/a.txt" };
 
     /// <summary>
-    /// シードから操作列を作る。各手は、それまでの手がすべてモデルどおり通った前提で打てるものを選ぶ
+    /// Makes a sequence from a seed. Each step is chosen so it can be made, assuming every earlier step passed as the model says.
     /// </summary>
-    /// <param name="seed">シード</param>
-    /// <param name="maxOperations">操作数の上限</param>
-    /// <param name="maxBytes">1 ファイルの長さの上限</param>
-    /// <returns>作った操作列</returns>
+    /// <param name="seed">The seed.</param>
+    /// <param name="maxOperations">The maximum number of operations.</param>
+    /// <param name="maxBytes">The maximum length of one file.</param>
+    /// <returns>The sequence that was made.</returns>
     public static DirectoryScenario Generate(int seed, int maxOperations, int maxBytes)
     {
         Random random = new Random(seed);
@@ -50,11 +50,11 @@ internal sealed record DirectoryScenario(
     }
 
     /// <summary>
-    /// 開始前の木を作る。d と e はいつもある
+    /// Makes the tree before the start. d and e always exist.
     /// </summary>
-    /// <param name="random">置くものを決める乱数</param>
-    /// <param name="maxBytes">ファイルの長さの上限</param>
-    /// <returns>開始前の木</returns>
+    /// <param name="random">The random source that decides what to place.</param>
+    /// <param name="maxBytes">The maximum file length.</param>
+    /// <returns>The tree before the start.</returns>
     public static DirectoryTree CreateInitial(Random random, int maxBytes)
     {
         DirectoryTree initial = new DirectoryTree();
@@ -83,9 +83,9 @@ internal sealed record DirectoryScenario(
     }
 
     /// <summary>
-    /// 失敗の報告に使う、読める形の操作列
+    /// A readable form of the sequence for failure reports.
     /// </summary>
-    /// <returns>開始時の木、操作、終わり方を並べた文字列</returns>
+    /// <returns>A string with the starting tree, the operations, and how it ends.</returns>
     public string Describe()
     {
         StringBuilder text = new StringBuilder();
