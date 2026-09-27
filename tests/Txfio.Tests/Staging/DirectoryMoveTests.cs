@@ -111,8 +111,8 @@ public sealed class DirectoryMoveTests
         InvalidOperationException same = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.MoveAsync("sub", "sub"));
 
-        Assert.Contains("同じパスへは移動できません", differentCase.Message, StringComparison.Ordinal);
-        Assert.Contains("同じパスへは移動できません", same.Message, StringComparison.Ordinal);
+        Assert.Contains("A path cannot be moved to itself", differentCase.Message, StringComparison.Ordinal);
+        Assert.Contains("A path cannot be moved to itself", same.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, ".txfio", "locks")));
         Assert.True(Directory.Exists(source));

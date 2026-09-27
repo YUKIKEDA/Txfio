@@ -15,7 +15,7 @@ internal static class StaleJournals
         if (Exists(workFolder))
         {
             throw new RecoveryRequiredException(
-                "復旧していないトランザクションがあります。先に RecoverAsync を呼んでください: " + workFolder,
+                "A transaction has not been recovered. Call RecoverAsync first: " + workFolder,
                 workFolder);
         }
     }

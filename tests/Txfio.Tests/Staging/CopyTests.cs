@@ -176,7 +176,7 @@ public sealed class CopyTests
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => tx.CopyAsync("link", "dest"));
 
-            Assert.Contains("リパースポイントは操作できません", error.Message, StringComparison.Ordinal);
+            Assert.Contains("A reparse point cannot be used", error.Message, StringComparison.Ordinal);
             Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "dest")));
             Assert.Empty(tx.GetPendingChanges());
             Assert.Equal("secret", await File.ReadAllTextAsync(System.IO.Path.Combine(target, "secret.txt")));
@@ -208,7 +208,7 @@ public sealed class CopyTests
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CopyAsync("link.txt", "copy.txt"));
 
-        Assert.Contains("リパースポイントは操作できません", error.Message, StringComparison.Ordinal);
+        Assert.Contains("A reparse point cannot be used", error.Message, StringComparison.Ordinal);
         Assert.False(File.Exists(System.IO.Path.Combine(work.Path, "copy.txt")));
         Assert.Empty(tx.GetPendingChanges());
         Assert.Equal("secret", await File.ReadAllTextAsync(target));
@@ -281,7 +281,7 @@ public sealed class CopyTests
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CopyAsync("a.txt", "a.txt"));
 
-        Assert.Contains("同じパスへはコピーできません", error.Message, StringComparison.Ordinal);
+        Assert.Contains("A path cannot be copied to itself", error.Message, StringComparison.Ordinal);
         Assert.Equal("keep", await File.ReadAllTextAsync(source));
     }
 
@@ -304,7 +304,7 @@ public sealed class CopyTests
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CopyAsync("src", "src/nested"));
 
-        Assert.Contains("ディレクトリを自分自身の配下へはコピーできません", error.Message, StringComparison.Ordinal);
+        Assert.Contains("A directory cannot be copied under itself", error.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(System.IO.Path.Combine(source, "nested")));
     }
 

@@ -96,7 +96,7 @@ internal sealed partial class Transaction
 
             if (Directory.Exists(targetPath) || existing.IsDirectory)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
 
             if (existing.Kind == PendingChangeKind.Add)
@@ -188,22 +188,22 @@ internal sealed partial class Transaction
                 return;
             }
 
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (moveToIndex >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (File.Exists(targetPath))
         {
-            throw new UnsupportedOperationException("ファイルの全削除は未対応です: " + targetPath);
+            throw new UnsupportedOperationException("DeleteTree of a file is not supported: " + targetPath);
         }
 
         if (!Directory.Exists(targetPath))
         {
-            throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + targetPath, targetPath);
+            throw new ExternalConflictException("The directory to delete does not exist: " + targetPath, targetPath);
         }
 
         await StageDeleteTreeAsync(targetPath, cancellationToken).ConfigureAwait(false);
@@ -225,7 +225,7 @@ internal sealed partial class Transaction
         string destPath = WorkPath.ResolveInWorkFolder(_workFolder, newPath);
         if (string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("同じパスへは移動できません: " + sourcePath);
+            throw new InvalidOperationException("A path cannot be moved to itself: " + sourcePath);
         }
 
         StagingRules.EnsureNotMetadataFolder(_workFolder, sourcePath);
@@ -262,12 +262,12 @@ internal sealed partial class Transaction
 
         if (destIndex >= 0 && (!destIsMoveSource || overwrite))
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (IsFileMoveOut(destIndex) && FindLaterOperationIndex(destPath, destIndex) >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         int moveToDest = FindMoveToIndex(destPath);
@@ -278,7 +278,7 @@ internal sealed partial class Transaction
                 return;
             }
 
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         if (directoryMove)
@@ -315,7 +315,7 @@ internal sealed partial class Transaction
             }
             else
             {
-                throw new ExternalConflictException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
+                throw new ExternalConflictException("The source file does not exist: " + sourcePath, sourcePath);
             }
         }
 
@@ -324,14 +324,14 @@ internal sealed partial class Transaction
             PendingChangeKind sourceKind = _paths.Rows[sourceIndex].Kind;
             if (sourceKind == PendingChangeKind.Delete || sourceKind == PendingChangeKind.DeleteTree)
             {
-                throw new InvalidOperationException("削除予約されたパスは移動できません");
+                throw new InvalidOperationException("A path scheduled for deletion cannot be moved");
             }
 
             if (sourceKind != PendingChangeKind.Move
                 && sourceKind != PendingChangeKind.Add
                 && sourceKind != PendingChangeKind.Update)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
 
@@ -341,7 +341,7 @@ internal sealed partial class Transaction
             StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, destPath);
             if (sourceIndex >= 0 || moveToSource >= 0)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
 
@@ -481,7 +481,7 @@ internal sealed partial class Transaction
     {
         if (sourceIndex >= 0 || moveToSource >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         StagingRules.ThrowIfDirectoryReplaceConflicts(_paths.Rows, _createdDirectories, sourcePath, destPath);
@@ -490,7 +490,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!Directory.Exists(sourcePath))
         {
-            throw new ExternalConflictException("移動元のディレクトリが存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("The source directory does not exist: " + sourcePath, sourcePath);
         }
 
         // 移動先がファイルでもディレクトリでも入れ替える。無ければ普通のディレクトリ Move と同じ
@@ -557,10 +557,10 @@ internal sealed partial class Transaction
             if (_paths.Rows[sourceIndex].Kind == PendingChangeKind.Delete
                 || _paths.Rows[sourceIndex].Kind == PendingChangeKind.DeleteTree)
             {
-                throw new InvalidOperationException("削除予約されたパスは移動できません");
+                throw new InvalidOperationException("A path scheduled for deletion cannot be moved");
             }
 
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         StagingRules.ThrowIfDirectoryMoveConflicts(_paths.Rows, root, destPath);
@@ -574,7 +574,7 @@ internal sealed partial class Transaction
 
         if (!Directory.Exists(root))
         {
-            throw new ExternalConflictException("移動元のディレクトリが存在しません: " + root, root);
+            throw new ExternalConflictException("The source directory does not exist: " + root, root);
         }
 
         if (replaceIndex >= 0)
@@ -646,7 +646,7 @@ internal sealed partial class Transaction
         await _locks.AcquireReservingAsync(_workFolder, new[] { directoryPath }, new[] { directoryPath }, _lockAttempt).ConfigureAwait(false);
         if (!Directory.Exists(directoryPath))
         {
-            throw new ExternalConflictException("削除対象のディレクトリが存在しません: " + directoryPath, directoryPath);
+            throw new ExternalConflictException("The directory to delete does not exist: " + directoryPath, directoryPath);
         }
 
         JournalOperation operation = new JournalOperation(
@@ -671,7 +671,7 @@ internal sealed partial class Transaction
         JournalOperation existing = _paths.Rows[sourceIndex];
         if (existing.Kind == PendingChangeKind.Delete || existing.Kind == PendingChangeKind.DeleteTree)
         {
-            throw new InvalidOperationException("削除予約されたパスは移動できません");
+            throw new InvalidOperationException("A path scheduled for deletion cannot be moved");
         }
 
         if (existing.Kind == PendingChangeKind.Move)
@@ -689,7 +689,7 @@ internal sealed partial class Transaction
 
         if (existing.Kind != PendingChangeKind.Add && existing.Kind != PendingChangeKind.Update)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         // 置き換える先がファイルなら、書き直した中身はその Update になる

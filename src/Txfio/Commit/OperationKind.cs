@@ -58,7 +58,7 @@ internal abstract class OperationKind
     {
         if (!_byKind.TryGetValue(kind, out OperationKind? behavior))
         {
-            throw new InvalidOperationException("未知の操作種別です: " + kind);
+            throw new InvalidOperationException("Unknown operation kind: " + kind);
         }
 
         return behavior;

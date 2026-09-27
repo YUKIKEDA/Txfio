@@ -408,7 +408,7 @@ internal sealed class PathLockSet
 
     private static LockContentionException Contention(string workFolder)
     {
-        return new LockContentionException("他のトランザクションがこのパスを使用中です: " + workFolder, workFolder);
+        return new LockContentionException("Another transaction is using this path: " + workFolder, workFolder);
     }
 
     private FileStream OpenLockFile(string lockPath, FileShare share)
@@ -442,7 +442,7 @@ internal sealed class PathLockSet
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
-            throw new LockContentionException("他のトランザクションがこのパスを使用中です: " + fullPath, fullPath);
+            throw new LockContentionException("Another transaction is using this path: " + fullPath, fullPath);
         }
     }
 
@@ -642,7 +642,7 @@ internal sealed class PathLockSet
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
-            throw new LockContentionException("他のトランザクションがこのパスを使用中です: " + directory, directory);
+            throw new LockContentionException("Another transaction is using this path: " + directory, directory);
         }
     }
 
@@ -681,7 +681,7 @@ internal sealed class PathLockSet
                     if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
                     {
                         throw new LockContentionException(
-                            "他のトランザクションがこのパスを使用中です: " + directory,
+                            "Another transaction is using this path: " + directory,
                             directory);
                     }
                 }

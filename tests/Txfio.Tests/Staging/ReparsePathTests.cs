@@ -28,7 +28,7 @@ public sealed class ReparsePathTests
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => tx.AddAsync(System.IO.Path.Combine("link", "a.txt"), content));
 
-            Assert.Contains("リパースポイントは操作できません", error.Message, StringComparison.Ordinal);
+            Assert.Contains("A reparse point cannot be used", error.Message, StringComparison.Ordinal);
             Assert.Contains(link, error.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Empty(Directory.GetFileSystemEntries(outside.Path));
             Assert.Empty(Directory.GetFiles(work.Path, "*.txnew", SearchOption.AllDirectories));
@@ -64,7 +64,7 @@ public sealed class ReparsePathTests
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => tx.AddAsync(System.IO.Path.Combine("link", "a.txt"), content));
 
-            Assert.Contains("リパースポイントは操作できません", error.Message, StringComparison.Ordinal);
+            Assert.Contains("A reparse point cannot be used", error.Message, StringComparison.Ordinal);
             Assert.Empty(Directory.GetFileSystemEntries(real));
             Assert.Empty(tx.GetPendingChanges());
         }
@@ -97,7 +97,7 @@ public sealed class ReparsePathTests
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => tx.AddAsync(System.IO.Path.Combine("link", "missing", "a.txt"), content));
 
-            Assert.Contains("リパースポイントは操作できません", error.Message, StringComparison.Ordinal);
+            Assert.Contains("A reparse point cannot be used", error.Message, StringComparison.Ordinal);
             Assert.Empty(Directory.GetFileSystemEntries(outside.Path));
             Assert.Empty(tx.GetPendingChanges());
         }

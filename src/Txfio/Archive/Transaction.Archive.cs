@@ -125,7 +125,7 @@ internal sealed partial class Transaction
                 ArchiveEntryNames.Split(name, out bool endsWithSeparator);
                 if (endsWithSeparator)
                 {
-                    throw new InvalidDataException("ファイルのエントリ名が区切りで終わっています: " + entryName);
+                    throw new InvalidDataException("The entry name of a file ends with a separator: " + entryName);
                 }
 
                 return name;
@@ -175,16 +175,16 @@ internal sealed partial class Transaction
             if (exception is DirectoryNotFoundException)
             {
                 string parent = System.IO.Path.GetDirectoryName(destinationPath) ?? destinationPath;
-                throw new ExternalConflictException("親ディレクトリが存在しません: " + parent, parent);
+                throw new ExternalConflictException("The parent directory does not exist: " + parent, parent);
             }
 
-            throw new ExternalConflictException("ZIP のパスに既にファイルがあります: " + destinationPath, destinationPath);
+            throw new ExternalConflictException("A file already exists at the ZIP path: " + destinationPath, destinationPath);
         }
     }
 
     private static FileStream OpenArchiveSourceFromDisk(string path)
     {
-        return OpenExternalFile(path, "入力のファイルが存在しません: " + path, path);
+        return OpenExternalFile(path, "The input file does not exist: " + path, path);
     }
 
     private static DateTimeOffset ToEntryTime(DateTime lastWriteTime)
@@ -266,12 +266,12 @@ internal sealed partial class Transaction
         {
             if (entry is null)
             {
-                throw new ArgumentNullException(nameof(entries), "ZIP に入れる要素が null です");
+                throw new ArgumentNullException(nameof(entries), "An element to put in the ZIP is null");
             }
 
             if (entry.SourcePath is null)
             {
-                throw new ArgumentNullException(nameof(entries), "ZIP に入れる要素のパスが null です");
+                throw new ArgumentNullException(nameof(entries), "The path of an element to put in the ZIP is null");
             }
 
             string sourcePath = WorkPath.ResolveInWorkFolder(_workFolder, entry.SourcePath);
@@ -328,7 +328,7 @@ internal sealed partial class Transaction
         {
             if (root.IsDirectory ? !Directory.Exists(root.SourcePath) : !File.Exists(root.SourcePath))
             {
-                throw new ExternalConflictException("入力が存在しません: " + root.SourcePath, root.SourcePath);
+                throw new ExternalConflictException("The input does not exist: " + root.SourcePath, root.SourcePath);
             }
         }
 
@@ -398,7 +398,7 @@ internal sealed partial class Transaction
 
             if (File.Exists(root.SourcePath) && WorkPath.IsReparsePoint(root.SourcePath))
             {
-                throw new InvalidOperationException("シンボリックリンクは ZIP に入れられません: " + root.SourcePath);
+                throw new InvalidOperationException("A symbolic link cannot be put in a ZIP: " + root.SourcePath);
             }
 
             // 入力が無いときは、書き出し先より先に知らせる

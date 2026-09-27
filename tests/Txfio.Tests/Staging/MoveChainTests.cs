@@ -128,7 +128,7 @@ public sealed class MoveChainTests
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("b.txt", "a.txt"));
 
-        Assert.Contains("空いている端が無い移動は受け付けられません", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("A move without a free end is not accepted", ex.Message, StringComparison.Ordinal);
         PendingChange pending = Assert.Single(tx.GetPendingChanges());
         Assert.EndsWith("b.txt", pending.NewPath, StringComparison.Ordinal);
         Assert.Equal("keep", await File.ReadAllTextAsync(source));

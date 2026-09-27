@@ -143,10 +143,10 @@ internal static class StagingFile
             if (exception is DirectoryNotFoundException)
             {
                 string parent = System.IO.Path.GetDirectoryName(destinationPath) ?? destinationPath;
-                throw new ExternalConflictException("親ディレクトリが存在しません: " + parent, parent);
+                throw new ExternalConflictException("The parent directory does not exist: " + parent, parent);
             }
 
-            throw new ExternalConflictException("コピー先のファイルが既に存在します: " + destinationPath, destinationPath);
+            throw new ExternalConflictException("The destination file already exists: " + destinationPath, destinationPath);
         }
 
         try

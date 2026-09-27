@@ -16,7 +16,7 @@ internal static class StagingRules
         {
             if (!File.Exists(targetPath))
             {
-                throw new ExternalConflictException("削除対象のファイルが存在しません: " + targetPath, targetPath);
+                throw new ExternalConflictException("The file to delete does not exist: " + targetPath, targetPath);
             }
 
             return;
@@ -26,20 +26,20 @@ internal static class StagingRules
         {
             // ディレクトリへファイルを書くと、コミットの検証まで失敗が分からない
             string message = kind == PendingChangeKind.Add
-                ? "追加対象のパスにディレクトリが既に存在します: "
-                : "更新対象のパスはディレクトリです: ";
+                ? "A directory already exists at the path to add: "
+                : "The path to update is a directory: ";
             throw new ExternalConflictException(message + targetPath, targetPath);
         }
 
         bool exists = File.Exists(targetPath);
         if (kind == PendingChangeKind.Add && exists)
         {
-            throw new ExternalConflictException("追加対象のファイルが既に存在します: " + targetPath, targetPath);
+            throw new ExternalConflictException("The file to add already exists: " + targetPath, targetPath);
         }
 
         if (kind == PendingChangeKind.Update && !exists)
         {
-            throw new ExternalConflictException("更新対象のファイルが存在しません: " + targetPath, targetPath);
+            throw new ExternalConflictException("The file to update does not exist: " + targetPath, targetPath);
         }
     }
 
@@ -58,7 +58,7 @@ internal static class StagingRules
     {
         if (IsInsideDirectory(sourcePath, destPath) || IsInsideDirectory(destPath, sourcePath))
         {
-            throw new InvalidOperationException("ディレクトリを自分自身の配下や親とは入れ替えられません: " + sourcePath);
+            throw new InvalidOperationException("A directory cannot be swapped with its own descendant or parent: " + sourcePath);
         }
 
         bool createdSource = createdDirectories.Any(
@@ -68,14 +68,14 @@ internal static class StagingRules
             if (IsInsideDirectory(destPath, operation.Path)
                 || (operation.NewPath is not null && IsInsideDirectory(destPath, operation.NewPath)))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
 
             bool underSource = IsInsideDirectory(sourcePath, operation.Path)
                 || (operation.NewPath is not null && IsInsideDirectory(sourcePath, operation.NewPath));
             if (underSource && !(createdSource && operation.Kind == PendingChangeKind.Add))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
     }
@@ -95,7 +95,7 @@ internal static class StagingRules
                     || string.Equals(operation.NewPath, path, StringComparison.OrdinalIgnoreCase)
                     || (operation.NewPath is not null && IsInsideDirectory(operation.NewPath, path))))
             {
-                throw new InvalidOperationException("置き換えまたは入れ替えの Move の移動元、移動先、または入れ替えの移動先の配下へは、続けて操作できません: " + path);
+                throw new InvalidOperationException("No further operation is allowed on the source or destination of a replacing or swapping Move, or under the destination of a swap: " + path);
             }
         }
     }
@@ -108,7 +108,7 @@ internal static class StagingRules
     {
         if (!File.Exists(sourcePath))
         {
-            throw new ExternalConflictException("移動元のファイルが存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("The source file does not exist: " + sourcePath, sourcePath);
         }
     }
 
@@ -120,12 +120,12 @@ internal static class StagingRules
     {
         if (Directory.Exists(destPath))
         {
-            throw new ExternalConflictException("移動先がディレクトリです: " + destPath, destPath);
+            throw new ExternalConflictException("The destination is a directory: " + destPath, destPath);
         }
 
         if (File.Exists(destPath))
         {
-            throw new ExternalConflictException("移動先のファイルが既に存在します: " + destPath, destPath);
+            throw new ExternalConflictException("The destination file already exists: " + destPath, destPath);
         }
     }
 
@@ -143,7 +143,7 @@ internal static class StagingRules
             || string.IsNullOrEmpty(destRoot)
             || !string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase))
         {
-            throw new UnsupportedOperationException("ボリュームをまたぐ移動はできません: " + sourcePath + " -> " + destPath);
+            throw new UnsupportedOperationException("A move across volumes is not supported: " + sourcePath + " -> " + destPath);
         }
     }
 
@@ -157,7 +157,7 @@ internal static class StagingRules
         if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent))
         {
             string reported = string.IsNullOrEmpty(parent) ? targetPath : parent;
-            throw new ExternalConflictException("親ディレクトリが存在しません: " + reported, reported);
+            throw new ExternalConflictException("The parent directory does not exist: " + reported, reported);
         }
     }
 
@@ -170,7 +170,7 @@ internal static class StagingRules
     {
         if (WorkPath.IsInMetadataFolder(workFolder, targetPath))
         {
-            throw new InvalidOperationException("メタデータフォルダとその配下のパスは操作できません: " + targetPath);
+            throw new InvalidOperationException("The metadata folder and paths under it cannot be used: " + targetPath);
         }
     }
 
@@ -190,7 +190,7 @@ internal static class StagingRules
 
             if (IsInsideDirectory(operation.Path, path) || IsInsideDirectory(operation.NewPath, path))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
     }
@@ -208,20 +208,20 @@ internal static class StagingRules
     {
         if (IsInsideDirectory(sourcePath, destPath))
         {
-            throw new InvalidOperationException("ディレクトリを自分自身の配下へは移動できません: " + sourcePath);
+            throw new InvalidOperationException("A directory cannot be moved under itself: " + sourcePath);
         }
 
         foreach (JournalOperation operation in operations)
         {
             if (IsInsideDirectory(sourcePath, operation.Path) || IsInsideDirectory(destPath, operation.Path))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
 
             if (operation.NewPath is not null
                 && (IsInsideDirectory(sourcePath, operation.NewPath) || IsInsideDirectory(destPath, operation.NewPath)))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
     }
@@ -235,12 +235,12 @@ internal static class StagingRules
     {
         if (string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("同じパスへはコピーできません: " + sourcePath);
+            throw new InvalidOperationException("A path cannot be copied to itself: " + sourcePath);
         }
 
         if (IsInsideDirectory(sourcePath, destPath))
         {
-            throw new InvalidOperationException("ディレクトリを自分自身の配下へはコピーできません: " + sourcePath);
+            throw new InvalidOperationException("A directory cannot be copied under itself: " + sourcePath);
         }
     }
 
@@ -253,12 +253,12 @@ internal static class StagingRules
     {
         if (string.Equals(sourcePath, archivePath, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("入力と同じパスへは ZIP を作れません: " + sourcePath);
+            throw new InvalidOperationException("A ZIP cannot be created at the same path as its input: " + sourcePath);
         }
 
         if (IsInsideDirectory(sourcePath, archivePath))
         {
-            throw new InvalidOperationException("入力ディレクトリの配下へは ZIP を作れません: " + sourcePath);
+            throw new InvalidOperationException("A ZIP cannot be created under its input directory: " + sourcePath);
         }
     }
 
@@ -272,7 +272,7 @@ internal static class StagingRules
         if (IsPendingDirectoryDelete(operations, path)
             || IsPendingDirectoryDelete(operations, System.IO.Path.GetDirectoryName(path)))
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
     }
 
@@ -288,7 +288,7 @@ internal static class StagingRules
             if (operation.Kind == PendingChangeKind.CreateDirectory
                 && string.Equals(operation.Path, path, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
     }
@@ -304,7 +304,7 @@ internal static class StagingRules
         {
             if (operation.Kind == PendingChangeKind.DeleteTree && IsInsideDirectory(operation.Path, path))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
     }
@@ -321,7 +321,7 @@ internal static class StagingRules
             if (IsInsideDirectory(directoryPath, operation.Path)
                 || (operation.NewPath is not null && IsInsideDirectory(directoryPath, operation.NewPath)))
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
         }
     }
@@ -339,7 +339,7 @@ internal static class StagingRules
     {
         if (!MatchesDirectoryDeletePreconditions(directoryPath, operations, transactionId))
         {
-            throw new ExternalConflictException("ディレクトリの直下に未予約の子があります: " + directoryPath, directoryPath);
+            throw new ExternalConflictException("The directory has a child that is not scheduled: " + directoryPath, directoryPath);
         }
     }
 

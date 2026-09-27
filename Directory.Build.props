@@ -8,7 +8,7 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NeutralLanguage>ja</NeutralLanguage>
+    <NeutralLanguage>en</NeutralLanguage>
     <!-- Copyright file headers are not used in this repo -->
     <NoWarn>$(NoWarn);SA1633</NoWarn>
   </PropertyGroup>

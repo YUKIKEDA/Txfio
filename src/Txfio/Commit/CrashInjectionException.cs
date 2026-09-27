@@ -10,7 +10,7 @@ internal sealed class CrashInjectionException : Exception
     /// </summary>
     /// <param name="name">止めた地点</param>
     internal CrashInjectionException(string name)
-        : base("コミット途中の停止: " + name)
+        : base("Commit stopped partway: " + name)
     {
         Name = name;
     }

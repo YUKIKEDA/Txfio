@@ -27,10 +27,10 @@ internal sealed partial class Transaction
 
         if (File.Exists(external) && WorkPath.IsReparsePoint(external))
         {
-            throw new InvalidOperationException("シンボリックリンクはコピーできません: " + external);
+            throw new InvalidOperationException("A symbolic link cannot be copied: " + external);
         }
 
-        await using FileStream source = OpenExternalFile(external, "コピー元のファイルが存在しません: " + external, external);
+        await using FileStream source = OpenExternalFile(external, "The source file to copy does not exist: " + external, external);
         await StageAsync(PendingChangeKind.Add, target, source, progress, cancellationToken).ConfigureAwait(false);
     }
 
@@ -58,18 +58,18 @@ internal sealed partial class Transaction
 
         if (!appearance.Exists || string.IsNullOrEmpty(appearance.ContentPath))
         {
-            throw new ExternalConflictException("コピー元のファイルが存在しません: " + sourcePath, sourcePath);
+            throw new ExternalConflictException("The source file to copy does not exist: " + sourcePath, sourcePath);
         }
 
         if (WorkPath.IsReparsePoint(appearance.ContentPath))
         {
-            throw new InvalidOperationException("シンボリックリンクはコピーできません: " + sourcePath);
+            throw new InvalidOperationException("A symbolic link cannot be copied: " + sourcePath);
         }
 
         EnsureExportDestination(destinationPath);
         await using FileStream source = OpenExternalFile(
             appearance.ContentPath,
-            "コピー元のファイルが存在しません: " + sourcePath,
+            "The source file to copy does not exist: " + sourcePath,
             sourcePath);
         await StagingFile.CopyToNewFileAsync(source, destinationPath, progress, cancellationToken)
             .ConfigureAwait(false);
@@ -79,12 +79,12 @@ internal sealed partial class Transaction
     {
         if (Directory.Exists(destinationPath))
         {
-            throw new ExternalConflictException("コピー先がディレクトリです: " + destinationPath, destinationPath);
+            throw new ExternalConflictException("The copy destination is a directory: " + destinationPath, destinationPath);
         }
 
         if (File.Exists(destinationPath))
         {
-            throw new ExternalConflictException("コピー先のファイルが既に存在します: " + destinationPath, destinationPath);
+            throw new ExternalConflictException("The destination file already exists: " + destinationPath, destinationPath);
         }
 
         StagingRules.EnsureParentDirectoryExists(destinationPath);
@@ -160,7 +160,7 @@ internal sealed partial class Transaction
         await _locks.AcquireReservingAsync(_workFolder, new[] { target }, new[] { target }, _lockAttempt).ConfigureAwait(false);
         if (!Directory.Exists(external))
         {
-            throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + external, external);
+            throw new ExternalConflictException("The source directory to copy does not exist: " + external, external);
         }
 
         EnsureCopyDestinationFree(target);
@@ -188,7 +188,7 @@ internal sealed partial class Transaction
         {
             if (!Directory.Exists(sourcePath))
             {
-                throw new ExternalConflictException("コピー元のディレクトリが存在しません: " + sourcePath, sourcePath);
+                throw new ExternalConflictException("The source directory to copy does not exist: " + sourcePath, sourcePath);
             }
 
             EnsureExportDestination(destinationPath);
@@ -269,9 +269,9 @@ internal sealed partial class Transaction
         string? stagingPath = index < 0 ? null : _paths.Rows[index].StagingPath;
         if (!string.IsNullOrEmpty(stagingPath))
         {
-            return OpenExternalFile(stagingPath, "コピー元のファイルが存在しません: " + sourcePath, sourcePath);
+            return OpenExternalFile(stagingPath, "The source file to copy does not exist: " + sourcePath, sourcePath);
         }
 
-        return OpenExternalFile(sourcePath, "コピー元のファイルが存在しません: " + sourcePath, sourcePath);
+        return OpenExternalFile(sourcePath, "The source file to copy does not exist: " + sourcePath, sourcePath);
     }
 }

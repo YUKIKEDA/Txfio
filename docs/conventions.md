@@ -1,153 +1,158 @@
-# 開発規約
+# Conventions
 
-コードレビューで繰り返さないためのリポジトリ規約。人間向けの詳細正本である。要約は [`CONTRIBUTING.md`](../CONTRIBUTING.md)、強制は `.cursor/rules/` である。
+English | [日本語](conventions.ja.md)
 
-## リポジトリ配置
+Repository conventions, so that the same points are not repeated in code review. This is the detailed human-readable source. The summary is [`CONTRIBUTING.md`](../CONTRIBUTING.md), and enforcement is `.cursor/rules/`.
 
-- ライブラリは `src/Txfio/`、単体テストは `tests/Txfio.Tests/`、耐久テストは `tests/Txfio.Stress/`、両方が使う一時ディレクトリと `WindowsFact` は `tests/Txfio.TestSupport/`
-- `.csproj` は各プロジェクトのルートに置く。リポジトリ直下にプロジェクトを並べない
-- `.cs` は機能フォルダに置く。プロジェクト直下はエントリ（静的 `Txfio`）と実装の根と `.csproj` だけ。新しい機能は新しいフォルダを足し、直下へバラまかない
-- テストは `src/Txfio/<Area>/` と同じ `<Area>/` を `tests/Txfio.Tests/` に作る。ファイル名は `Foo.cs` → `FooTests.cs`
-- 名前空間はフォルダに連動させない。ライブラリは `Txfio`、単体テストと耐久テストは `Txfio.Tests`、共有ヘルパーは `Txfio.Tests.Support`
-- ソリューションは **`Txfio.slnx` をコミット**する。`.sln` は置かない
+## Repository layout
 
-公開面は契約（`Txfio`、`ITransaction`、結果型、例外、進捗）だけとする。実装型は `internal` とする。テストアセンブリへ `InternalsVisibleTo` を付ける。
+- The library is in `src/Txfio/`, unit tests in `tests/Txfio.Tests/`, stress tests in `tests/Txfio.Stress/`, and the temporary directory and `WindowsFact` that both use in `tests/Txfio.TestSupport/`
+- Each `.csproj` is at the root of its project. Do not put projects directly at the repository root
+- `.cs` files go in feature folders. Directly under a project there are only the entry point (static `Txfio`), the root of the implementation, and the `.csproj`. A new feature gets a new folder; do not scatter files directly under the project
+- Tests create the same `<Area>/` under `tests/Txfio.Tests/` as `src/Txfio/<Area>/`. File names go `Foo.cs` → `FooTests.cs`
+- Namespaces do not follow folders. The library is `Txfio`, unit tests and stress tests are `Txfio.Tests`, and shared helpers are `Txfio.Tests.Support`
+- **Commit `Txfio.slnx`**. Do not add a `.sln`
 
-## 機能フォルダ
+The public surface is only the contracts (`Txfio`, `ITransaction`, result types, exceptions, progress). Implementation types are `internal`. The test assemblies get `InternalsVisibleTo`.
 
-プロジェクト直下に機能ファイルを足さない。追加先が無いときはフォルダを新設する。例:
+## Feature folders
+
+Do not add feature files directly under the project. If there is no folder to add to, create one. For example:
 
 ```text
 src/Txfio/
-  Txfio.cs                 エントリ（BeginAsync / Recover）
-  Contracts/               公開契約（インタフェース・例外・結果型）
+  Txfio.cs                 entry point (BeginAsync / Recover)
+  Contracts/               public contracts (interfaces, exceptions, result types)
   Journal/
   Staging/
   Commit/
   Recover/
 
 tests/Txfio.TestSupport/
-  TempDirectory.cs         一時ディレクトリ。Fact は置かない
+  TempDirectory.cs         temporary directory. No Facts here
   WindowsFactAttribute.cs
 tests/Txfio.Tests/
   TxfioTests.cs
-  Support/                 単体テストのフィクスチャ。Fact は置かない
+  Support/                 unit test fixtures. No Facts here
   Contracts/
   Journal/
 tests/Txfio.Stress/
-  耐久テスト。関門の dotnet test では回さない
+  stress tests. The gate's dotnet test does not run them
 ```
 
-## partial クラス
+## Partial classes
 
-既定は **1 型 1 ファイル**。ファイルが長いだけでは partial にしない。ヘルパーは別型へ切り出す。
+The default is **one type per file**. A long file alone is not a reason for partial. Move helpers into another type.
 
-トランザクション実装型だけ、機能フォルダに対応する partial を許す。
+Only the transaction implementation type may use partial files that match feature folders.
 
-- 機能フォルダには `Type.<Area>.cs` を **1 つだけ** 置く。同じフォルダに 2 枚目は足さない
-- テストクラスは partial にしない
+- Put **only one** `Type.<Area>.cs` in a feature folder. Do not add a second one to the same folder
+- Test classes are not partial
 
-## using エイリアス
+## Using aliases
 
-- `using IoFile = System.IO.File;` のような型エイリアスは、記述短縮のためには使わない
-- BCL の `File` / `Directory` と衝突する場合は `System.IO.File` / `System.IO.Directory` と完全修飾する
+- Do not use type aliases such as `using IoFile = System.IO.File;` to shorten code
+- When a name collides with the BCL `File` / `Directory`, fully qualify it as `System.IO.File` / `System.IO.Directory`
 
-## 非同期と所有権
+## Async and ownership
 
-- ライブラリ内の `await` は `ConfigureAwait(false)` する
-- `CancellationToken` は最後の引数にする
-- メソッドが受け取った `Stream` は **呼び出され側が Dispose しない**（所有権は呼び出し側）。自分で開いたハンドルだけ閉じる
+- `await` in the library uses `ConfigureAwait(false)`
+- `CancellationToken` is the last parameter
+- A `Stream` a method receives is **not disposed by the callee** (the caller owns it). Close only handles you opened yourself
 
-## パス
+## Paths
 
-内部では正規化した絶対パスで比較し、ロック取得順を決める。パス比較は `OrdinalIgnoreCase` とする。
+Internally, compare normalized absolute paths, and decide the lock order by them. Path comparison uses `OrdinalIgnoreCase`.
 
-## 公開 API の XML コメント
+## Language
 
-- `public` な型・メンバーには XML ドキュメントコメントを付ける（`<summary>` 必須。引数・戻り値・例外は読み手が迷うものに付ける）
-- **internal 型でも `public` メンバーには付ける**（例: 実装型の `ITransaction` メンバー、JSON 用の public コンストラクタ）
-- `internal` な型・メンバーも付ける（StyleCop `documentInternalElements`）。テストと `private` は必須にしない
-- 実装がインタフェースと同じ契約なら `/// <inheritdoc />` を使う。重複して書き直さない
-- ライブラリプロジェクトは `GenerateDocumentationFile=true`。欠落は CS1591 としてエラーにする
-- テストプロジェクトは XML ドキュメントを生成しない（CS1591 は出さない）
-- XML ドキュメントおよび通常コメントは **日本語** とする（識別子・型名・公開 API 名は英語のまま）
-- 文末にも文の途中にも **「。」や英語のピリオド `.` を付けない**（例外メッセージと README の地の文は対象外）
-- 補足は（）、並列は、、状態の続きは「しており」でつなぐ。取り消しを「キャンセル」と書かない
-- 設計用語の「哨兵」は、XML・README・テストの説明では「ワークフォルダ全体のロック」と書く。繰り返された言い換えは [`.cursor/skills/japanese-writing/SKILL.md`](../.cursor/skills/japanese-writing/SKILL.md)
-- `src/` の XML コメントを足す・変える PR では、マージ前に **Gemini へ日本語の自然さをレビューさせる**（手順は `.cursor/rules/japanese-docs.mdc`）。新しい指摘は、文を直すのと同時にそのスキルへ一般則として足す
+The repository language is English. Which files are bilingual, and how translations stay in sync, is in [`docs/language.md`](language.md).
 
-## 設計書と XML ドキュメントの分担
+## XML comments on the public API
 
-仕様の正本は `docs/design.md` とする。同じ規則を複数の場所に書くと、言い方が少しずつずれ、更新漏れの元になる。
+- Give `public` types and members XML documentation comments (`<summary>` is required; add parameters, return values, and exceptions when a reader might be unsure)
+- **Also give them to `public` members of internal types** (for example the `ITransaction` members of the implementation type, and public constructors for JSON)
+- `internal` types and members get them too (StyleCop `documentInternalElements`). Tests and `private` members are not required
+- When an implementation has the same contract as the interface, use `/// <inheritdoc />`. Do not write it again
+- The library project has `GenerateDocumentationFile=true`. Missing docs are errors (CS1591)
+- Test projects do not generate XML documentation (no CS1591)
+- XML documentation and ordinary comments are in **English**
+- Write full sentences. Every XML documentation element ends with a period (StyleCop SA1629). Inline comments are sentences too; a short phrase without a period is fine for a one-line inline comment
+- Follow the StyleCop wording for summaries: properties start with "Gets" / "Gets or sets" (SA1623), and constructors start with "Initializes a new instance of the <see cref="T"/> class" (SA1642)
+- Use the terms in [`.cursor/skills/english-writing/SKILL.md`](../.cursor/skills/english-writing/SKILL.md). For example, the design term "sentinel" is written "work-folder lock" everywhere. When a review finds wording to correct, add the general rule to that skill in the same change
 
-### XML ドキュメント（`ITransaction` など公開面）に書くこと
+## How design docs and XML docs share the work
 
-- 利用者が呼ぶ前と呼んだ直後に要る契約だけを書く
-  - 何をするか
-  - 引数の意味
-  - 投げる例外の型と、その条件の要約
-  - 戻り値
-- ロックの取り方、ジャーナルの書き方、畳み込み、後始末の順番など、実装と設計の詳細は書かない。必要なら「詳しくは設計書の〇〇」と参照する
-- 設計書と食い違ったときは、設計書が正とする。XML ドキュメントを設計書に合わせて直す
+The source of truth for behavior is `docs/design.md`. Writing the same rule in several places makes the wording drift and causes missed updates.
 
-### `docs/design.md` の API の節の形
+### What XML docs (on the public surface such as `ITransaction`) contain
 
-API ごとに節を分け、次の見出しをこの順番で置く。当てはまらない見出しは「なし」と書き、省かない（書き漏れと区別するため）
+- Only the contract a caller needs before and right after the call
+  - What it does
+  - The meaning of the parameters
+  - The exception types it throws, with a short condition
+  - The return value
+- Do not write implementation or design details such as how locks are taken, how the journal is written, folding, or the order of cleanup. If needed, refer to it: "see the design, section X"
+- When they disagree with the design, the design wins. Fix the XML docs to match the design
 
-| 見出し | 書くこと |
+### Shape of an API section in `docs/design.md`
+
+Each API has its own section, with these headings in this order. A heading that does not apply says "None"; do not omit it (so that it can be told apart from a missing section).
+
+| Heading | Contents |
 | --- | --- |
-| 概要 | 何を予約するか。操作種別（`PendingChangeKind`） |
-| 前提 | 呼べる状態、パスの条件、既存の予約との組み合わせ（畳み込みと拒否） |
-| ロック | 取るロックと待ち方。横断する規則は「並行性とロック」を参照し、この API に固有のことだけを書く |
-| ジャーナル | 書く行と、書く時点。横断する順序は「ジャーナルとリカバリ」を参照する |
-| 例外 | 例外の型と条件の一覧（表） |
-| 失敗時の後始末 | 途中で失敗したときに消すものと残るもの |
+| Overview | What it schedules. The operation kind (`PendingChangeKind`) |
+| Preconditions | When it can be called, conditions on paths, combinations with existing scheduled changes (folding and rejection) |
+| Locks | The locks it takes and how it waits. Cross-cutting rules are in "Concurrency and locks"; write only what is specific to this API |
+| Journal | The lines it writes, and when. The cross-cutting order is in "Journal and recovery" |
+| Exceptions | A table of exception types and conditions |
+| Cleanup on failure | What is deleted and what stays when it fails partway |
 
-- ロックの順番、ジャーナルを書く順番、コミットの手順など、複数の API にまたがる規則は、それぞれの横断の節に 1 回だけ書く。API の節では繰り返さず参照する
-- 規則を足すときは、まず横断の節か API の節のどちらに属するかを決め、1 か所にだけ書く
+- Rules that span several APIs, such as the lock order, the order of journal writes, and the commit steps, are written once in their cross-cutting section. API sections refer to them instead of repeating them
+- When adding a rule, first decide whether it belongs to a cross-cutting section or an API section, and write it in one place only
 
-## テスト
+## Tests
 
-- テストメソッド名は日本語の自然文にする。推奨形式は `{対象}_〜すると／したとき〜こと`
-- 各 `[Fact]` / `[Theory]` には XML コメントで **前提**・**手順**・**期待** を残す。ヘルパーには不要
-- `tests/Txfio.TestSupport/` に一時ディレクトリと `WindowsFact` を置く。Fact は置かない
-- 単体テストのフィクスチャは `tests/Txfio.Tests/Support/` に置く。Fact は置かない
-- テストごとに一意の一時ディレクトリを作り、破棄時に消す。並列実行を前提にする
-- 乱数で約束を確かめる耐久テストは `tests/Txfio.Stress/` に置く。対応する `src/` のフォルダは無い
-  - ランダム操作列はメモリ上のモデルと比べ、失敗したら手を外して縮めた列を出す。ファイルの Add / Update / Delete / Move / Read の列、ディレクトリの作成、空の削除、木の削除、上書きしない Move の列、移動先を置き換える Move の列、ファイルとディレクトリの Copy / Import / Export の列、文字列と JSON の読み書きの列、ZIP の作成と展開と取り込みと書き出しの列を持つ。ディレクトリの奪い合いは、少数を待たずに競合させる版と、多めを競合したらやり直す版の 2 つを持つ。クラッシュは親が子を殺し、Recover のあと記録かその 1 件先とディスクを比べる
-  - 多プロセスの耐久は、耐久プロジェクトの実行ファイル自身を子プロセスとして起動する（`Program.cs` の入口）
-  - 関門（`./build.ps1` と Linux の PR 前確認）の `dotnet test` は `tests/Txfio.Tests/Txfio.Tests.csproj` だけを実行する。耐久は `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。既定はその実行で短く終わる規模にする。長く、または大きく回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES`、`TXFIO_STRESS_FILES`、`TXFIO_STRESS_MAX_BYTES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
-  - 多プロセスの耐久は、少数のファイルを待たずに奪い合う版（競合の組み合わせを増やす）と、多めのファイルを競合したらやり直す版（使い方に近い負荷）の 2 つを持つ。結果の件数はテストの出力に出る
-  - 見つかった不具合はテストで隠さず、別 Issue にする
+- Test method names are English: `{Target}_{Behavior}` in PascalCase, where `{Target}` is the method or type under test and `{Behavior}` states the expected behavior, for example `AddAsync_ShortAndLongNamesShareOneLock`. Keep them readable; do not abbreviate
+- Every `[Fact]` / `[Theory]` has an XML comment with **Given**, **When**, and **Then** in `<remarks>` (`<para>Given: ...</para>` and so on). Helpers do not need them
+- `tests/Txfio.TestSupport/` holds the temporary directory and `WindowsFact`. No Facts there
+- Unit test fixtures go in `tests/Txfio.Tests/Support/`. No Facts there
+- Each test creates its own unique temporary directory and deletes it on dispose. Assume parallel execution
+- Stress tests that check promises with random input go in `tests/Txfio.Stress/`. There is no matching `src/` folder
+  - Random operation sequences are compared with an in-memory model, and on failure the sequence is shrunk by removing steps. There are sequences for file Add / Update / Delete / Move / Read; directory create, delete of an empty directory, delete of a tree, Move without overwrite, and Move that replaces the destination; Copy / Import / Export of files and directories; text and JSON reads and writes; and ZIP create, extract, import, and export. Directory contention has two versions: a few directories competing without waiting, and more directories retrying on contention. Crashes: the parent kills the child, and after Recover the disk is compared with the record or with one step after it
+  - Multi-process stress tests start the stress project's own executable as the child process (the entry in `Program.cs`)
+  - The `dotnet test` of the gate (`./build.ps1` and the Linux pre-PR check) runs only `tests/Txfio.Tests/Txfio.Tests.csproj`. Run stress tests explicitly with `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj`. By default they are sized to finish quickly in that run. To run longer or larger, change the environment variables `TXFIO_STRESS_SEED`, `TXFIO_STRESS_ITERATIONS`, `TXFIO_STRESS_PROCESSES`, `TXFIO_STRESS_FILES`, `TXFIO_STRESS_MAX_BYTES`. Passing the seed from a failure message reproduces the same sequence
+  - Multi-process stress has two versions: a few files competing without waiting (more combinations of contention) and more files retrying on contention (load closer to real use). The result counts are printed in the test output
+  - Do not hide bugs found by these tests; open a separate Issue
 
-### Windows 専用のテストと Linux での実行
+### Windows-only tests and running on Linux
 
-実行時に保証するのは Windows だけである（`docs/design.md`「対象プラットフォーム」）。ただし開発環境として、Linux でも単体テストの `dotnet test` を回せるようにしておく。
+Only Windows is guaranteed at run time (`docs/design.md`, "Target platform"). Still, as a development environment, the unit tests can run with `dotnet test` on Linux too.
 
-- Windows の挙動そのものに頼るテストは `[WindowsFact("理由")]`（`tests/Txfio.TestSupport/`）にする。対象は、ジャンクション、ドライブ文字のパス、開いたままのファイルを rename や削除できないこと。Windows 以外では `Windows 専用: 理由` として Skip になる
-- パスの区切りはテストでも `/` か `Path.Combine` を使う。`\` は Linux ではファイル名の一部になる
-- Linux では、PR を出す前に `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行し、`WindowsFact` 以外のテストがすべて通っていること。耐久テストはこの確認に含めない。マージの関門は Windows の `./build.ps1` のままで、Windows では Skip は 0 件である
-- ロック競合の判定（`PathLockSet.IsSharingViolation`）は、Linux の EAGAIN（`HResult` = 11）も共有違反とみなす。テストを回すためのもので、実行時の保証ではない。macOS は実機で確かめるまで足さない
+- Tests that rely on Windows behavior itself use `[WindowsFact("reason")]` (`tests/Txfio.TestSupport/`). This covers junctions, drive-letter paths, and open files that cannot be renamed or deleted. On other operating systems they are skipped as `Windows only: reason`
+- Use `/` or `Path.Combine` for path separators in tests too. `\` is part of a file name on Linux
+- On Linux, run `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` before opening a PR; every test except `WindowsFact` must pass. Stress tests are not part of this check. The merge gate stays `./build.ps1` on Windows, where no tests are skipped
+- Lock contention detection (`PathLockSet.IsSharingViolation`) also treats Linux EAGAIN (`HResult` = 11) as a sharing violation. This is only so the tests run; it is not a run-time guarantee. macOS is not added until checked on a real machine
 
-## 書式
+## Formatting
 
-- 正本はリポジトリルートの `.editorconfig`
-- file-scoped namespace、ImplicitUsings
-- 変数の型は明示する。`var` は使わない
-- コレクションと配列は `new List<T>()` と `new T[] { }` で書く。コレクション式 `[]`、型を省略した `new()`、オブジェクト初期化子への寄せ、プライマリコンストラクタは使わない
-- `Substring` を範囲演算子や末尾からのインデックスに置き換えない。ラムダをメソッドグループに簡略化しない
-- 名前空間はフォルダに合わせない（上の「リポジトリ配置」）。`Txfio.Archive` のようなフォルダ名の名前空間にはしない
-- コールバックが末尾にある private メソッドでは、`CancellationToken` をコールバックの前に置く
-- 公開メソッドの引数名を、ヘルパーから `ArgumentException` のパラメータ名として渡してよい
-- `finally` でのロック復帰は、競合と取り消しだけを受け、それ以外の例外は呼び出し元へ届く
-- 具象型への変更、インスタンスメソッドの static 化、引数の定数配列を static フィールドに出す、といった性能の提案ではコードを変えない
-- 行末は **LF**（`.gitattributes` で固定）
-- 提出前に `dotnet format` を通す。CI / `build.ps1` は `--verify-no-changes` で確認する
-- コンパイラ警告はエラーにする（`TreatWarningsAsErrors`）
-- 命名は **.NET の慣例**に合わせる
-  - private フィールド（静的含む）は `_camelCase`
-  - 定数は PascalCase
-  - インスタンスメンバーに `this.` は付けない（識別子の衝突回避が必要なときだけ）
-  - StyleCop の SA1101 / SA1306 / SA1309 / SA1310 / SA1311 は無効化する（上記と衝突するため）
-- インターフェース名は `I` プレフィックス必須（SA1302 を無効化しない）
-- ライブラリにログフレームワークを入れない。診断は戻り値と例外だけとする
+- The source of truth is `.editorconfig` at the repository root
+- File-scoped namespaces, ImplicitUsings
+- Write variable types explicitly. Do not use `var`
+- Write collections and arrays as `new List<T>()` and `new T[] { }`. Do not use collection expressions `[]`, target-typed `new()`, conversions to object initializers, or primary constructors
+- Do not replace `Substring` with range operators or indexes from the end. Do not simplify lambdas to method groups
+- Namespaces do not follow folders ("Repository layout" above). Do not use folder namespaces such as `Txfio.Archive`
+- In private methods whose last parameter is a callback, put `CancellationToken` before the callback
+- A public method's parameter name may be passed from a helper as the parameter name of an `ArgumentException`
+- Lock restoration in `finally` catches only contention and cancellation; other exceptions reach the caller
+- Do not change code for performance suggestions such as changing to concrete types, making instance methods static, or moving constant argument arrays to static fields
+- Line endings are **LF** (fixed by `.gitattributes`)
+- Run `dotnet format` before submitting. CI / `build.ps1` check with `--verify-no-changes`
+- Compiler warnings are errors (`TreatWarningsAsErrors`)
+- Naming follows **.NET conventions**
+  - Private fields (including static) are `_camelCase`
+  - Constants are PascalCase
+  - Do not prefix instance members with `this.` (only when needed to avoid a name collision)
+  - StyleCop SA1101 / SA1306 / SA1309 / SA1310 / SA1311 are disabled (they conflict with the above)
+- Interface names must have the `I` prefix (SA1302 stays enabled)
+- No logging framework in the library. Diagnostics are return values and exceptions only

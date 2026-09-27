@@ -179,7 +179,7 @@ internal sealed partial class Transaction : ITransaction
             Interlocked.Decrement(ref _callDepth);
 
             // 入れなかった呼び出しは数えず、先に入った呼び出しを続ける
-            throw new InvalidOperationException("同じトランザクションへの呼び出しが重なっています");
+            throw new InvalidOperationException("Calls to the same transaction overlap");
         }
 
         _lockAttempt = LockAttempt.Start(_lockWait, cancellationToken);
@@ -197,7 +197,7 @@ internal sealed partial class Transaction : ITransaction
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_committed)
         {
-            throw new InvalidOperationException("このトランザクションは既にコミット済みです");
+            throw new InvalidOperationException("This transaction has already been committed");
         }
     }
 

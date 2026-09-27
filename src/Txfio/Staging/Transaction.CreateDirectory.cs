@@ -21,7 +21,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, targetPath);
         if (FindOperationIndex(targetPath) >= 0 || FindMoveToIndex(targetPath) >= 0)
         {
-            throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+            throw new InvalidOperationException("This path is already staged by another operation");
         }
 
         await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
@@ -29,7 +29,7 @@ internal sealed partial class Transaction
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (File.Exists(targetPath) || Directory.Exists(targetPath))
         {
-            throw new ExternalConflictException("作成対象のパスが既に存在します: " + targetPath, targetPath);
+            throw new ExternalConflictException("The path to create already exists: " + targetPath, targetPath);
         }
 
         JournalOperation operation = new JournalOperation(

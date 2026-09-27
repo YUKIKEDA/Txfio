@@ -191,7 +191,7 @@ public static class Txfio
         string workFolder = System.IO.Path.GetFullPath(path);
         if (!Directory.Exists(workFolder))
         {
-            throw new ExternalConflictException("ワークフォルダが存在しません: " + workFolder, workFolder);
+            throw new ExternalConflictException("The work folder does not exist: " + workFolder, workFolder);
         }
 
         return WorkPath.ToLongPath(workFolder);

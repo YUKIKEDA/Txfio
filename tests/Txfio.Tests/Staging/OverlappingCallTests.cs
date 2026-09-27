@@ -28,7 +28,7 @@ public sealed class OverlappingCallTests
         await using MemoryStream later = LeftoverAddFiles.Utf8Stream("later");
         await tx.AddAsync("c.txt", later);
 
-        Assert.Contains("呼び出しが重なっています", overlap.Message, StringComparison.Ordinal);
+        Assert.Contains("Calls to the same transaction overlap", overlap.Message, StringComparison.Ordinal);
         Assert.Equal(2, tx.GetPendingChanges().Count);
         Assert.Contains(tx.GetPendingChanges(), change => change.Path.EndsWith("a.txt", StringComparison.Ordinal));
         Assert.Contains(tx.GetPendingChanges(), change => change.Path.EndsWith("c.txt", StringComparison.Ordinal));
@@ -59,8 +59,8 @@ public sealed class OverlappingCallTests
             held.Release();
             await first;
 
-            Assert.Contains("呼び出しが重なっています", pending.Message, StringComparison.Ordinal);
-            Assert.Contains("呼び出しが重なっています", dispose.Message, StringComparison.Ordinal);
+            Assert.Contains("Calls to the same transaction overlap", pending.Message, StringComparison.Ordinal);
+            Assert.Contains("Calls to the same transaction overlap", dispose.Message, StringComparison.Ordinal);
             Assert.Single(tx.GetPendingChanges());
         }
         finally
@@ -91,7 +91,7 @@ public sealed class OverlappingCallTests
         InvalidOperationException overlap = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.AddAsync("a.txt", content, progress));
 
-        Assert.Contains("呼び出しが重なっています", overlap.Message, StringComparison.Ordinal);
+        Assert.Contains("Calls to the same transaction overlap", overlap.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
     }
 

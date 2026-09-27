@@ -27,7 +27,7 @@ internal static class WorkPath
         string fullPath = ToLongPath(System.IO.Path.GetFullPath(combined));
         if (!IsInsideWorkFolder(workFolder, fullPath))
         {
-            throw new ArgumentException("パスはワークフォルダの内側である必要があります", nameof(path));
+            throw new ArgumentException("The path must be inside the work folder", nameof(path));
         }
 
         ThrowIfReparseInside(workFolder, fullPath);
@@ -47,7 +47,7 @@ internal static class WorkPath
         string fullPath = System.IO.Path.GetFullPath(path);
         if (IsInsideWorkFolder(workFolder, fullPath))
         {
-            throw new ArgumentException("パスはワークフォルダの外側である必要があります", nameof(path));
+            throw new ArgumentException("The path must be outside the work folder", nameof(path));
         }
 
         return fullPath;
@@ -75,7 +75,7 @@ internal static class WorkPath
         string? directory = System.IO.Path.GetDirectoryName(targetPath);
         if (string.IsNullOrEmpty(directory))
         {
-            throw new ArgumentException("対象パスの親ディレクトリを特定できません", nameof(targetPath));
+            throw new ArgumentException("The parent directory of the target path cannot be determined", nameof(targetPath));
         }
 
         string fileName = System.IO.Path.GetFileName(targetPath);
@@ -211,7 +211,7 @@ internal static class WorkPath
 
             if (IsExistingReparsePoint(trimmed))
             {
-                throw new InvalidOperationException("リパースポイントは操作できません: " + trimmed);
+                throw new InvalidOperationException("A reparse point cannot be used: " + trimmed);
             }
 
             current = System.IO.Path.GetDirectoryName(trimmed);

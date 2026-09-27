@@ -21,7 +21,7 @@ Human source of truth: `CONTRIBUTING.md`.
 8. Repeat
 
 ```text
-（設計判断が残っていれば Grill）→ Issue 作成 →（実装不能なら再 Grill）→ ブランチ作成 → 作業 → PR → 人間レビュー → squash マージ
+(grill if design decisions remain) → create Issue → (grill again if not implementable) → create branch → work → PR → human review → squash merge
 ```
 
 ## Forbidden

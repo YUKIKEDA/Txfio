@@ -70,7 +70,7 @@ public sealed class CreateDirectoryTests
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.CreateDirectoryAsync("drop"));
 
-        Assert.Contains("作成対象のパスが既に存在します", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("The path to create already exists", ex.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
     }
 
@@ -91,7 +91,7 @@ public sealed class CreateDirectoryTests
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.CreateDirectoryAsync("missing/drop"));
 
-        Assert.Contains("親ディレクトリが存在しません", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("The parent directory does not exist", ex.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "missing")));
     }
 
@@ -194,7 +194,7 @@ public sealed class CreateDirectoryTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.UpdateAsync("drop", content));
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CreateDirectoryAsync("drop"));
 
-        Assert.Contains("このパスは既に別の操作でステージングされています", delete.Message, StringComparison.Ordinal);
+        Assert.Contains("This path is already staged by another operation", delete.Message, StringComparison.Ordinal);
         Assert.Equal(PendingChangeKind.CreateDirectory, Assert.Single(tx.GetPendingChanges()).Kind);
         Assert.True(Directory.Exists(drop));
         Assert.True(File.Exists(System.IO.Path.Combine(work.Path, "src.txt")));

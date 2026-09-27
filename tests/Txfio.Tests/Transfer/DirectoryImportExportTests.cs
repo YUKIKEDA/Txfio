@@ -111,7 +111,7 @@ public sealed class DirectoryImportExportTests
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.ImportAsync(parent, "nested"));
 
-        Assert.Contains("ディレクトリを自分自身の配下へはコピーできません", error.Message, StringComparison.Ordinal);
+        Assert.Contains("A directory cannot be copied under itself", error.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "nested")));
     }
 
@@ -230,7 +230,7 @@ public sealed class DirectoryImportExportTests
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.ImportAsync(link, "a.txt"));
 
-        Assert.Contains("シンボリックリンクはコピーできません", error.Message, StringComparison.Ordinal);
+        Assert.Contains("A symbolic link cannot be copied", error.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
         Assert.Equal("secret", await File.ReadAllTextAsync(target));
     }

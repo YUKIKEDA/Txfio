@@ -54,7 +54,7 @@ internal sealed class PathTable
             JournalOperation readded = operations[readdedIndex];
             if (readded.Kind != PendingChangeKind.Add)
             {
-                throw new InvalidOperationException("このパスは既に別の操作でステージングされています");
+                throw new InvalidOperationException("This path is already staged by another operation");
             }
 
             operations[readdedIndex] = new JournalOperation(PendingChangeKind.Update, sourcePath, readded.StagingPath);
@@ -66,7 +66,7 @@ internal sealed class PathTable
                 && string.Equals(operation.NewPath, sourcePath, StringComparison.OrdinalIgnoreCase));
         if (movedInto)
         {
-            throw new InvalidOperationException("移動元へ別のファイルを移す予定があるので、元を消す形に畳めません: " + sourcePath);
+            throw new InvalidOperationException("Another file is scheduled to move into the source, so this cannot fold into deleting the original: " + sourcePath);
         }
 
         JournalOperation delete = new JournalOperation(PendingChangeKind.Delete, sourcePath);
@@ -327,7 +327,7 @@ internal sealed class PathTable
 
         if (!StagingApplier.MovesReachFreeEnd(prospective))
         {
-            throw new InvalidOperationException("空いている端が無い移動は受け付けられません");
+            throw new InvalidOperationException("A move without a free end is not accepted");
         }
     }
 
@@ -360,7 +360,7 @@ internal sealed class PathTable
 
     private static InvalidOperationException AlreadyStaged()
     {
-        return new InvalidOperationException("このパスは既に別の操作でステージングされています");
+        return new InvalidOperationException("This path is already staged by another operation");
     }
 
     private void Note(JournalOperation operation, int index)

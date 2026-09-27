@@ -1,12 +1,12 @@
 # Security Policy
 
-脆弱性を発見した場合は、**公開 Issue に書かないでください**。
+If you find a vulnerability, **do not write it in a public Issue**.
 
-報告先は [GitHub Security Advisories](https://github.com/YUKIKEDA/Txfio/security/advisories/new) です。個人メールは公開しません。
+Report it through [GitHub Security Advisories](https://github.com/YUKIKEDA/Txfio/security/advisories/new). No personal email address is published.
 
-対応目安（ベストエフォート）:
+Response targets (best effort):
 
-- 受領確認: 数日以内
-- 修正方針: 重大度に応じて
+- Acknowledgement: within a few days
+- Plan for a fix: depending on severity
 
-Txfio はファイルシステム上のジャーナルとロックを扱います。再現手順に本番データの実パスや認証情報を含めないでください。
+Txfio handles journals and locks on the file system. Do not include real paths of production data or credentials in reproduction steps.

@@ -40,12 +40,12 @@ internal sealed partial class Transaction
         CommitAppearance appearance = CommitView.Resolve(_paths.Rows, target);
         if (!appearance.Exists)
         {
-            throw new ExternalConflictException("ディレクトリが存在しません: " + target, target);
+            throw new ExternalConflictException("The directory does not exist: " + target, target);
         }
 
         if (!appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
         {
-            throw new UnsupportedOperationException("ファイルの直下は一覧できません: " + target);
+            throw new UnsupportedOperationException("A file has no entries to list: " + target);
         }
 
         // 候補はディスク上の直下と、親がこのディレクトリである操作であり、姿は 1 件ずつ確かめる
@@ -119,7 +119,7 @@ internal sealed partial class Transaction
         catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
             // 開く時点で無ければ、対象が無い契約として返す
-            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + reportedPath, reportedPath);
+            throw new ExternalConflictException("The file to read does not exist: " + reportedPath, reportedPath);
         }
     }
 
@@ -132,12 +132,12 @@ internal sealed partial class Transaction
         CommitAppearance appearance = CommitView.Resolve(_paths.Rows, targetPath);
         if (!appearance.Exists)
         {
-            throw new ExternalConflictException("読み取り対象のファイルが存在しません: " + targetPath, targetPath);
+            throw new ExternalConflictException("The file to read does not exist: " + targetPath, targetPath);
         }
 
         if (appearance.IsDirectory || string.IsNullOrEmpty(appearance.ContentPath))
         {
-            throw new UnsupportedOperationException("ディレクトリの読み取りは未対応です: " + targetPath);
+            throw new UnsupportedOperationException("Reading a directory is not supported: " + targetPath);
         }
 
         Stream stream = OpenRead(appearance.ContentPath, targetPath);

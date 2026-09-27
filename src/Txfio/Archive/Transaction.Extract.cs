@@ -57,13 +57,13 @@ internal sealed partial class Transaction
         string destination = ValidateExtractDestination(destinationDir);
         if (Directory.Exists(external))
         {
-            throw new UnsupportedOperationException("ディレクトリは ZIP として開けません: " + external);
+            throw new UnsupportedOperationException("A directory cannot be opened as a ZIP: " + external);
         }
 
         await AcquireExtractLocksAsync(destination).ConfigureAwait(false);
         await using FileStream content = OpenExternalFile(
             external,
-            "ZIP が存在しません: " + external,
+            "The ZIP does not exist: " + external,
             external);
         await ExtractAsync(content, destination, entryNameEncoding, maxExtractedBytes, progress, cancellationToken)
             .ConfigureAwait(false);
@@ -109,7 +109,7 @@ internal sealed partial class Transaction
             long length = plan.Entry.Length;
             if (length < 0 || totalBytes > long.MaxValue - length)
             {
-                throw new InvalidDataException("ZIP の展開後のサイズの合計が上限を超えています");
+                throw new InvalidDataException("The total extracted size of the ZIP exceeds the limit");
             }
 
             totalBytes += length;

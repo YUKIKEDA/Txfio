@@ -45,7 +45,7 @@ internal static class JournalPaths
         string fullPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(workFolder, path));
         if (!PathMath.IsUnder(workFolder, fullPath) || WorkPath.IsInMetadataFolder(workFolder, fullPath))
         {
-            throw new JsonException("ジャーナルのパスがワークフォルダの外、ワークフォルダ自身、メタデータフォルダ、またはメタデータフォルダの配下を指しています: " + path);
+            throw new JsonException("A journal path points outside the work folder, to the work folder itself, to the metadata folder, or under the metadata folder: " + path);
         }
 
         return fullPath;

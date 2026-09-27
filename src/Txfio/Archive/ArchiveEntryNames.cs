@@ -72,7 +72,7 @@ internal static class ArchiveEntryNames
     {
         if (segment.Length == 0 || segment == "." || segment == "..")
         {
-            throw new InvalidDataException("展開先の外へ出るエントリ名です: " + fullName);
+            throw new InvalidDataException("The entry name leaves the destination: " + fullName);
         }
 
         if (segment.IndexOfAny(_invalidCharacters) >= 0
@@ -80,12 +80,12 @@ internal static class ArchiveEntryNames
             || segment.EndsWith(' ')
             || _reservedNames.Contains(segment.Split('.')[0].TrimEnd(' ').ToUpperInvariant()))
         {
-            throw new InvalidDataException("Windows のパスに使えないエントリ名です: " + fullName);
+            throw new InvalidDataException("The entry name is not valid in a Windows path: " + fullName);
         }
 
         if (segment.EndsWith(".txnew", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException(".txnew で終わるエントリ名は展開できません: " + fullName);
+            throw new InvalidDataException("An entry name ending in .txnew cannot be extracted: " + fullName);
         }
     }
 
@@ -124,7 +124,7 @@ internal static class ArchiveEntryNames
             string key = string.Join('/', segments).ToUpperInvariant();
             if (_files.Contains(key) || _directories.Contains(key))
             {
-                throw new InvalidDataException("ZIP に同じ名前のエントリがあります: " + fullName);
+                throw new InvalidDataException("The ZIP has entries with the same name: " + fullName);
             }
 
             (isDirectory ? _directories : _files).Add(key);
@@ -142,7 +142,7 @@ internal static class ArchiveEntryNames
             {
                 if (_ancestors.Contains(file))
                 {
-                    throw new InvalidDataException("ZIP に同じ名前のファイルとディレクトリがあります: " + file);
+                    throw new InvalidDataException("The ZIP has a file and a directory with the same name: " + file);
                 }
             }
         }

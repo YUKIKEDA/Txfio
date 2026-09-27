@@ -522,7 +522,7 @@ public sealed class MoveTests
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", "A.txt"));
 
-        Assert.Contains("同じパスへは移動できません", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("A path cannot be moved to itself", ex.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, ".txfio", "locks")));
         Assert.Equal("keep", await File.ReadAllTextAsync(source));
@@ -546,7 +546,7 @@ public sealed class MoveTests
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", "a.txt"));
 
-        Assert.Contains("同じパスへは移動できません", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("A path cannot be moved to itself", ex.Message, StringComparison.Ordinal);
         Assert.Empty(tx.GetPendingChanges());
     }
 

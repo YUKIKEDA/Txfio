@@ -269,7 +269,7 @@ internal static class JournalStore
             JournalAppend? record = JsonSerializer.Deserialize<JournalAppend>(lines[i].Span, _jsonOptions);
             if (record is null)
             {
-                throw new JsonException("ジャーナルの追記レコードが null です");
+                throw new JsonException("A journal append record is null");
             }
 
             operations.AddRange(record.Append);

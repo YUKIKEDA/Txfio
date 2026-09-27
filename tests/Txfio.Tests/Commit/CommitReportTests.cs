@@ -229,7 +229,7 @@ public sealed class CommitReportTests
         Assert.Equal(OperationFailureReason.SharingViolation, operation.Reason);
         Assert.Equal(PendingChangeKind.Delete, operation.Kind);
         InvalidOperationException again = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CommitAsync());
-        Assert.Equal("このトランザクションは既にコミット済みです", again.Message);
+        Assert.Equal("This transaction has already been committed", again.Message);
     }
 
     /// <summary>
