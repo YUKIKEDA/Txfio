@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// ワークフォルダ内のコピー
+/// Copies inside the work folder.
 /// </content>
 internal sealed partial class Transaction
 {
@@ -193,7 +193,7 @@ internal sealed partial class Transaction
             }
             catch (Exception exception) when (ignoreIoFailures && IoErrors.IsIo(exception))
             {
-                // 失敗したコピーの後始末では、元の例外を残す
+                // Cleanup after a failed copy keeps the original exception.
                 succeeded = false;
             }
         }

@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// ディスク上の前提が崩れている
+/// A precondition on disk no longer holds.
 /// </summary>
 public sealed class ExternalConflictException : TxfioException
 {
     /// <summary>
-    /// メッセージと失敗したパスを指定して例外を作る
+    /// Initializes a new instance of the <see cref="ExternalConflictException"/> class with a message and the path that failed.
     /// </summary>
-    /// <param name="message">例外メッセージ</param>
-    /// <param name="path">失敗したパス</param>
+    /// <param name="message">The exception message.</param>
+    /// <param name="path">The path that failed.</param>
     public ExternalConflictException(string message, string path)
         : base(message)
     {
@@ -17,7 +17,7 @@ public sealed class ExternalConflictException : TxfioException
     }
 
     /// <summary>
-    /// 失敗したパス
+    /// Gets the path that failed.
     /// </summary>
     public string Path { get; }
 }

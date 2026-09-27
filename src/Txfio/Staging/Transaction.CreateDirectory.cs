@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <content>
-/// 空ディレクトリを呼び出した時点で作る（配下の操作は通常どおりであり、破棄ではそのディレクトリを中身ごと消す）
+/// Creates an empty directory when called (operations under it work as usual, and discard deletes the directory with its contents).
 /// </content>
 internal sealed partial class Transaction
 {
@@ -42,7 +42,7 @@ internal sealed partial class Transaction
         {
             Directory.CreateDirectory(targetPath);
 
-            // 作ったあとで作成済みを書く（未作成のまま落ちたときは、他が作った同じ名前のディレクトリを Recover が中身ごと消さない）
+            // Record "created" after creating it (if it crashes while still recorded as not created, Recover does not delete, with its contents, a directory of the same name that someone else created).
             JournalOperation created = operation.WithDirectoryCreated();
             _paths.Set(_paths.IndexOf(operation), created);
             operation = created;
@@ -66,7 +66,7 @@ internal sealed partial class Transaction
         }
         catch (Exception exception) when (IoErrors.IsIo(exception))
         {
-            // ディレクトリが残っても、ジャーナルに載っていれば破棄で消える
+            // Even if the directory remains, discard deletes it because it is in the journal.
         }
 
         _paths.Remove(operation);

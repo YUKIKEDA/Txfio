@@ -3,20 +3,20 @@ using System.Buffers;
 namespace Txfio;
 
 /// <summary>
-/// ステージングファイル（`.txnew`）の書き込みと削除
+/// Writes and deletes staging files (<c>.txnew</c>).
 /// </summary>
 internal static class StagingFile
 {
     private const int CopyBufferSize = 81920;
 
     /// <summary>
-    /// 呼び出し側のストリームを `.txnew` へコピーしてフラッシュする
+    /// Copies the caller's stream to <c>.txnew</c> and flushes it.
     /// </summary>
-    /// <param name="stagingPath">書き込み先</param>
-    /// <param name="content">内容（Dispose しない）</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>書いたバイト数</returns>
+    /// <param name="stagingPath">The path to write to.</param>
+    /// <param name="content">The content (not disposed).</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The number of bytes written.</returns>
     internal static async Task<long> WriteAsync(
         string stagingPath,
         Stream content,
@@ -60,13 +60,13 @@ internal static class StagingFile
     }
 
     /// <summary>
-    /// 排他で開けることを確かめてから、同じディレクトリの移し先へファイルを移し、移し先があれば置き換える
+    /// After confirming the file can be opened exclusively, moves it to a destination in the same directory, replacing the destination if it exists.
     /// </summary>
-    /// <param name="sourcePath">移すファイル</param>
-    /// <param name="destinationPath">移し先</param>
+    /// <param name="sourcePath">The file to move.</param>
+    /// <param name="destinationPath">The destination.</param>
     internal static void MoveReplacing(string sourcePath, string destinationPath)
     {
-        // 読み取り中は FileShare.Delete で移せるため、排他で開けなければ移さない
+        // While it is being read, FileShare.Delete allows a move, so do not move it unless it can be opened exclusively.
         FileStream exclusive = new FileStream(
             sourcePath,
             FileMode.Open,
@@ -78,15 +78,15 @@ internal static class StagingFile
     }
 
     /// <summary>
-    /// コミットの適用で、`.txnew` を対象パスへ移す
+    /// Moves <c>.txnew</c> to the target path when the commit is applied.
     /// </summary>
     /// <remarks>
-    /// 置き換え（Update）は <see cref="File.Replace(string, string, string?, bool)"/> であり、対象ファイルの ACL、属性、作成日時、代替データストリームを新しいファイルへ移す
-    /// それらを移せないときも、中身の置き換えを優先して失敗にしない
+    /// A replacement (Update) uses <see cref="File.Replace(string, string, string?, bool)"/>, which moves the target file's ACL, attributes, creation time, and alternate data streams to the new file.
+    /// Even when those cannot be moved, replacing the content wins and the operation does not fail.
     /// </remarks>
-    /// <param name="stagingPath">ステージングファイル（`.txnew`）</param>
-    /// <param name="targetPath">対象パス</param>
-    /// <param name="replace"><see langword="true"/> なら既存のファイルを置き換える（Update）、<see langword="false"/> なら新規に作る（Add）</param>
+    /// <param name="stagingPath">The staging file (<c>.txnew</c>).</param>
+    /// <param name="targetPath">The target path.</param>
+    /// <param name="replace"><see langword="true"/> replaces an existing file (Update); <see langword="false"/> creates a new one (Add).</param>
     internal static void MoveToTarget(string stagingPath, string targetPath, bool replace)
     {
         if (replace)
@@ -99,9 +99,9 @@ internal static class StagingFile
     }
 
     /// <summary>
-    /// ステージングファイルがあれば削除する
+    /// Deletes the staging file, if there is one.
     /// </summary>
-    /// <param name="stagingPath">削除対象</param>
+    /// <param name="stagingPath">The file to delete.</param>
     internal static void TryDelete(string? stagingPath)
     {
         if (string.IsNullOrEmpty(stagingPath) || !File.Exists(stagingPath))
@@ -113,13 +113,13 @@ internal static class StagingFile
     }
 
     /// <summary>
-    /// 呼び出し側のストリームを、まだ存在しないファイルへコピーしてフラッシュする
+    /// Copies the caller's stream to a file that does not exist yet, and flushes it.
     /// </summary>
-    /// <param name="content">内容（Dispose しない）</param>
-    /// <param name="destinationPath">新しいファイルのパス</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>書いたバイト数</returns>
+    /// <param name="content">The content (not disposed).</param>
+    /// <param name="destinationPath">The path of the new file.</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The number of bytes written.</returns>
     internal static async Task<long> CopyToNewFileAsync(
         Stream content,
         string destinationPath,
@@ -173,14 +173,14 @@ internal static class StagingFile
     }
 
     /// <summary>
-    /// ストリームを別のストリームへコピーし、書き終えたバイト数を通知する
+    /// Copies a stream to another stream, and reports the bytes written.
     /// </summary>
-    /// <param name="source">コピー元（Dispose しない）</param>
-    /// <param name="destination">コピー先（Dispose しない）</param>
-    /// <param name="totalBytes">通知に載せる全体のバイト数（分からなければ null）</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>コピーしたバイト数</returns>
+    /// <param name="source">The source (not disposed).</param>
+    /// <param name="destination">The destination (not disposed).</param>
+    /// <param name="totalBytes">The total bytes to report (<see langword="null"/> if unknown).</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The number of bytes copied.</returns>
     internal static async Task<long> CopyAsync(
         Stream source,
         Stream destination,
@@ -220,14 +220,14 @@ internal static class StagingFile
     }
 
     /// <summary>
-    /// 書いた内容をディスクまで書き出す
+    /// Writes what was written through to the disk.
     /// </summary>
     /// <remarks>
-    /// 書き終えたなら 1 回だけ、バッファを出してからディスクまでフラッシュする
+    /// Once writing is done, flushes the buffer and then flushes to disk, once.
     /// </remarks>
-    /// <param name="stream">書き終えたストリーム</param>
-    /// <param name="cancellationToken">バッファを OS へ出すあいだの取り消し（ディスクまでのフラッシュは取り消せない）</param>
-    /// <returns>ディスクまで書き出したこと</returns>
+    /// <param name="stream">The stream that has been written.</param>
+    /// <param name="cancellationToken">Cancels while the buffer is handed to the OS (the flush to disk cannot be canceled).</param>
+    /// <returns>A task that completes when the data is on disk.</returns>
     internal static async Task FlushToDiskAsync(FileStream stream, CancellationToken cancellationToken)
     {
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);

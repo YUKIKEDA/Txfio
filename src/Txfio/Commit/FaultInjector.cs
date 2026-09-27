@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// テストが失敗と途中停止を仕込む
+/// Lets a test arm failures and partial stops.
 /// </summary>
 internal sealed class FaultInjector : IFaultInjector
 {
@@ -53,9 +53,9 @@ internal sealed class FaultInjector : IFaultInjector
     }
 
     /// <summary>
-    /// 次に通過したら止める地点を指定する
+    /// Sets the point to stop at the next time it is passed.
     /// </summary>
-    /// <param name="name">止める地点</param>
+    /// <param name="name">The point to stop at.</param>
     internal void Arm(string name)
     {
         _armedName = name;
@@ -63,7 +63,7 @@ internal sealed class FaultInjector : IFaultInjector
     }
 
     /// <summary>
-    /// 止める地点の指定を消す
+    /// Clears the point to stop at.
     /// </summary>
     internal void Reset()
     {
@@ -74,7 +74,7 @@ internal sealed class FaultInjector : IFaultInjector
     }
 
     /// <summary>
-    /// 次の Dispose を、ロックを閉じるだけにする
+    /// Makes the next Dispose only close the locks.
     /// </summary>
     internal void SuppressRollback()
     {
@@ -83,26 +83,26 @@ internal sealed class FaultInjector : IFaultInjector
     }
 
     /// <summary>
-    /// 次の適用で、指定した例外を投げる
+    /// Throws the given exception at the next apply.
     /// </summary>
-    /// <param name="exception">投げる例外</param>
+    /// <param name="exception">The exception to throw.</param>
     internal void FailNextApply(Exception exception)
     {
         _applyFailure = exception;
     }
 
     /// <summary>
-    /// 次に指定した共有モードで開くとき、指定した例外を投げる
+    /// Throws the given exception the next time a file is opened with the given share mode.
     /// </summary>
-    /// <param name="share">失敗させる共有モード</param>
-    /// <param name="exception">投げる例外</param>
+    /// <param name="share">The share mode to fail.</param>
+    /// <param name="exception">The exception to throw.</param>
     internal void FailNextOpen(FileShare share, Exception exception)
     {
         _openFailures.Enqueue((share, exception));
     }
 
     /// <summary>
-    /// 仕込んだ開く失敗を消す
+    /// Clears the armed open failure.
     /// </summary>
     internal void ClearOpenFailures()
     {

@@ -1,17 +1,17 @@
 namespace Txfio;
 
 /// <summary>
-/// 操作を確定できなかったときの成り行き
+/// What happened to an operation that could not be finished.
 /// </summary>
 public enum OperationDisposition
 {
     /// <summary>
-    /// 検証で拒んだ
+    /// Rejected by the check.
     /// </summary>
     Rejected = 0,
 
     /// <summary>
-    /// 適用で飛ばした
+    /// Skipped during apply.
     /// </summary>
     Skipped = 1,
 }

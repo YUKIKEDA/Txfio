@@ -4,7 +4,7 @@ using System.Text;
 namespace Txfio;
 
 /// <content>
-/// ZIP アーカイブの展開（ワークフォルダ内の ZIP と外の ZIP）
+/// Extracting ZIP archives (ZIPs inside and outside the work folder).
 /// </content>
 internal sealed partial class Transaction
 {
@@ -115,14 +115,14 @@ internal sealed partial class Transaction
             totalBytes += length;
         }
 
-        // 申告の合計で書く前に止め、無圧縮は Length より多く読むので書く途中でも上限で止める
+        // Stop before writing by the declared total; Stored entries can read more than Length, so also stop at the limit while writing.
         ExtractByteBudget? budget = null;
         if (maxExtractedBytes is long limit)
         {
             if (totalBytes > limit)
             {
                 throw new InvalidDataException(
-                    "ZIP の展開後のサイズの合計が上限を超えています: " + totalBytes + " > " + limit);
+                    "The total extracted size of the ZIP exceeds the limit: " + totalBytes + " > " + limit);
             }
 
             budget = new ExtractByteBudget(limit);
@@ -240,7 +240,7 @@ internal sealed partial class Transaction
     }
 
     /// <summary>
-    /// 展開で読んでよい残りのバイト数
+    /// The bytes that the extract may still read.
     /// </summary>
     private sealed class ExtractByteBudget
     {
@@ -249,22 +249,22 @@ internal sealed partial class Transaction
         private long _accepted;
 
         /// <summary>
-        /// 上限を指定する
+        /// Initializes a new instance of the <see cref="ExtractByteBudget"/> class with the limit.
         /// </summary>
-        /// <param name="limit">読んでよい合計バイト数</param>
+        /// <param name="limit">The total bytes that may be read.</param>
         internal ExtractByteBudget(long limit)
         {
             _limit = limit;
         }
 
         /// <summary>
-        /// 上限を超えない範囲だけ読む（超えるバイトがあれば <see cref="InvalidDataException"/>）
+        /// Reads only within the limit (throws <see cref="InvalidDataException"/> if there are bytes beyond it).
         /// </summary>
-        /// <param name="inner">エントリの中身</param>
-        /// <param name="buffer">読み先</param>
-        /// <param name="offset">読み先の開始位置</param>
-        /// <param name="count">読みたいバイト数</param>
-        /// <returns>読んだバイト数（終わりなら 0）</returns>
+        /// <param name="inner">The content of the entry.</param>
+        /// <param name="buffer">The buffer to read into.</param>
+        /// <param name="offset">The start position in the buffer.</param>
+        /// <param name="count">The number of bytes to read.</param>
+        /// <returns>The number of bytes read (0 at the end).</returns>
         internal int Read(Stream inner, byte[] buffer, int offset, int count)
         {
             bool probe = BeginRead(count, out int toRead);
@@ -275,12 +275,12 @@ internal sealed partial class Transaction
         }
 
         /// <summary>
-        /// 上限を超えない範囲だけ非同期に読む（超えるバイトがあれば <see cref="InvalidDataException"/>）
+        /// Reads asynchronously, only within the limit (throws <see cref="InvalidDataException"/> if there are bytes beyond it).
         /// </summary>
-        /// <param name="inner">エントリの中身</param>
-        /// <param name="buffer">読み先</param>
-        /// <param name="cancellationToken">取り消し用のトークン</param>
-        /// <returns>読んだバイト数（終わりなら 0）</returns>
+        /// <param name="inner">The content of the entry.</param>
+        /// <param name="buffer">The buffer to read into.</param>
+        /// <param name="cancellationToken">The token to cancel the operation.</param>
+        /// <returns>The number of bytes read (0 at the end).</returns>
         internal async ValueTask<int> ReadAsync(
             Stream inner,
             Memory<byte> buffer,
@@ -325,12 +325,12 @@ internal sealed partial class Transaction
         private InvalidDataException Exceeded()
         {
             return new InvalidDataException(
-                "ZIP の展開後のサイズの合計が上限を超えています: " + (_accepted + 1) + " > " + _limit);
+                "The total extracted size of the ZIP exceeds the limit: " + (_accepted + 1) + " > " + _limit);
         }
     }
 
     /// <summary>
-    /// エントリの読み取りを、展開全体の上限で止める
+    /// Stops reading an entry at the limit for the whole extract.
     /// </summary>
     private sealed class CappedEntryStream : Stream
     {
@@ -338,10 +338,10 @@ internal sealed partial class Transaction
         private readonly ExtractByteBudget _budget;
 
         /// <summary>
-        /// 中身と、展開全体で共有する上限を指定する
+        /// Initializes a new instance of the <see cref="CappedEntryStream"/> class with the content and the limit shared by the whole extract.
         /// </summary>
-        /// <param name="inner">エントリの中身（このストリームが破棄する）</param>
-        /// <param name="budget">展開全体の上限</param>
+        /// <param name="inner">The content of the entry (this stream disposes it).</param>
+        /// <param name="budget">The limit for the whole extract.</param>
         internal CappedEntryStream(Stream inner, ExtractByteBudget budget)
         {
             _inner = inner;

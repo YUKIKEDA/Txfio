@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// 持ち主のいない残骸ジャーナルがあるあいだ、新しいトランザクションを拒否する
+/// Rejects new transactions while an orphaned journal exists.
 /// </summary>
 internal static class StaleJournals
 {
     /// <summary>
-    /// 残骸ジャーナルがあれば例外を投げる
+    /// Throws if there is an orphaned journal.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <exception cref="RecoveryRequiredException">残骸ジャーナルがある</exception>
+    /// <param name="workFolder">The work folder.</param>
+    /// <exception cref="RecoveryRequiredException">There is an orphaned journal.</exception>
     internal static void ThrowIfAny(string workFolder)
     {
         if (Exists(workFolder))
@@ -21,10 +21,10 @@ internal static class StaleJournals
     }
 
     /// <summary>
-    /// 生存ロックを開けて、開けたあともジャーナルが残っているものがあるかどうかを返す（ジャーナルは読まない）
+    /// Returns whether some journal's liveness lock can be opened and the journal still exists after that (journals are not read).
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>残骸ジャーナルがあれば <see langword="true"/></returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <returns><see langword="true"/> if there is an orphaned journal.</returns>
     internal static bool Exists(string workFolder)
     {
         string metadataFolder = MetadataNames.FolderPath(workFolder);
@@ -38,7 +38,7 @@ internal static class StaleJournals
             MetadataNames.JournalSearchPattern,
             SearchOption.TopDirectoryOnly))
         {
-            // 共有違反なら持ち主が生きている（自分のジャーナルも自分が持つので必ずここで飛ぶ）
+            // A sharing violation means the owner is alive (our own journal always skips here, since we hold its lock).
             using FileStream? liveness = LivenessLock.TryOpenStale(MetadataNames.LivenessLockPath(journalPath));
             if (liveness is not null && File.Exists(journalPath))
             {

@@ -1,14 +1,14 @@
 namespace Txfio;
 
 /// <summary>
-/// Txfio が呼び出し側へ返す例外の基底
+/// The base of the exceptions Txfio returns to the caller.
 /// </summary>
 public abstract class TxfioException : Exception
 {
     /// <summary>
-    /// メッセージを指定して例外を作る
+    /// Initializes a new instance of the <see cref="TxfioException"/> class with a message.
     /// </summary>
-    /// <param name="message">例外メッセージ</param>
+    /// <param name="message">The exception message.</param>
     protected TxfioException(string message)
         : base(message)
     {

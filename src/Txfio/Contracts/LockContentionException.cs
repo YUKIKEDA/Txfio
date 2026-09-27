@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// 他のトランザクションがパスを押さえている
+/// Another transaction holds the path.
 /// </summary>
 public sealed class LockContentionException : TxfioException
 {
     /// <summary>
-    /// メッセージと失敗したパスを指定して例外を作る
+    /// Initializes a new instance of the <see cref="LockContentionException"/> class with a message and the path that failed.
     /// </summary>
-    /// <param name="message">例外メッセージ</param>
-    /// <param name="path">失敗したパス</param>
+    /// <param name="message">The exception message.</param>
+    /// <param name="path">The path that failed.</param>
     public LockContentionException(string message, string path)
         : base(message)
     {
@@ -17,7 +17,7 @@ public sealed class LockContentionException : TxfioException
     }
 
     /// <summary>
-    /// 失敗したパス
+    /// Gets the path that failed.
     /// </summary>
     public string Path { get; }
 }

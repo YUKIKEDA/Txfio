@@ -5,25 +5,25 @@ using System.Text.Json;
 namespace Txfio;
 
 /// <summary>
-/// トランザクションの公開契約
+/// The public contract of a transaction.
 /// </summary>
 /// <remarks>
-/// 公開メンバーは重なって呼べず、重なった呼び出しは状態を変える前に <see cref="InvalidOperationException"/> になる
+/// Public members cannot be called concurrently; an overlapping call throws <see cref="InvalidOperationException"/> before it changes any state.
 /// </remarks>
 public interface ITransaction : IAsyncDisposable
 {
     /// <summary>
-    /// 新規ファイルの内容をステージングする
+    /// Stages the content of a new file.
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">対象が既にあり、ファイル Move の移動元ではない、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、ディレクトリ Move の移動元への追加、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="content">The content to write (owned by the caller).</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The target already exists and is not the source of a file Move, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the Add targets the source of a directory Move, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task AddAsync(
         string path,
         Stream content,
@@ -31,17 +31,17 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 既存ファイルを新しい内容でステージングする
+    /// Stages new content for an existing file.
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="content">書き込む内容（呼び出し側が所有する）</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">対象が無い、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="content">The content to write (owned by the caller).</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The target does not exist, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task UpdateAsync(
         string path,
         Stream content,
@@ -49,93 +49,93 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 既存のファイルまたはディレクトリの削除を予約する
+    /// Schedules deleting an existing file or directory.
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>予約の完了</returns>
-    /// <exception cref="ExternalConflictException">対象が無い、またはディレクトリ直下に予定外の子がある</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the operation is scheduled.</returns>
+    /// <exception cref="ExternalConflictException">The target does not exist, or the directory has an unexpected direct child.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task DeleteAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ディレクトリとその配下すべての削除を予約する
+    /// Schedules deleting a directory and everything under it.
     /// </summary>
-    /// <param name="path">対象ディレクトリ（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>予約の完了</returns>
-    /// <exception cref="ExternalConflictException">対象ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="UnsupportedOperationException">対象がファイルである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、配下にこのトランザクションの操作がある、ディレクトリ Move の配下である、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target directory (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the operation is scheduled.</returns>
+    /// <exception cref="ExternalConflictException">The target directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="UnsupportedOperationException">The target is a file.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, this transaction has an operation under the directory, the path is under a directory Move, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task DeleteTreeAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 同一ボリューム内のファイルまたはディレクトリの移動を予約する
+    /// Schedules moving a file or directory within one volume.
     /// </summary>
-    /// <param name="oldPath">移動元パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>予約の完了</returns>
-    /// <exception cref="ExternalConflictException">移動元が無い、移動先が別の Move の移動元でもなく塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
-    /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動である</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動（大文字小文字だけの違いを含む）、別操作でステージング済み、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="oldPath">The source path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="newPath">The destination path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the operation is scheduled.</returns>
+    /// <exception cref="ExternalConflictException">The source does not exist, the destination is occupied and is not the source of another Move, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the source, the destination, or the work folder.</exception>
+    /// <exception cref="UnsupportedOperationException">The move crosses volumes.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the move is to the same path (including a difference only in case), the path is already staged by another operation, the move has no free end, the move is into a directory scheduled for deletion, an operation is under the source or destination, a directory is moved under itself, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task MoveAsync(string oldPath, string newPath, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 同一ボリューム内のファイルまたはディレクトリの移動を予約する
-    /// <paramref name="overwrite"/> が <see langword="true"/> なら、移動先の既存のファイルかディレクトリを移動元で置き換えるか入れ替える
-    /// ファイルどうしは 1 回の rename で置き換え、どちらかがディレクトリなら移動先を `.txold` へ退避してから入れ替える
+    /// Schedules moving a file or directory within one volume.
+    /// When <paramref name="overwrite"/> is <see langword="true"/>, replaces or swaps the existing file or directory at the destination with the source.
+    /// Two files are replaced with one rename; when either is a directory, the destination is moved aside to <c>.txold</c> and then swapped.
     /// </summary>
     /// <remarks>
-    /// ファイルどうしの置き換えはコミットで 1 回の rename（`MOVEFILE_REPLACE_EXISTING`）であり、バイトはコピーしない
-    /// 移動元か移動先がディレクトリの入れ替えは、移動先を `{名前}.{txid}.txold` へ退避し、移動元を移動先へ rename してから `.txold` を消す
-    /// 移動先にこのトランザクションのファイルの Delete があれば、その Delete をファイルどうしの置き換えに畳む
-    /// 移動先の DeleteTree は、入れ替えに畳む
-    /// 置き換えと入れ替えでは、移動元と移動先へはこのあと続けて操作できない
-    /// 入れ替えでは、移動先の配下へも続けて操作できない
+    /// Replacing a file with a file is one rename at commit (<c>MOVEFILE_REPLACE_EXISTING</c>), and no bytes are copied.
+    /// A swap where the source or destination is a directory moves the destination aside to <c>{name}.{txid}.txold</c>, renames the source to the destination, and then deletes <c>.txold</c>.
+    /// If this transaction has a file Delete at the destination, that Delete folds into the file replacement.
+    /// A DeleteTree at the destination folds into the swap.
+    /// After a replacement or a swap, no further operation is allowed on the source or destination.
+    /// After a swap, no further operation is allowed under the destination either.
     /// </remarks>
-    /// <param name="oldPath">移動元パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="newPath">移動先パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="overwrite"><see langword="true"/> なら移動先の既存のファイルかディレクトリを移動元で置き換えるか入れ替える（<see langword="false"/> は <see cref="MoveAsync(string, string, CancellationToken)"/> と同じ）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>予約の完了</returns>
-    /// <exception cref="ExternalConflictException">移動元が無い、<paramref name="overwrite"/> が <see langword="false"/> なのに移動先が塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが移動元、移動先、またはワークフォルダを押さえている</exception>
-    /// <exception cref="UnsupportedOperationException">ボリュームをまたぐ移動である</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、同じパスへの移動、別操作でステージング済み、置き換えまたは入れ替えの Move の移動元か移動先への操作、入れ替えの移動先の配下への操作、空いている端が無い移動、削除予約済みディレクトリへの移動、移動元または移動先の配下への操作、自分自身の配下への移動、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="oldPath">The source path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="newPath">The destination path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="overwrite">When <see langword="true"/>, replaces or swaps the existing file or directory at the destination with the source (<see langword="false"/> is the same as <see cref="MoveAsync(string, string, CancellationToken)"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the operation is scheduled.</returns>
+    /// <exception cref="ExternalConflictException">The source does not exist, the destination is occupied while <paramref name="overwrite"/> is <see langword="false"/>, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the source, the destination, or the work folder.</exception>
+    /// <exception cref="UnsupportedOperationException">The move crosses volumes.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the move is to the same path, the path is already staged by another operation, an operation targets the source or destination of a replacing or swapping Move, an operation is under the destination of a swap, the move has no free end, the move is into a directory scheduled for deletion, an operation is under the source or destination, a directory is moved under itself, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 空ディレクトリを呼び出した時点で作る（配下では通常の操作ができ、中身は素のファイル API でも書ける）
+    /// Creates an empty directory when called (normal operations work under it, and its contents can also be written with the plain file API).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>作成の完了</returns>
-    /// <exception cref="ExternalConflictException">対象が既にある、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、配下に操作がある、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the directory is created.</returns>
+    /// <exception cref="ExternalConflictException">The target already exists, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, there is an operation under it, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ワークフォルダ内のファイルまたはディレクトリをコピーする
+    /// Copies a file or directory inside the work folder.
     /// </summary>
-    /// <param name="source">コピー元（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="destination">コピー先（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が既にある、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションがコピー元、コピー先、またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、同じパスへのコピー、自分自身の配下へのコピー、シンボリックリンク、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="source">The source (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="destination">The destination (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The source does not exist, the destination already exists, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the source, the destination, or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the copy is to the same path or under itself, or the path is a symbolic link, a reparse point, or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task CopyAsync(
         string source,
         string destination,
@@ -143,17 +143,17 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ワークフォルダの外にあるファイルまたはディレクトリをコピーして Add する
+    /// Copies a file or directory from outside the work folder and adds it.
     /// </summary>
-    /// <param name="externalPath">ワークフォルダの外にあるコピー元</param>
-    /// <param name="targetPath">コピー先（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が既にある、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションがコピー先またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、自分自身の配下への取り込み、シンボリックリンク、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">コピー元がワークフォルダの中、またはコピー先がワークフォルダの外である</exception>
+    /// <param name="externalPath">The source outside the work folder.</param>
+    /// <param name="targetPath">The destination (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The source does not exist, the destination already exists, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the destination or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the import is under itself, or the path is a symbolic link, a reparse point, or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The source is inside the work folder, or the destination is outside the work folder.</exception>
     Task ImportAsync(
         string externalPath,
         string targetPath,
@@ -161,16 +161,16 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ワークフォルダのファイルまたはディレクトリを、ワークフォルダの外へコピーする
+    /// Copies a file or directory in the work folder to outside the work folder.
     /// </summary>
-    /// <param name="path">コピー元（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="externalPath">ワークフォルダの外にあるコピー先</param>
-    /// <param name="progress">コピーの進み具合（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>コピーの完了</returns>
-    /// <exception cref="ExternalConflictException">コピー元が無い、コピー先が塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、シンボリックリンク、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">コピー元がワークフォルダの外、またはコピー先がワークフォルダの中である</exception>
+    /// <param name="path">The source (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="externalPath">The destination outside the work folder.</param>
+    /// <param name="progress">Receives copy progress (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the copy is done.</returns>
+    /// <exception cref="ExternalConflictException">The source does not exist, the destination is occupied, or the parent directory does not exist.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a symbolic link, a reparse point, or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The source is outside the work folder, or the destination is inside the work folder.</exception>
     Task ExportAsync(
         string path,
         string externalPath,
@@ -178,19 +178,19 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ワークフォルダ内のファイルまたはディレクトリから ZIP を作り、ワークフォルダ内に Add する
+    /// Creates a ZIP from a file or directory inside the work folder, and adds it inside the work folder.
     /// </summary>
-    /// <param name="source">入力（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="archivePath">作る ZIP のパス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="compressionLevel">圧縮レベル</param>
-    /// <param name="includeBaseDirectory">入力がディレクトリのとき、その名前をエントリのルートに含めるか</param>
-    /// <param name="progress">読み込んだ圧縮前のバイト数（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが既にある、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが入力、ZIP のパス、またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、入力の配下に操作がある、ZIP のパスが入力の配下、シンボリックリンク、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="source">The input (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="archivePath">The path of the ZIP to create (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="compressionLevel">The compression level.</param>
+    /// <param name="includeBaseDirectory">When the input is a directory, whether to include its name as the root of the entries.</param>
+    /// <param name="progress">Receives the uncompressed bytes read (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The input does not exist, the ZIP path already exists, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the input, the ZIP path, or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, there is an operation under the input, the ZIP path is under the input, or the path is a symbolic link, a reparse point, or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task CreateArchiveAsync(
         string source,
         string archivePath,
@@ -200,19 +200,19 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 指定したファイルとディレクトリを指定した名前で入れた ZIP を作り、ワークフォルダ内に Add する
+    /// Creates a ZIP that contains the given files and directories under the given names, and adds it inside the work folder.
     /// </summary>
-    /// <param name="entries">入れるものと ZIP の中での名前の組（リストの順に入れる）</param>
-    /// <param name="archivePath">作る ZIP のパス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="compressionLevel">圧縮レベル</param>
-    /// <param name="progress">読み込んだ圧縮前のバイト数（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ArgumentNullException">組の列、要素、または要素のパスが null である</exception>
-    /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが既にある、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが入力、ZIP のパス、またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、入力がステージング済み、入力の配下に操作がある、ZIP のパスが入力の配下、シンボリックリンク、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外、またはエントリ名が不正、重複、ファイルとディレクトリの同名である</exception>
+    /// <param name="entries">Pairs of what to add and its name inside the ZIP (added in list order).</param>
+    /// <param name="archivePath">The path of the ZIP to create (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="compressionLevel">The compression level.</param>
+    /// <param name="progress">Receives the uncompressed bytes read (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ArgumentNullException">The sequence, an element, or an element's path is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The input does not exist, the ZIP path already exists, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the input, the ZIP path, or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, an input is already staged, there is an operation under an input, the ZIP path is under an input, or the path is a symbolic link, a reparse point, or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">A path is outside the work folder, or entry names are invalid, duplicated, or shared by a file and a directory.</exception>
     Task CreateArchiveAsync(
         IEnumerable<ArchiveEntrySource> entries,
         string archivePath,
@@ -221,18 +221,18 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ワークフォルダ内のファイルまたはディレクトリから、ワークフォルダの外に ZIP を作る
+    /// Creates a ZIP outside the work folder from a file or directory inside the work folder.
     /// </summary>
-    /// <param name="source">入力（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="externalArchivePath">ワークフォルダの外に作る ZIP のパス</param>
-    /// <param name="compressionLevel">圧縮レベル</param>
-    /// <param name="includeBaseDirectory">入力がディレクトリのとき、その名前をエントリのルートに含めるか</param>
-    /// <param name="progress">読み込んだ圧縮前のバイト数（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>書き出しの完了</returns>
-    /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、シンボリックリンク、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">入力がワークフォルダの外、または ZIP のパスがワークフォルダの中である</exception>
+    /// <param name="source">The input (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="externalArchivePath">The path of the ZIP to create outside the work folder.</param>
+    /// <param name="compressionLevel">The compression level.</param>
+    /// <param name="includeBaseDirectory">When the input is a directory, whether to include its name as the root of the entries.</param>
+    /// <param name="progress">Receives the uncompressed bytes read (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the export is written.</returns>
+    /// <exception cref="ExternalConflictException">The input does not exist, the ZIP path is occupied, or the parent directory does not exist.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a symbolic link, a reparse point, or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The input is outside the work folder, or the ZIP path is inside the work folder.</exception>
     Task ExportArchiveAsync(
         string source,
         string externalArchivePath,
@@ -242,18 +242,18 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 指定したファイルとディレクトリを指定した名前で入れた ZIP を、ワークフォルダの外に作る
+    /// Creates a ZIP outside the work folder that contains the given files and directories under the given names.
     /// </summary>
-    /// <param name="entries">入れるものと ZIP の中での名前の組（リストの順に入れる）</param>
-    /// <param name="externalArchivePath">ワークフォルダの外に作る ZIP のパス</param>
-    /// <param name="compressionLevel">圧縮レベル</param>
-    /// <param name="progress">読み込んだ圧縮前のバイト数（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>書き出しの完了</returns>
-    /// <exception cref="ArgumentNullException">組の列、要素、または要素のパスが null である</exception>
-    /// <exception cref="ExternalConflictException">入力が無い、ZIP のパスが塞がっている、または親ディレクトリが無い</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、シンボリックリンク、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">入力がワークフォルダの外、ZIP のパスがワークフォルダの中、またはエントリ名が不正、重複、ファイルとディレクトリの同名である</exception>
+    /// <param name="entries">Pairs of what to add and its name inside the ZIP (added in list order).</param>
+    /// <param name="externalArchivePath">The path of the ZIP to create outside the work folder.</param>
+    /// <param name="compressionLevel">The compression level.</param>
+    /// <param name="progress">Receives the uncompressed bytes read (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the export is written.</returns>
+    /// <exception cref="ArgumentNullException">The sequence, an element, or an element's path is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The input does not exist, the ZIP path is occupied, or the parent directory does not exist.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a symbolic link, a reparse point, or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">An input is outside the work folder, the ZIP path is inside the work folder, or entry names are invalid, duplicated, or shared by a file and a directory.</exception>
     Task ExportArchiveAsync(
         IEnumerable<ArchiveEntrySource> entries,
         string externalArchivePath,
@@ -262,22 +262,22 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ワークフォルダ内の ZIP を、ワークフォルダ内の新しいディレクトリへ展開し、各ファイルを Add する
+    /// Extracts a ZIP inside the work folder into a new directory inside the work folder, and adds each file.
     /// </summary>
-    /// <param name="archivePath">展開する ZIP（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パスとし、ステージング済みならその内容を読む）</param>
-    /// <param name="destinationDir">展開先の新しいディレクトリ（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="entryNameEncoding">UTF-8 フラグの無いエントリ名の読み方（null のときは .NET の既定）</param>
-    /// <param name="maxExtractedBytes">展開後のバイト数の合計の上限（null のときは上限なし、外から受け取った ZIP では渡す）</param>
-    /// <param name="progress">展開後のバイト数と、エントリの合計サイズ（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">ZIP が無い、展開先が既にある、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが展開先またはワークフォルダを押さえている</exception>
-    /// <exception cref="UnsupportedOperationException">ZIP のパスがディレクトリである</exception>
-    /// <exception cref="InvalidDataException">展開先の外へ出る名前がある、Windows で使えない名前がある、`.txnew` で終わる名前がある、名前が重複している、ファイルとディレクトリの同名がある、または申告した展開後のサイズの合計か実際に読んだバイト数が <paramref name="maxExtractedBytes"/> を超える（合計が long に収まらないとき、ファイルの Length が 0 未満のとき、ZIP 自体が読めないときも同じ）</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxExtractedBytes"/> が 0 未満である</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、展開先の配下に操作がある、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="archivePath">The ZIP to extract (relative to the work folder, or absolute inside the work folder; if it is staged, its staged content is read).</param>
+    /// <param name="destinationDir">The new destination directory (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="entryNameEncoding">How to read entry names without the UTF-8 flag (the .NET default when <see langword="null"/>).</param>
+    /// <param name="maxExtractedBytes">The limit on the total extracted bytes (no limit when <see langword="null"/>; pass one for ZIPs received from outside).</param>
+    /// <param name="progress">Receives the extracted bytes and the total size of the entries (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The ZIP does not exist, the destination already exists, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the destination or the work folder.</exception>
+    /// <exception cref="UnsupportedOperationException">The ZIP path is a directory.</exception>
+    /// <exception cref="InvalidDataException">A name leaves the destination, is not valid on Windows, or ends in <c>.txnew</c>; names are duplicated; a file and a directory share a name; or the declared total extracted size or the bytes actually read exceed <paramref name="maxExtractedBytes"/> (also when the total does not fit in a <see langword="long"/>, a file's Length is negative, or the ZIP itself cannot be read).</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxExtractedBytes"/> is negative.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, there is an operation under the destination, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task ExtractArchiveAsync(
         string archivePath,
         string destinationDir,
@@ -287,22 +287,22 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ワークフォルダの外の ZIP を、ワークフォルダ内の新しいディレクトリへ展開し、各ファイルを Add する
+    /// Extracts a ZIP outside the work folder into a new directory inside the work folder, and adds each file.
     /// </summary>
-    /// <param name="externalArchivePath">ワークフォルダの外にある ZIP</param>
-    /// <param name="destinationDir">展開先の新しいディレクトリ（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="entryNameEncoding">UTF-8 フラグの無いエントリ名の読み方（null のときは .NET の既定）</param>
-    /// <param name="maxExtractedBytes">展開後のバイト数の合計の上限（null のときは上限なし、外から受け取った ZIP では渡す）</param>
-    /// <param name="progress">展開後のバイト数と、エントリの合計サイズ（null のときは通知しない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">ZIP が無い、展開先が既にある、または親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが展開先またはワークフォルダを押さえている</exception>
-    /// <exception cref="UnsupportedOperationException">ZIP のパスがディレクトリである</exception>
-    /// <exception cref="InvalidDataException">展開先の外へ出る名前がある、Windows で使えない名前がある、`.txnew` で終わる名前がある、名前が重複している、ファイルとディレクトリの同名がある、または申告した展開後のサイズの合計か実際に読んだバイト数が <paramref name="maxExtractedBytes"/> を超える（合計が long に収まらないとき、ファイルの Length が 0 未満のとき、ZIP 自体が読めないときも同じ）</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxExtractedBytes"/> が 0 未満である</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、展開先の配下に操作がある、リパースポイント、またはメタデータ配下である</exception>
-    /// <exception cref="ArgumentException">ZIP のパスがワークフォルダの中、または展開先がワークフォルダの外である</exception>
+    /// <param name="externalArchivePath">The ZIP outside the work folder.</param>
+    /// <param name="destinationDir">The new destination directory (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="entryNameEncoding">How to read entry names without the UTF-8 flag (the .NET default when <see langword="null"/>).</param>
+    /// <param name="maxExtractedBytes">The limit on the total extracted bytes (no limit when <see langword="null"/>; pass one for ZIPs received from outside).</param>
+    /// <param name="progress">Receives the extracted bytes and the total size of the entries (nothing is reported when <see langword="null"/>).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The ZIP does not exist, the destination already exists, or the parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the destination or the work folder.</exception>
+    /// <exception cref="UnsupportedOperationException">The ZIP path is a directory.</exception>
+    /// <exception cref="InvalidDataException">A name leaves the destination, is not valid on Windows, or ends in <c>.txnew</c>; names are duplicated; a file and a directory share a name; or the declared total extracted size or the bytes actually read exceed <paramref name="maxExtractedBytes"/> (also when the total does not fit in a <see langword="long"/>, a file's Length is negative, or the ZIP itself cannot be read).</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxExtractedBytes"/> is negative.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, there is an operation under the destination, or the path is a reparse point or under the metadata folder.</exception>
+    /// <exception cref="ArgumentException">The ZIP path is inside the work folder, or the destination is outside the work folder.</exception>
     Task ImportArchiveAsync(
         string externalArchivePath,
         string destinationDir,
@@ -312,129 +312,129 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// コミット後の姿のファイルを開く
+    /// Opens the file in the post-commit view.
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
-    /// <returns>位置 0 の読み取りストリーム（呼び出し側が破棄する）</returns>
-    /// <exception cref="ExternalConflictException">対象が無い</exception>
-    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The cancellation token, honored only at the start of the call.</param>
+    /// <returns>A read stream at position 0 (the caller disposes it).</returns>
+    /// <exception cref="ExternalConflictException">The target does not exist.</exception>
+    /// <exception cref="UnsupportedOperationException">The target is a directory.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<Stream> ReadAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// コミット後の姿で、ファイルかディレクトリがあるかどうかを返す
+    /// Returns whether a file or directory exists in the post-commit view.
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
-    /// <returns>ファイルかディレクトリがあるなら <see langword="true"/></returns>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The cancellation token, honored only at the start of the call.</param>
+    /// <returns><see langword="true"/> if a file or directory exists.</returns>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// コミット後の姿で、ディレクトリの直下にあるファイルとディレクトリを返す（再帰しない）
+    /// Returns the files and directories directly under a directory in the post-commit view (not recursive).
     /// </summary>
     /// <remarks>
-    /// このトランザクションのステージングファイル（`.txnew`）、再ステージの退避（`.txnew.prev`）、入れ替えの退避（`.txold`）は含めない（別のトランザクションのものは、ディスクにあるので見える）
+    /// This transaction's staging files (<c>.txnew</c>), restage backups (<c>.txnew.prev</c>), and swap backups (<c>.txold</c>) are not included (those of other transactions are on disk, so they are visible).
     /// </remarks>
-    /// <param name="directoryPath">ディレクトリ（ワークフォルダ基準の相対、ワークフォルダ内の絶対パス、またはワークフォルダ自身）</param>
-    /// <param name="cancellationToken">呼び出し開始時のみ有効な取り消しトークン</param>
-    /// <returns>直下の 1 件ずつ（パスの大文字小文字を無視した辞書順）</returns>
-    /// <exception cref="ExternalConflictException">コミット後の姿でディレクトリが無い</exception>
-    /// <exception cref="UnsupportedOperationException">コミット後の姿でファイルである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="directoryPath">The directory (relative to the work folder, absolute inside the work folder, or the work folder itself).</param>
+    /// <param name="cancellationToken">The cancellation token, honored only at the start of the call.</param>
+    /// <returns>One entry per direct child (in lexical order of the path, ignoring case).</returns>
+    /// <exception cref="ExternalConflictException">The directory does not exist in the post-commit view.</exception>
+    /// <exception cref="UnsupportedOperationException">It is a file in the post-commit view.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<IReadOnlyList<DirectoryEntry>> GetEntriesAsync(string directoryPath, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 読み取ったバイトを文字列にする（エンコーディングは BOM を見て決める）
+    /// Reads the bytes as a string (the encoding is detected from the BOM).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>読み取った文字列</returns>
-    /// <exception cref="ExternalConflictException">対象が無い</exception>
-    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The string that was read.</returns>
+    /// <exception cref="ExternalConflictException">The target does not exist.</exception>
+    /// <exception cref="UnsupportedOperationException">The target is a directory.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 読み取ったバイトを、指定したエンコーディングで文字列にする（BOM があればそちらを優先する）
+    /// Reads the bytes as a string with the given encoding (a BOM, if present, takes precedence).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="encoding">BOM が無いときのエンコーディング</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>読み取った文字列</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> が null</exception>
-    /// <exception cref="ExternalConflictException">対象が無い</exception>
-    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="encoding">The encoding to use when there is no BOM.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The string that was read.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The target does not exist.</exception>
+    /// <exception cref="UnsupportedOperationException">The target is a directory.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<string> ReadAllTextAsync(
         string path,
         Encoding encoding,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 読み取ったバイトを行の配列にする（エンコーディングは BOM を見て決める）
+    /// Reads the bytes as an array of lines (the encoding is detected from the BOM).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>改行を含まない行の配列</returns>
-    /// <exception cref="ExternalConflictException">対象が無い</exception>
-    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>An array of lines without line breaks.</returns>
+    /// <exception cref="ExternalConflictException">The target does not exist.</exception>
+    /// <exception cref="UnsupportedOperationException">The target is a directory.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<string[]> ReadAllLinesAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 読み取ったバイトを、指定したエンコーディングで行の配列にする（BOM があればそちらを優先する）
+    /// Reads the bytes as an array of lines with the given encoding (a BOM, if present, takes precedence).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="encoding">BOM が無いときのエンコーディング</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>改行を含まない行の配列</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> が null</exception>
-    /// <exception cref="ExternalConflictException">対象が無い</exception>
-    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="encoding">The encoding to use when there is no BOM.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>An array of lines without line breaks.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The target does not exist.</exception>
+    /// <exception cref="UnsupportedOperationException">The target is a directory.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<string[]> ReadAllLinesAsync(
         string path,
         Encoding encoding,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 文字列を書く（コミット後の姿でファイルが無ければ Add、あれば Update、エンコーディングは BOM なし UTF-8）
+    /// Writes a string (Add if the post-commit view has no file, otherwise Update; the encoding is UTF-8 without a BOM).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">書き込む文字列（null は空文字列として書く）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The string to write (<see langword="null"/> is written as an empty string).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task WriteAllTextAsync(
         string path,
         string? contents,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 文字列を、指定したエンコーディングで書く（コミット後の姿でファイルが無ければ Add、あれば Update）
+    /// Writes a string with the given encoding (Add if the post-commit view has no file, otherwise Update).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">書き込む文字列（null は空文字列として書く）</param>
-    /// <param name="encoding">書き込みのエンコーディング</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> が null</exception>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The string to write (<see langword="null"/> is written as an empty string).</param>
+    /// <param name="encoding">The encoding to write with.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task WriteAllTextAsync(
         string path,
         string? contents,
@@ -442,35 +442,35 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 行を書く（コミット後の姿でファイルが無ければ Add、あれば Update、エンコーディングは BOM なし UTF-8）
+    /// Writes lines (Add if the post-commit view has no file, otherwise Update; the encoding is UTF-8 without a BOM).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">書き込む行（各行の改行は含めない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="contents"/> が null</exception>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The lines to write (each without its line break).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="contents"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task WriteAllLinesAsync(
         string path,
         IEnumerable<string> contents,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 行を、指定したエンコーディングで書く（コミット後の姿でファイルが無ければ Add、あれば Update）
+    /// Writes lines with the given encoding (Add if the post-commit view has no file, otherwise Update).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">書き込む行（各行の改行は含めない）</param>
-    /// <param name="encoding">書き込みのエンコーディング</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="contents"/> または <paramref name="encoding"/> が null</exception>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The lines to write (each without its line break).</param>
+    /// <param name="encoding">The encoding to write with.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="contents"/> or <paramref name="encoding"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task WriteAllLinesAsync(
         string path,
         IEnumerable<string> contents,
@@ -478,37 +478,37 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 文字列を BOM なし UTF-8 で末尾に足す（コミット後の姿でファイルが無ければ Add、あれば中身に足して Update）
+    /// Appends a string in UTF-8 without a BOM (Add if the post-commit view has no file, otherwise an Update with the appended content).
     /// </summary>
     /// <remarks>
-    /// 既存の中身もいったんメモリに読むので、大きいファイルは <see cref="Stream"/> の API で組み立てる
+    /// The existing content is read into memory too, so build large files with the <see cref="Stream"/> APIs.
     /// </remarks>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">足す文字列（null は空文字列として書く）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The string to append (<see langword="null"/> is written as an empty string).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task AppendAllTextAsync(
         string path,
         string? contents,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 文字列を、指定したエンコーディングで末尾に足す（足す部分には BOM を付けず、新しく書くときだけ付ける）
+    /// Appends a string with the given encoding (the appended part gets no BOM; only a new file gets one).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">足す文字列（null は空文字列として書く）</param>
-    /// <param name="encoding">足す部分のエンコーディング</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> が null</exception>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The string to append (<see langword="null"/> is written as an empty string).</param>
+    /// <param name="encoding">The encoding of the appended part.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="encoding"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task AppendAllTextAsync(
         string path,
         string? contents,
@@ -516,35 +516,35 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 行を BOM なし UTF-8 で末尾に足す（コミット後の姿でファイルが無ければ Add、あれば中身に足して Update、各行のあとに改行を書く）
+    /// Appends lines in UTF-8 without a BOM (Add if the post-commit view has no file, otherwise an Update with the appended content; a line break is written after each line).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">足す行（各行の改行は含めない）</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="contents"/> が null</exception>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The lines to append (each without its line break).</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="contents"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task AppendAllLinesAsync(
         string path,
         IEnumerable<string> contents,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 行を、指定したエンコーディングで末尾に足す（足す部分には BOM を付けず、新しく書くときだけ付ける）
+    /// Appends lines with the given encoding (the appended part gets no BOM; only a new file gets one).
     /// </summary>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="contents">足す行（各行の改行は含めない）</param>
-    /// <param name="encoding">足す部分のエンコーディング</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="contents"/> または <paramref name="encoding"/> が null</exception>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い、または対象がディレクトリである</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="contents">The lines to append (each without its line break).</param>
+    /// <param name="encoding">The encoding of the appended part.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="contents"/> or <paramref name="encoding"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task AppendAllLinesAsync(
         string path,
         IEnumerable<string> contents,
@@ -552,36 +552,36 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 読み取ったバイトを JSON として読む
+    /// Reads the bytes as JSON.
     /// </summary>
-    /// <typeparam name="T">読み取る型</typeparam>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="options">省略時は <see cref="JsonSerializer"/> の既定</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>デシリアライズした値</returns>
-    /// <exception cref="JsonException">JSON として読めない</exception>
-    /// <exception cref="ExternalConflictException">対象が無い</exception>
-    /// <exception cref="UnsupportedOperationException">対象がディレクトリである</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <typeparam name="T">The type to read.</typeparam>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="options">When omitted, the <see cref="JsonSerializer"/> defaults.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The deserialized value.</returns>
+    /// <exception cref="JsonException">The content cannot be read as JSON.</exception>
+    /// <exception cref="ExternalConflictException">The target does not exist.</exception>
+    /// <exception cref="UnsupportedOperationException">The target is a directory.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task<T?> ReadFromJsonAsync<T>(
         string path,
         JsonSerializerOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 値を JSON にして書く（コミット後の姿でファイルが無ければ Add、あれば Update）
+    /// Writes a value as JSON (Add if the post-commit view has no file, otherwise Update).
     /// </summary>
-    /// <typeparam name="T">書き込む型</typeparam>
-    /// <param name="path">対象パス（ワークフォルダ基準の相対、またはワークフォルダ内の絶対パス）</param>
-    /// <param name="value">書き込む値</param>
-    /// <param name="options">省略時は <see cref="JsonSerializer"/> の既定</param>
-    /// <param name="cancellationToken">取り消し用のトークン</param>
-    /// <returns>ステージングの完了</returns>
-    /// <exception cref="ExternalConflictException">親ディレクトリが無い</exception>
-    /// <exception cref="LockContentionException">他のトランザクションが対象またはワークフォルダを押さえている</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、別操作でステージング済み、リパースポイント、メタデータ配下、またはコミット済みである</exception>
-    /// <exception cref="ArgumentException">パスがワークフォルダの外である</exception>
+    /// <typeparam name="T">The type to write.</typeparam>
+    /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
+    /// <param name="value">The value to write.</param>
+    /// <param name="options">When omitted, the <see cref="JsonSerializer"/> defaults.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>A task that completes when the content is staged.</returns>
+    /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point or under the metadata folder, or the transaction is already committed.</exception>
+    /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
     Task WriteAsJsonAsync<T>(
         string path,
         T value,
@@ -589,18 +589,18 @@ public interface ITransaction : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// ステージングした変更をワークフォルダへ確定する
+    /// Commits the staged changes to the work folder.
     /// </summary>
-    /// <param name="cancellationToken">コミット開始前まで有効な取り消しトークン</param>
-    /// <returns>全体の結果と、拒んだ操作または飛ばした操作</returns>
-    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている（未コミットのまま残る）</exception>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている、またはコミット済みである</exception>
+    /// <param name="cancellationToken">The cancellation token, honored until the commit starts.</param>
+    /// <returns>The overall result, and the operations that were rejected or skipped.</returns>
+    /// <exception cref="RecoveryRequiredException">An orphaned journal remains (the transaction stays uncommitted).</exception>
+    /// <exception cref="InvalidOperationException">Calls overlap, or the transaction is already committed.</exception>
     Task<CommitReport> CommitAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 現在のジャーナル上の未確定操作一覧を返す
+    /// Returns the list of unfinished operations in the current journal.
     /// </summary>
-    /// <returns>操作一覧（この時点では空になりうる）</returns>
-    /// <exception cref="InvalidOperationException">呼び出しが重なっている</exception>
+    /// <returns>The list of operations (may be empty at this point).</returns>
+    /// <exception cref="InvalidOperationException">Calls overlap.</exception>
     IReadOnlyList<PendingChange> GetPendingChanges();
 }

@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// コミット後の姿で、ディレクトリの直下にある 1 件
+/// One entry directly under a directory in the post-commit view.
 /// </summary>
 public sealed class DirectoryEntry
 {
     /// <summary>
-    /// パスと種類を指定する
+    /// Initializes a new instance of the <see cref="DirectoryEntry"/> class with a path and a kind.
     /// </summary>
-    /// <param name="path">絶対パス</param>
-    /// <param name="isDirectory">ディレクトリなら <see langword="true"/>、ファイルなら <see langword="false"/></param>
+    /// <param name="path">The absolute path.</param>
+    /// <param name="isDirectory"><see langword="true"/> for a directory, <see langword="false"/> for a file.</param>
     public DirectoryEntry(string path, bool isDirectory)
     {
         Path = path;
@@ -17,12 +17,12 @@ public sealed class DirectoryEntry
     }
 
     /// <summary>
-    /// 絶対パス
+    /// Gets the absolute path.
     /// </summary>
     public string Path { get; }
 
     /// <summary>
-    /// ディレクトリなら <see langword="true"/>、ファイルなら <see langword="false"/>
+    /// Gets a value indicating whether the entry is a directory (<see langword="true"/>) or a file (<see langword="false"/>).
     /// </summary>
     public bool IsDirectory { get; }
 }

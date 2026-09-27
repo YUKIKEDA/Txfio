@@ -1,17 +1,17 @@
 namespace Txfio;
 
 /// <summary>
-/// ステージングした操作を対象パスへ適用する（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
+/// Applies staged operations to their target paths (Move chains from the free end; an Add to the source of a file comes after that Move).
 /// </summary>
 internal static class StagingApplier
 {
     /// <summary>
-    /// Add / Move / CreateDirectory を先に、Update を次に、Delete と DeleteTree をパスが深い順で後に適用する（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
+    /// Applies Add / Move / CreateDirectory first, then Update, and last Delete and DeleteTree, deepest path first (Move chains from the free end; an Add to the source of a file comes after that Move).
     /// </summary>
-    /// <param name="operations">適用する操作一覧</param>
-    /// <param name="faults">この適用の失敗と途中停止</param>
-    /// <param name="skipped">適用で飛ばした操作（すべてできたときは空）</param>
-    /// <returns>すべて適用できた、または既に適用済みなら <see langword="true"/></returns>
+    /// <param name="operations">The operations to apply.</param>
+    /// <param name="faults">The failures and partial stops of this apply.</param>
+    /// <param name="skipped">The operations skipped during apply (empty when everything succeeded).</param>
+    /// <returns><see langword="true"/> if everything was applied, or was already applied.</returns>
     internal static bool TryApplyAll(
         IReadOnlyList<JournalOperation> operations,
         IFaultInjector faults,
@@ -25,13 +25,13 @@ internal static class StagingApplier
             JournalOperation operation = ordered[i];
             int index = i;
 
-            // あとのディレクトリ Move が済んでいれば、その移動元の配下の操作も済んでいる（元の場所には残っていない）
+            // If a later directory Move is done, the operations under its source are done too (nothing remains in the original place).
             if (IsUnderAppliedLaterDirectoryMove(ordered, i))
             {
                 continue;
             }
 
-            // あとの操作が変えるパスは、この操作が済んだかどうかの手がかりにならない
+            // A path that a later operation changes is no clue as to whether this operation is done.
             bool ChangedLater(string path) => lastTouch.TryGetValue(path, out int last) && last > index;
             if (!TryApply(operation, faults, ChangedLater, out OperationFailureReason reason))
             {
@@ -47,10 +47,10 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// Add / Move / CreateDirectory、Update、Delete と DeleteTree（深い順）の順に並べる（Move の連鎖は空いている端から、ファイルの移動元への Add はその Move のあと）
+    /// Orders operations as Add / Move / CreateDirectory, Update, then Delete and DeleteTree (deepest first) (Move chains from the free end; an Add to the source of a file comes after that Move).
     /// </summary>
-    /// <param name="operations">操作一覧</param>
-    /// <returns>適用順の操作</returns>
+    /// <param name="operations">The list of operations.</param>
+    /// <returns>The operations in apply order.</returns>
     internal static JournalOperation[] InApplyOrder(IReadOnlyList<JournalOperation> operations)
     {
         List<JournalOperation> ordered = new List<JournalOperation>(operations.Count);
@@ -88,10 +88,10 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// すべての Move を、空いている端から辿れるかを判定する
+    /// Returns whether every Move can be reached from a free end.
     /// </summary>
-    /// <param name="operations">操作一覧</param>
-    /// <returns>循環が無ければ <see langword="true"/></returns>
+    /// <param name="operations">The list of operations.</param>
+    /// <returns><see langword="true"/> if there is no cycle.</returns>
     internal static bool MovesReachFreeEnd(IReadOnlyList<JournalOperation> operations)
     {
         List<JournalOperation> moves = new List<JournalOperation>();
@@ -107,13 +107,13 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// 1 操作を適用する（既に適用済みなら成功、失敗なら <see langword="false"/>）
+    /// Applies one operation (success if it was already applied; <see langword="false"/> on failure).
     /// </summary>
-    /// <param name="operation">適用する操作</param>
-    /// <param name="faults">この適用の失敗と途中停止</param>
-    /// <param name="changedLater">適用順であとの操作も変えるパスなら <see langword="true"/></param>
-    /// <param name="reason">飛ばした理由（成功時は使わない）</param>
-    /// <returns>適用できた、または既に適用済みなら <see langword="true"/></returns>
+    /// <param name="operation">The operation to apply.</param>
+    /// <param name="faults">The failures and partial stops of this apply.</param>
+    /// <param name="changedLater"><see langword="true"/> if a later operation in apply order also changes the path.</param>
+    /// <param name="reason">The reason it was skipped (unused on success).</param>
+    /// <returns><see langword="true"/> if it was applied, or was already applied.</returns>
     internal static bool TryApply(
         JournalOperation operation,
         IFaultInjector faults,
@@ -141,9 +141,9 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// 操作ごとの `.txnew` を消す（無いものは飛ばす）
+    /// Deletes the <c>.txnew</c> of each operation (skips missing ones).
     /// </summary>
-    /// <param name="operations">操作一覧</param>
+    /// <param name="operations">The list of operations.</param>
     internal static void DeleteStagingFiles(IReadOnlyList<JournalOperation> operations)
     {
         foreach (JournalOperation operation in operations)
@@ -153,13 +153,13 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// このトランザクションの `.txnew` と再ステージの退避を、ワークフォルダ配下から探して消す（操作が分からない読めないジャーナルだけに使う）
+    /// Finds and deletes this transaction's <c>.txnew</c> files and restage backups under the work folder (used only for an unreadable journal, whose operations are unknown).
     /// </summary>
     /// <remarks>
-    /// 読めないフォルダとリパースポイントは飛ばし、辿らない
+    /// Unreadable folders and reparse points are skipped and not followed.
     /// </remarks>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="transactionId">トランザクション ID</param>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="transactionId">The transaction ID.</param>
     internal static void DeleteStagingFiles(string workFolder, Guid transactionId)
     {
         string stagingSuffix = "." + transactionId.ToString("D") + ".txnew";
@@ -185,11 +185,11 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// 操作の `.txnew` に `.prev` を付けた再ステージの退避を消す（ワークフォルダは走査しない）
+    /// Deletes the restage backups, which are the operations' <c>.txnew</c> with <c>.prev</c> appended (the work folder is not walked).
     /// </summary>
-    /// <param name="operations">操作一覧</param>
-    /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに最後まで続ける</param>
-    /// <returns>すべて消せたら <see langword="true"/>（例外を投げるときは戻らない）</returns>
+    /// <param name="operations">The list of operations.</param>
+    /// <param name="ignoreIoFailures">When <see langword="true"/>, continue to the end without throwing <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>.</param>
+    /// <returns><see langword="true"/> if everything was deleted (does not return when it throws).</returns>
     internal static bool DeleteStagingBackups(IReadOnlyList<JournalOperation> operations, bool ignoreIoFailures = false)
     {
         bool succeeded = true;
@@ -211,11 +211,11 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// 作成ディレクトリを深い順に、再帰せず消す
+    /// Deletes created directories deepest first, without recursion.
     /// </summary>
-    /// <param name="directories">消すディレクトリ</param>
-    /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに最後まで続ける</param>
-    /// <returns>すべて消せたら <see langword="true"/>（例外を投げるときは戻らない）</returns>
+    /// <param name="directories">The directories to delete.</param>
+    /// <param name="ignoreIoFailures">When <see langword="true"/>, continue to the end without throwing <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>.</param>
+    /// <returns><see langword="true"/> if everything was deleted (does not return when it throws).</returns>
     internal static bool DeleteCreatedDirectories(IReadOnlyList<string> directories, bool ignoreIoFailures = false)
     {
         List<string> pending = new List<string>(directories);
@@ -239,11 +239,11 @@ internal static class StagingApplier
     }
 
     /// <summary>
-    /// CreateDirectory が作ったディレクトリを、中身ごと消す
+    /// Deletes the directories CreateDirectory created, with their contents.
     /// </summary>
-    /// <param name="operations">操作一覧</param>
-    /// <param name="ignoreIoFailures"><see langword="true"/> なら <see cref="IOException"/> と <see cref="UnauthorizedAccessException"/> を投げずに最後まで続ける</param>
-    /// <returns>すべて消せたら <see langword="true"/>（例外を投げるときは戻らない）</returns>
+    /// <param name="operations">The list of operations.</param>
+    /// <param name="ignoreIoFailures">When <see langword="true"/>, continue to the end without throwing <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>.</param>
+    /// <returns><see langword="true"/> if everything was deleted (does not return when it throws).</returns>
     internal static bool DeleteCreateDirectoryTrees(IReadOnlyList<JournalOperation> operations, bool ignoreIoFailures = false)
     {
         bool succeeded = true;
@@ -396,7 +396,7 @@ internal static class StagingApplier
         return false;
     }
 
-    // ディレクトリ Move の移動元の配下の操作（作成ディレクトリへの Add）は、その Move より先に適用する
+    // Operations under the source of a directory Move (Adds into a created directory) are applied before that Move.
     private static List<JournalOperation> PlaceBeforeDirectoryMoves(List<JournalOperation> items)
     {
         List<JournalOperation> output = new List<JournalOperation>(items);

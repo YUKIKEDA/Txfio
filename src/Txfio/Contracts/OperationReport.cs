@@ -1,18 +1,18 @@
 namespace Txfio;
 
 /// <summary>
-/// 確定できなかった 1 操作
+/// One operation that could not be finished.
 /// </summary>
 public sealed class OperationReport
 {
     /// <summary>
-    /// パスと理由を指定する
+    /// Initializes a new instance of the <see cref="OperationReport"/> class with the path and the reason.
     /// </summary>
-    /// <param name="path">対象パス</param>
-    /// <param name="newPath">Move の移動先（それ以外は null）</param>
-    /// <param name="kind">操作の種類</param>
-    /// <param name="disposition">検証で拒んだか、適用で飛ばしたか</param>
-    /// <param name="reason">失敗した理由</param>
+    /// <param name="path">The target path.</param>
+    /// <param name="newPath">The Move destination (<see langword="null"/> otherwise).</param>
+    /// <param name="kind">The operation kind.</param>
+    /// <param name="disposition">Whether it was rejected by the check or skipped during apply.</param>
+    /// <param name="reason">The reason for the failure.</param>
     public OperationReport(
         string path,
         string? newPath,
@@ -28,37 +28,37 @@ public sealed class OperationReport
     }
 
     /// <summary>
-    /// 対象パス
+    /// Gets the target path.
     /// </summary>
     public string Path { get; }
 
     /// <summary>
-    /// Move の移動先パス
+    /// Gets the Move destination path.
     /// </summary>
     public string? NewPath { get; }
 
     /// <summary>
-    /// 操作の種類
+    /// Gets the operation kind.
     /// </summary>
     public PendingChangeKind Kind { get; }
 
     /// <summary>
-    /// 検証で拒んだか、適用で飛ばしたか
+    /// Gets the disposition: whether it was rejected by the check or skipped during apply.
     /// </summary>
     public OperationDisposition Disposition { get; }
 
     /// <summary>
-    /// 失敗した理由
+    /// Gets the reason for the failure.
     /// </summary>
     public OperationFailureReason Reason { get; }
 
     /// <summary>
-    /// ジャーナルの操作から、確定できなかった 1 件を作る
+    /// Creates the report of one operation that could not be finished from a journal operation.
     /// </summary>
-    /// <param name="operation">対象の操作</param>
-    /// <param name="disposition">検証で拒んだか、適用で飛ばしたか</param>
-    /// <param name="reason">失敗した理由</param>
-    /// <returns>パスと理由を持った報告</returns>
+    /// <param name="operation">The target operation.</param>
+    /// <param name="disposition">Whether it was rejected by the check or skipped during apply.</param>
+    /// <param name="reason">The reason for the failure.</param>
+    /// <returns>A report with the path and the reason.</returns>
     internal static OperationReport Create(
         JournalOperation operation,
         OperationDisposition disposition,

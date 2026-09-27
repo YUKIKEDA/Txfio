@@ -1,19 +1,19 @@
 namespace Txfio;
 
 /// <summary>
-/// Committing 直前に Before / After を適用順で投影する
+/// Projects Before / After in apply order just before Committing.
 /// </summary>
 internal static class OperationOutcomes
 {
     /// <summary>
-    /// 全操作の Before / After を決め、投影できればその配列を返す
+    /// Decides Before / After for every operation, and returns the array if it can be projected.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="transactionId">ディレクトリ直下の検証に使うトランザクション ID</param>
-    /// <param name="stamped">状態を付けた操作一覧（失敗時は空）</param>
-    /// <param name="rejections">検証で拒んだ操作（成功時は空）</param>
-    /// <param name="isExternalChange">記録と違う Update（または畳んだ残り）のとき <see langword="true"/>（null は比べない）</param>
-    /// <returns>すべて記録できたら <see langword="true"/></returns>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="transactionId">The transaction ID used to check direct children of directories.</param>
+    /// <param name="stamped">The operations with their states (empty on failure).</param>
+    /// <param name="rejections">The operations rejected by the check (empty on success).</param>
+    /// <param name="isExternalChange">Returns <see langword="true"/> for an Update (or what remains after folding) that differs from the record (<see langword="null"/> does not compare).</param>
+    /// <returns><see langword="true"/> if everything was recorded.</returns>
     internal static bool TryStamp(
         IReadOnlyList<JournalOperation> operations,
         Guid transactionId,

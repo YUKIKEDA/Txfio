@@ -3,7 +3,7 @@ using System.IO.Compression;
 namespace Txfio;
 
 /// <content>
-/// ZIP アーカイブの作成（ワークフォルダ内への Add と、外への書き出し）
+/// Creating ZIP archives (an Add inside the work folder, and an export outside).
 /// </content>
 internal sealed partial class Transaction
 {
@@ -344,7 +344,7 @@ internal sealed partial class Transaction
         bool journalUpdated = false;
         try
         {
-            // 落ちても Recover が .txnew を消せるよう、書く前にジャーナルへ載せる
+            // Record it in the journal before writing, so that Recover can delete the .txnew after a crash.
             _paths.Add(new JournalOperation(PendingChangeKind.Add, archive, stagingPath));
             await PersistAsync(committing: false, cancellationToken).ConfigureAwait(false);
             journalUpdated = true;
@@ -401,7 +401,7 @@ internal sealed partial class Transaction
                 throw new InvalidOperationException("A symbolic link cannot be put in a ZIP: " + root.SourcePath);
             }
 
-            // 入力が無いときは、書き出し先より先に知らせる
+            // When the input is missing, report that before touching the export destination.
             await using FileStream probe = OpenExportSource(root.SourcePath);
         }
 

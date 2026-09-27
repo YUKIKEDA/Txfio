@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// ステージ後の外部変更を比べるためのサイズと最終更新日時の記録
+/// The record of sizes and last write times used to compare external changes after staging.
 /// </summary>
 internal sealed class ExternalChangeSet
 {
@@ -11,12 +11,12 @@ internal sealed class ExternalChangeSet
     private readonly HashSet<string> _removals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// コミット後の姿の元になっている実ファイルを探す
+    /// Finds the real file behind the post-commit view.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="logicalPath">問い合わせたパス</param>
-    /// <param name="realPath">見つかった実ファイル</param>
-    /// <returns>ディスク上に実ファイルがあるなら <see langword="true"/></returns>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="logicalPath">The queried path.</param>
+    /// <param name="realPath">The real file that was found.</param>
+    /// <returns><see langword="true"/> if a real file exists on disk.</returns>
     internal static bool TryRealFile(
         IReadOnlyList<JournalOperation> operations,
         string logicalPath,
@@ -26,12 +26,12 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// 実ファイルのサイズと最終更新日時を読む
+    /// Reads the size and last write time of a real file.
     /// </summary>
-    /// <param name="realPath">対象の実ファイル</param>
-    /// <param name="length">サイズ</param>
-    /// <param name="lastWriteTimeUtc">最終更新日時（UTC）</param>
-    /// <returns>ファイルとして読めたなら <see langword="true"/></returns>
+    /// <param name="realPath">The real file.</param>
+    /// <param name="length">The size.</param>
+    /// <param name="lastWriteTimeUtc">The last write time (UTC).</param>
+    /// <returns><see langword="true"/> if it could be read as a file.</returns>
     internal static bool TryCapture(string realPath, out long length, out DateTime lastWriteTimeUtc)
     {
         length = 0;
@@ -48,10 +48,10 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// 実ファイルを読むたび、記録をその時点へ更新する（このトランザクションのステージングファイル（<c>.txnew</c>）を読んだときは更新しない）
+    /// Updates the record to the current moment each time a real file is read (not when this transaction's staging file (<c>.txnew</c>) is read).
     /// </summary>
-    /// <param name="logicalPath">読み取ったパス</param>
-    /// <param name="appearance">読んだときのコミット後の姿</param>
+    /// <param name="logicalPath">The path that was read.</param>
+    /// <param name="appearance">The post-commit view when it was read.</param>
     internal void NoteRead(string logicalPath, CommitAppearance appearance)
     {
         if (appearance.StagedFor is not null)
@@ -73,10 +73,10 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// ファイルの Update について、実ファイルのサイズと最終更新日時を記録する
+    /// Records the size and last write time of the real file for a file Update.
     /// </summary>
-    /// <param name="operations">Update を足す前の操作一覧</param>
-    /// <param name="logicalPath">Update の対象パス</param>
+    /// <param name="operations">The list of operations before the Update is added.</param>
+    /// <param name="logicalPath">The target path of the Update.</param>
     internal void NoteUpdate(IReadOnlyList<JournalOperation> operations, string logicalPath)
     {
         if (!TryRealFile(operations, logicalPath, out string realPath))
@@ -100,10 +100,10 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// ファイルの Delete か、ファイルの Move の移動元をステージしたとき、消えるか動く実ファイルを記録する（読み取りの記録があればそれを使う）
+    /// When a file Delete or the source of a file Move is staged, records the real file that will be deleted or moved (uses the read record if there is one).
     /// </summary>
-    /// <param name="operations">ステージする前の操作一覧</param>
-    /// <param name="logicalPath">Delete するパス、または Move の移動元</param>
+    /// <param name="operations">The list of operations before staging.</param>
+    /// <param name="logicalPath">The path to delete, or the Move source.</param>
     internal void NoteRemoval(IReadOnlyList<JournalOperation> operations, string logicalPath)
     {
         if (!TryRealFile(operations, logicalPath, out string realPath))
@@ -125,10 +125,10 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// Move 先への Update を畳んだあと、残る Add と Delete を同じ実ファイルの記録に紐づける
+    /// After folding an Update at a Move destination, ties the remaining Add and Delete to the record of the same real file.
     /// </summary>
-    /// <param name="updatePath">畳む前の Update 対象（残る Add のパス）</param>
-    /// <param name="deletePath">残る Delete のパス</param>
+    /// <param name="updatePath">The Update target before folding (the path of the remaining Add).</param>
+    /// <param name="deletePath">The path of the remaining Delete.</param>
     internal void NoteFoldedUpdate(string updatePath, string deletePath)
     {
         if (!_updateToReal.TryGetValue(updatePath, out string? realPath))
@@ -142,10 +142,10 @@ internal sealed class ExternalChangeSet
     }
 
     /// <summary>
-    /// この操作が、記録と違うファイルの Update、ファイルの Delete、ファイルの Move、または畳んだ残りなら <see langword="true"/>
+    /// Returns <see langword="true"/> if this operation is a file Update, file Delete, file Move, or what remains after folding, that differs from the record.
     /// </summary>
-    /// <param name="operation">検証中の操作</param>
-    /// <returns>サイズか最終更新日時が違い、実ファイルがまだファイルなら <see langword="true"/></returns>
+    /// <param name="operation">The operation being checked.</param>
+    /// <returns><see langword="true"/> if the size or last write time differs and the real file is still a file.</returns>
     internal bool IsMismatch(JournalOperation operation)
     {
         if (operation.Kind == PendingChangeKind.Update
@@ -160,7 +160,7 @@ internal sealed class ExternalChangeSet
             return Differs(foldedReal);
         }
 
-        // ファイルの Delete とファイルの Move の移動元では、操作のパスが消えるか動く実ファイルである
+        // For a file Delete and the source of a file Move, the operation's path is the real file that will be deleted or moved.
         if (operation.Kind is PendingChangeKind.Delete or PendingChangeKind.Move
             && !operation.IsDirectory
             && _removals.Contains(operation.Path))
@@ -179,7 +179,7 @@ internal sealed class ExternalChangeSet
             return false;
         }
 
-        // ステージングファイルなら、それが置き換える対象パスが実ファイル
+        // For a staging file, the target path it replaces is the real file.
         string candidate = appearance.StagedFor ?? appearance.ContentPath;
         if (!File.Exists(candidate))
         {

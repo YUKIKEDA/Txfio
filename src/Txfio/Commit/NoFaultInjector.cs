@@ -1,12 +1,12 @@
 namespace Txfio;
 
 /// <summary>
-/// 失敗も途中停止もしない
+/// Neither fails nor stops partway.
 /// </summary>
 internal sealed class NoFaultInjector : IFaultInjector
 {
     /// <summary>
-    /// 何もしない共有の注入口
+    /// The shared injection point that does nothing.
     /// </summary>
     public static readonly NoFaultInjector Instance = new NoFaultInjector();
 

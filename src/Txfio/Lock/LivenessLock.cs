@@ -1,25 +1,25 @@
 namespace Txfio;
 
 /// <summary>
-/// トランザクションが生きているあいだ持ち続ける `.txfio/tx-{guid}.lock`
+/// The <c>.txfio/tx-{guid}.lock</c> held while a transaction is alive.
 /// </summary>
 internal static class LivenessLock
 {
     /// <summary>
-    /// トランザクション開始用の生存ロックを作って開く
+    /// Creates and opens the liveness lock when a transaction begins.
     /// </summary>
-    /// <param name="lockPath">生存ロックのパス</param>
-    /// <returns>トランザクションが終わるまで持つハンドル</returns>
+    /// <param name="lockPath">The path of the liveness lock.</param>
+    /// <returns>The handle held until the transaction ends.</returns>
     internal static FileStream Create(string lockPath)
     {
         return Open(lockPath, FileMode.CreateNew);
     }
 
     /// <summary>
-    /// 持ち主のいないジャーナルの生存ロックを開く（ファイルが無ければ作る）
+    /// Opens the liveness lock of a journal without an owner (creates the file if missing).
     /// </summary>
-    /// <param name="lockPath">生存ロックのパス</param>
-    /// <returns>開けたハンドル（持ち主が生きていれば <see langword="null"/>）</returns>
+    /// <param name="lockPath">The path of the liveness lock.</param>
+    /// <returns>The opened handle (<see langword="null"/> if the owner is alive).</returns>
     internal static FileStream? TryOpenStale(string lockPath)
     {
         try

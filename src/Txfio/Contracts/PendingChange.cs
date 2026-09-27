@@ -1,16 +1,16 @@
 namespace Txfio;
 
 /// <summary>
-/// ジャーナル上の 1 操作
+/// One operation in the journal.
 /// </summary>
 public sealed class PendingChange
 {
     /// <summary>
-    /// 操作の種類と対象パスを指定する
+    /// Initializes a new instance of the <see cref="PendingChange"/> class with the operation kind and the target path.
     /// </summary>
-    /// <param name="kind">操作の種類</param>
-    /// <param name="path">対象パス</param>
-    /// <param name="newPath">Move の移動先（それ以外は null）</param>
+    /// <param name="kind">The operation kind.</param>
+    /// <param name="path">The target path.</param>
+    /// <param name="newPath">The Move destination (<see langword="null"/> otherwise).</param>
     public PendingChange(PendingChangeKind kind, string path, string? newPath = null)
     {
         Kind = kind;
@@ -19,17 +19,17 @@ public sealed class PendingChange
     }
 
     /// <summary>
-    /// 操作の種類
+    /// Gets the operation kind.
     /// </summary>
     public PendingChangeKind Kind { get; }
 
     /// <summary>
-    /// 対象パス
+    /// Gets the target path.
     /// </summary>
     public string Path { get; }
 
     /// <summary>
-    /// Move の移動先パス
+    /// Gets the Move destination path.
     /// </summary>
     public string? NewPath { get; }
 }

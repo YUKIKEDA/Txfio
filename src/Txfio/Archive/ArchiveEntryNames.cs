@@ -3,7 +3,7 @@ using System.IO.Compression;
 namespace Txfio;
 
 /// <summary>
-/// 展開前に ZIP のエントリ名を検証し、展開先からの相対パスにする
+/// Checks ZIP entry names before extracting, and turns them into paths relative to the destination.
 /// </summary>
 internal static class ArchiveEntryNames
 {
@@ -12,11 +12,11 @@ internal static class ArchiveEntryNames
     private static readonly HashSet<string> _reservedNames = CreateReservedNames();
 
     /// <summary>
-    /// すべてのエントリ名を検証し、展開の予定を返す
+    /// Checks every entry name, and returns the extract plan.
     /// </summary>
-    /// <param name="entries">ZIP のエントリ</param>
-    /// <returns>エントリごとの相対パスと種別</returns>
-    /// <exception cref="InvalidDataException">危険な名前、Windows で使えない名前、重複、またはファイルとディレクトリの同名がある</exception>
+    /// <param name="entries">The ZIP entries.</param>
+    /// <returns>The relative path and kind of each entry.</returns>
+    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a duplicate, or a file and a directory with the same name.</exception>
     internal static IReadOnlyList<ArchiveEntryPlan> Plan(IReadOnlyCollection<ZipArchiveEntry> entries)
     {
         List<ArchiveEntryPlan> plans = new List<ArchiveEntryPlan>(entries.Count);
@@ -32,10 +32,10 @@ internal static class ArchiveEntryNames
     }
 
     /// <summary>
-    /// これから書くエントリ名をすべて検証する
+    /// Checks every entry name that is about to be written.
     /// </summary>
-    /// <param name="fullNames">エントリ名（ディレクトリは末尾が `/`）</param>
-    /// <exception cref="InvalidDataException">危険な名前、Windows で使えない名前、重複、またはファイルとディレクトリの同名がある</exception>
+    /// <param name="fullNames">The entry names (directories end with <c>/</c>).</param>
+    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a duplicate, or a file and a directory with the same name.</exception>
     internal static void Validate(IEnumerable<string> fullNames)
     {
         NameSet names = new NameSet();
@@ -48,12 +48,12 @@ internal static class ArchiveEntryNames
     }
 
     /// <summary>
-    /// エントリ名を区切り、使えない名前なら拒否する
+    /// Splits an entry name, and rejects names that cannot be used.
     /// </summary>
-    /// <param name="fullName">ZIP のエントリ名</param>
-    /// <param name="isDirectory">末尾が区切りのディレクトリエントリなら <see langword="true"/></param>
-    /// <returns>区切った名前</returns>
-    /// <exception cref="InvalidDataException">展開先の外へ出る、または Windows で使えない名前である</exception>
+    /// <param name="fullName">The ZIP entry name.</param>
+    /// <param name="isDirectory">Returns <see langword="true"/> for a directory entry that ends with a separator.</param>
+    /// <returns>The split name.</returns>
+    /// <exception cref="InvalidDataException">The name leaves the destination, or is not valid on Windows.</exception>
     internal static string[] Split(string fullName, out bool isDirectory)
     {
         string normalized = fullName.Replace('\\', '/');

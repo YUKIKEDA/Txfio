@@ -1,14 +1,14 @@
 namespace Txfio;
 
 /// <summary>
-/// テスト用にコミットを途中で止めたことを表す例外
+/// The exception that shows a test stopped a commit partway.
 /// </summary>
 internal sealed class CrashInjectionException : Exception
 {
     /// <summary>
-    /// 止めた地点を指定して例外を作る
+    /// Initializes a new instance of the <see cref="CrashInjectionException"/> class with the point where it stopped.
     /// </summary>
-    /// <param name="name">止めた地点</param>
+    /// <param name="name">The point where it stopped.</param>
     internal CrashInjectionException(string name)
         : base("Commit stopped partway: " + name)
     {
@@ -16,7 +16,7 @@ internal sealed class CrashInjectionException : Exception
     }
 
     /// <summary>
-    /// 止めた地点
+    /// Gets the point where it stopped.
     /// </summary>
     internal string Name { get; }
 }

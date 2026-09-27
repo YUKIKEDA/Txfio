@@ -1,16 +1,16 @@
 namespace Txfio;
 
 /// <summary>
-/// 復旧した 1 ジャーナル
+/// One recovered journal.
 /// </summary>
 public sealed class JournalReport
 {
     /// <summary>
-    /// トランザクションと、そのジャーナルの結果を指定する
+    /// Initializes a new instance of the <see cref="JournalReport"/> class with the transaction and the result of its journal.
     /// </summary>
-    /// <param name="transactionId">ジャーナルのトランザクション ID</param>
-    /// <param name="result">そのジャーナルの結果</param>
-    /// <param name="operations">競合して飛ばした操作（競合が無いときと、読めないときは空）</param>
+    /// <param name="transactionId">The transaction ID of the journal.</param>
+    /// <param name="result">The result of that journal.</param>
+    /// <param name="operations">The operations skipped because of conflicts (empty when there is no conflict, and when the journal is unreadable).</param>
     public JournalReport(Guid transactionId, RecoverResult result, IReadOnlyList<OperationReport> operations)
     {
         ArgumentNullException.ThrowIfNull(operations);
@@ -20,17 +20,17 @@ public sealed class JournalReport
     }
 
     /// <summary>
-    /// ジャーナルのトランザクション ID
+    /// Gets the transaction ID of the journal.
     /// </summary>
     public Guid TransactionId { get; }
 
     /// <summary>
-    /// そのジャーナルの結果
+    /// Gets the result of that journal.
     /// </summary>
     public RecoverResult Result { get; }
 
     /// <summary>
-    /// 競合して飛ばした操作（競合が無いときと、読めないときは空）
+    /// Gets the operations skipped because of conflicts (empty when there is no conflict, and when the journal is unreadable).
     /// </summary>
     public IReadOnlyList<OperationReport> Operations { get; }
 }

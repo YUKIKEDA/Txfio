@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// 問い合わせたパスのコミット後の姿
+/// The post-commit view of a queried path.
 /// </summary>
 internal readonly struct CommitAppearance
 {
@@ -14,59 +14,59 @@ internal readonly struct CommitAppearance
     }
 
     /// <summary>
-    /// ファイルかディレクトリがあるなら <see langword="true"/>
+    /// Gets a value indicating whether a file or directory exists.
     /// </summary>
     internal bool Exists { get; }
 
     /// <summary>
-    /// ディレクトリなら <see langword="true"/>
+    /// Gets a value indicating whether it is a directory.
     /// </summary>
     internal bool IsDirectory { get; }
 
     /// <summary>
-    /// 読む実体のパス（無いときは null）
+    /// Gets the path of what to read (<see langword="null"/> when missing).
     /// </summary>
     internal string? ContentPath { get; }
 
     /// <summary>
-    /// 中身がステージングファイルのとき、それを書いた操作の対象パス（実ファイルを読むときは null）
+    /// Gets the target path of the operation that wrote the staging file, when the content is a staging file (<see langword="null"/> when reading the real file).
     /// </summary>
     internal string? StagedFor { get; }
 
     /// <summary>
-    /// 無い姿を返す
+    /// Returns a missing view.
     /// </summary>
-    /// <returns>無い姿</returns>
+    /// <returns>A missing view.</returns>
     internal static CommitAppearance Absent()
     {
         return new CommitAppearance(exists: false, isDirectory: false, contentPath: null, stagedFor: null);
     }
 
     /// <summary>
-    /// 実ファイルをそのまま読むファイルの姿を返す
+    /// Returns the view of a file that reads the real file as is.
     /// </summary>
-    /// <param name="contentPath">読む実ファイルのパス</param>
-    /// <returns>ファイルがある姿</returns>
+    /// <param name="contentPath">The path of the real file to read.</param>
+    /// <returns>A view with a file.</returns>
     internal static CommitAppearance File(string contentPath)
     {
         return new CommitAppearance(exists: true, isDirectory: false, contentPath, stagedFor: null);
     }
 
     /// <summary>
-    /// ステージングファイルを読むファイルの姿を返す
+    /// Returns the view of a file that reads a staging file.
     /// </summary>
-    /// <param name="operation">中身を決めた Add か Update</param>
-    /// <returns>ファイルがある姿</returns>
+    /// <param name="operation">The Add or Update that decided the content.</param>
+    /// <returns>A view with a file.</returns>
     internal static CommitAppearance Staged(JournalOperation operation)
     {
         return new CommitAppearance(exists: true, isDirectory: false, operation.StagingPath, operation.Path);
     }
 
     /// <summary>
-    /// ディレクトリの姿を返す
+    /// Returns the view of a directory.
     /// </summary>
-    /// <param name="contentPath">実体のパス</param>
-    /// <returns>ディレクトリがある姿</returns>
+    /// <param name="contentPath">The path of the real directory.</param>
+    /// <returns>A view with a directory.</returns>
     internal static CommitAppearance Directory(string contentPath)
     {
         return new CommitAppearance(exists: true, isDirectory: true, contentPath, stagedFor: null);

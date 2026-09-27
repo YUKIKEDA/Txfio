@@ -1,34 +1,34 @@
 namespace Txfio;
 
 /// <summary>
-/// トランザクショナルなファイルIOのエントリポイント
+/// The entry point of transactional file IO.
 /// </summary>
 public static class Txfio
 {
     /// <summary>
-    /// ワークフォルダに対するトランザクションを開始する（ロックの待ちはゼロ）
+    /// Begins a transaction on a work folder (with no lock wait).
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
-    /// <returns>開始したトランザクション</returns>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="cancellationToken">The token to cancel beginning the transaction.</param>
+    /// <returns>The transaction that was started.</returns>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(string path, CancellationToken cancellationToken = default)
     {
         return BeginAsync(path, TimeSpan.Zero, detectExternalChanges: false, cancellationToken);
     }
 
     /// <summary>
-    /// ワークフォルダに対するトランザクションを開始する（ロックの待ちはゼロ）
+    /// Begins a transaction on a work folder (with no lock wait).
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
-    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
-    /// <returns>開始したトランザクション</returns>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="detectExternalChanges">When <see langword="true"/>, an Update whose file differs from the record after staging fails before commit.</param>
+    /// <param name="cancellationToken">The token to cancel beginning the transaction.</param>
+    /// <returns>The transaction that was started.</returns>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(
         string path,
         bool detectExternalChanges,
@@ -38,33 +38,33 @@ public static class Txfio
     }
 
     /// <summary>
-    /// ワークフォルダに対するトランザクションを開始する
+    /// Begins a transaction on a work folder.
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限（ゼロは待たない）</param>
-    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
-    /// <returns>開始したトランザクション</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="lockWait">How long each public method call waits when a lock cannot be taken (zero does not wait).</param>
+    /// <param name="cancellationToken">The token to cancel beginning the transaction.</param>
+    /// <returns>The transaction that was started.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(string path, TimeSpan lockWait, CancellationToken cancellationToken = default)
     {
         return BeginAsync(path, lockWait, detectExternalChanges: false, cancellationToken);
     }
 
     /// <summary>
-    /// ワークフォルダに対するトランザクションを開始する
+    /// Begins a transaction on a work folder.
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限（ゼロは待たない）</param>
-    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
-    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
-    /// <returns>開始したトランザクション</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="lockWait">How long each public method call waits when a lock cannot be taken (zero does not wait).</param>
+    /// <param name="detectExternalChanges">When <see langword="true"/>, an Update whose file differs from the record after staging fails before commit.</param>
+    /// <param name="cancellationToken">The token to cancel beginning the transaction.</param>
+    /// <returns>The transaction that was started.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(
         string path,
         TimeSpan lockWait,
@@ -75,33 +75,33 @@ public static class Txfio
     }
 
     /// <summary>
-    /// 未完了のトランザクションを検出し、ロールバックまたはロールフォワードする（ワークフォルダ全体のロックの待ちはゼロ）
+    /// Detects unfinished transactions and rolls them back or forward (with no wait for the work-folder lock).
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>全体の結果と、処理したジャーナル（パスの大文字小文字を無視した辞書順であり、JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="LockContentionException">他のトランザクションがワークフォルダを押さえている</exception>
-    /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="cancellationToken">The token to cancel detection and recovery.</param>
+    /// <returns>The overall result and the journals processed (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON).</returns>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="LockContentionException">Another transaction holds the work folder.</exception>
+    /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>
     public static Task<RecoverReport> RecoverAsync(string path, CancellationToken cancellationToken = default)
     {
         return RecoverAsync(path, TimeSpan.Zero, cancellationToken);
     }
 
     /// <summary>
-    /// 未完了のトランザクションを検出し、ロールバックまたはロールフォワードする
+    /// Detects unfinished transactions and rolls them back or forward.
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="lockWait">ワークフォルダ全体のロックが取れないとき、この呼び出しで待つ上限（ゼロは待たない）</param>
-    /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>全体の結果と、処理したジャーナル（パスの大文字小文字を無視した辞書順であり、JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="LockContentionException">期限までにワークフォルダを押さえられない</exception>
-    /// <exception cref="OperationCanceledException">ワークフォルダ全体のロックを待っているあいだに取り消された</exception>
-    /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="lockWait">How long this call waits when the work-folder lock cannot be taken (zero does not wait).</param>
+    /// <param name="cancellationToken">The token to cancel detection and recovery.</param>
+    /// <returns>The overall result and the journals processed (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON).</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="LockContentionException">The work folder cannot be taken by the deadline.</exception>
+    /// <exception cref="OperationCanceledException">The wait for the work-folder lock was canceled.</exception>
+    /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>
     public static async Task<RecoverReport> RecoverAsync(string path, TimeSpan lockWait, CancellationToken cancellationToken = default)
     {
         if (lockWait < TimeSpan.Zero && lockWait != Timeout.InfiniteTimeSpan)
@@ -117,15 +117,15 @@ public static class Txfio
     }
 
     /// <summary>
-    /// ワークフォルダに対するトランザクションを開始する（ロックの待ちはゼロ）。失敗と途中停止は <paramref name="faults"/> が担う
+    /// Begins a transaction on a work folder (with no lock wait). <paramref name="faults"/> handles failures and partial stops.
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="faults">このトランザクションの失敗と途中停止</param>
-    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
-    /// <returns>開始したトランザクション</returns>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="faults">The failures and partial stops of this transaction.</param>
+    /// <param name="cancellationToken">The token to cancel beginning the transaction.</param>
+    /// <returns>The transaction that was started.</returns>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     internal static Task<ITransaction> BeginAsync(
         string path,
         IFaultInjector faults,
@@ -135,18 +135,18 @@ public static class Txfio
     }
 
     /// <summary>
-    /// ワークフォルダに対するトランザクションを開始する。失敗と途中停止は <paramref name="faults"/> が担う
+    /// Begins a transaction on a work folder. <paramref name="faults"/> handles failures and partial stops.
     /// </summary>
-    /// <param name="path">既存のワークフォルダ</param>
-    /// <param name="lockWait">ロックが取れないとき、公開メソッド 1 回ごとに待つ上限（ゼロは待たない）</param>
-    /// <param name="detectExternalChanges"><see langword="true"/> のとき、ステージ後に記録と違う Update をコミット前に失敗にする</param>
-    /// <param name="faults">このトランザクションの失敗と途中停止</param>
-    /// <param name="cancellationToken">開始処理を取り消すトークン</param>
-    /// <returns>開始したトランザクション</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> がゼロ未満である（<see cref="Timeout.InfiniteTimeSpan"/> は除く）</exception>
-    /// <exception cref="ExternalConflictException">ワークフォルダが存在しない</exception>
-    /// <exception cref="IOException">ワークフォルダの長い名前を取れない</exception>
-    /// <exception cref="RecoveryRequiredException">持ち主のいない残骸ジャーナルが残っている</exception>
+    /// <param name="path">An existing work folder.</param>
+    /// <param name="lockWait">How long each public method call waits when a lock cannot be taken (zero does not wait).</param>
+    /// <param name="detectExternalChanges">When <see langword="true"/>, an Update whose file differs from the record after staging fails before commit.</param>
+    /// <param name="faults">The failures and partial stops of this transaction.</param>
+    /// <param name="cancellationToken">The token to cancel beginning the transaction.</param>
+    /// <returns>The transaction that was started.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
+    /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
+    /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     internal static async Task<ITransaction> BeginAsync(
         string path,
         TimeSpan lockWait,
@@ -171,7 +171,7 @@ public static class Txfio
         Guid transactionId = Guid.NewGuid();
         string journalPath = MetadataNames.JournalPath(workFolder, transactionId);
 
-        // Recover が生きているトランザクションのジャーナルを見つけたとき、必ず共有違反になるよう先に開く
+        // Open it first so that Recover always gets a sharing violation when it finds the journal of a live transaction.
         FileStream liveness = LivenessLock.Create(MetadataNames.LivenessLockPath(journalPath));
         try
         {

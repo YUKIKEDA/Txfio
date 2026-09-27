@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// Add / Update / Delete / Move / CreateDirectory / DeleteTree の前提チェック
+/// Precondition checks for Add / Update / Delete / Move / CreateDirectory / DeleteTree.
 /// </summary>
 internal static class StagingRules
 {
     /// <summary>
-    /// Add / Update / Delete の対象ファイルの存在有無を検証する
+    /// Checks whether the target file of Add / Update / Delete exists.
     /// </summary>
-    /// <param name="kind">操作の種類</param>
-    /// <param name="targetPath">対象パス</param>
+    /// <param name="kind">The operation kind.</param>
+    /// <param name="targetPath">The target path.</param>
     internal static void EnsureTargetMatchesKind(PendingChangeKind kind, string targetPath)
     {
         if (kind == PendingChangeKind.Delete)
@@ -24,7 +24,7 @@ internal static class StagingRules
 
         if (Directory.Exists(targetPath))
         {
-            // ディレクトリへファイルを書くと、コミットの検証まで失敗が分からない
+            // Writing a file to a directory would not fail until the commit check.
             string message = kind == PendingChangeKind.Add
                 ? "A directory already exists at the path to add: "
                 : "The path to update is a directory: ";
@@ -44,12 +44,12 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ディレクトリの入れ替えで、移動元と移動先の配下に重なる操作を拒否する（移動元が作成ディレクトリなら、配下の Add だけを許す）
+    /// Rejects overlapping operations under the source and destination when swapping a directory (if the source is a created directory, only Adds under it are allowed).
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="createdDirectories">このトランザクションが作ったディレクトリ</param>
-    /// <param name="sourcePath">移動元</param>
-    /// <param name="destPath">移動先</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="createdDirectories">The directories this transaction created.</param>
+    /// <param name="sourcePath">The source.</param>
+    /// <param name="destPath">The destination.</param>
     internal static void ThrowIfDirectoryReplaceConflicts(
         IReadOnlyList<JournalOperation> operations,
         IReadOnlyList<string> createdDirectories,
@@ -81,10 +81,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 置き換えまたは入れ替えの Move の移動元か移動先、または入れ替えの移動先の配下なら、続けて操作できない
+    /// No further operation is allowed on the source or destination of a replacing or swapping Move, or under the destination of a swap.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="path">操作するパス</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="path">The path to operate on.</param>
     internal static void ThrowIfOverwriteMovePath(IReadOnlyList<JournalOperation> operations, string path)
     {
         foreach (JournalOperation operation in operations)
@@ -101,9 +101,9 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 移動元が既存ファイルであることを検証する
+    /// Checks that the source is an existing file.
     /// </summary>
-    /// <param name="sourcePath">移動元パス</param>
+    /// <param name="sourcePath">The source path.</param>
     internal static void EnsureMoveSourceExists(string sourcePath)
     {
         if (!File.Exists(sourcePath))
@@ -113,9 +113,9 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 移動先にファイルもディレクトリも無いことを検証する
+    /// Checks that neither a file nor a directory exists at the destination.
     /// </summary>
-    /// <param name="destPath">移動先パス</param>
+    /// <param name="destPath">The destination path.</param>
     internal static void EnsureMoveDestinationIsFree(string destPath)
     {
         if (Directory.Exists(destPath))
@@ -130,11 +130,11 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 移動元と移動先のルート（ドライブまたは共有）が同じかどうかを検証する
+    /// Checks whether the source and destination have the same root (drive or share).
     /// </summary>
-    /// <param name="sourcePath">移動元パス</param>
-    /// <param name="destPath">移動先パス</param>
-    /// <remarks>マウントポイントは見ない（ワークフォルダ内側のリパースポイントはパス解決が拒否する）</remarks>
+    /// <param name="sourcePath">The source path.</param>
+    /// <param name="destPath">The destination path.</param>
+    /// <remarks>Mount points are not checked (path resolution rejects reparse points inside the work folder).</remarks>
     internal static void EnsureSameVolume(string sourcePath, string destPath)
     {
         string? sourceRoot = System.IO.Path.GetPathRoot(sourcePath);
@@ -148,9 +148,9 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 対象の親ディレクトリが存在するかを検証する
+    /// Checks whether the target's parent directory exists.
     /// </summary>
-    /// <param name="targetPath">対象パス</param>
+    /// <param name="targetPath">The target path.</param>
     internal static void EnsureParentDirectoryExists(string targetPath)
     {
         string? parent = System.IO.Path.GetDirectoryName(targetPath);
@@ -162,10 +162,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// メタデータフォルダとその配下を操作対象から除外する
+    /// Excludes the metadata folder and everything under it from operations.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="targetPath">対象パス</param>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="targetPath">The target path.</param>
     internal static void EnsureNotMetadataFolder(string workFolder, string targetPath)
     {
         if (WorkPath.IsInMetadataFolder(workFolder, targetPath))
@@ -175,10 +175,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ディレクトリ Move の移動元・移動先の配下への操作を拒否する
+    /// Rejects operations under the source or destination of a directory Move.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="path">操作しようとしているパス</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="path">The path about to be operated on.</param>
     internal static void ThrowIfInsideDirectoryMove(IReadOnlyList<JournalOperation> operations, string path)
     {
         foreach (JournalOperation operation in operations)
@@ -196,11 +196,11 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ディレクトリを自分自身の配下へ移す操作と、移動元・移動先の配下に重なる操作を拒否する
+    /// Rejects moving a directory under itself, and operations that overlap under the source or destination.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="sourcePath">移動するディレクトリ</param>
-    /// <param name="destPath">移動先</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="sourcePath">The directory to move.</param>
+    /// <param name="destPath">The destination.</param>
     internal static void ThrowIfDirectoryMoveConflicts(
         IReadOnlyList<JournalOperation> operations,
         string sourcePath,
@@ -227,10 +227,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 同じパス、またはディレクトリを自分自身の配下へコピーする操作を拒否する
+    /// Rejects copying to the same path, or copying a directory under itself.
     /// </summary>
-    /// <param name="sourcePath">コピー元</param>
-    /// <param name="destPath">コピー先</param>
+    /// <param name="sourcePath">The source.</param>
+    /// <param name="destPath">The destination.</param>
     internal static void ThrowIfCopyDestinationInsideSource(string sourcePath, string destPath)
     {
         if (string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase))
@@ -245,10 +245,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ZIP の出力先が入力そのもの、または入力ディレクトリの配下なら拒否する
+    /// Rejects a ZIP output that is the input itself or under the input directory.
     /// </summary>
-    /// <param name="sourcePath">入力</param>
-    /// <param name="archivePath">ZIP の出力先</param>
+    /// <param name="sourcePath">The input.</param>
+    /// <param name="archivePath">The ZIP output path.</param>
     internal static void ThrowIfArchiveInsideSource(string sourcePath, string archivePath)
     {
         if (string.Equals(sourcePath, archivePath, StringComparison.OrdinalIgnoreCase))
@@ -263,10 +263,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 削除予約済みディレクトリへの後続操作を拒否する
+    /// Rejects later operations on a directory scheduled for deletion.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="path">操作しようとしているパス</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="path">The path about to be operated on.</param>
     internal static void ThrowIfTouchesDeletedDirectory(IReadOnlyList<JournalOperation> operations, string path)
     {
         if (IsPendingDirectoryDelete(operations, path)
@@ -277,10 +277,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// CreateDirectory したディレクトリ自身への操作を拒否する
+    /// Rejects operations on a directory created by CreateDirectory itself.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="path">操作しようとしているパス</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="path">The path about to be operated on.</param>
     internal static void ThrowIfCreateDirectoryPath(IReadOnlyList<JournalOperation> operations, string path)
     {
         foreach (JournalOperation operation in operations)
@@ -294,10 +294,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 全削除を予約したディレクトリの配下への操作を拒否する
+    /// Rejects operations under a directory scheduled for DeleteTree.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="path">操作しようとしているパス</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="path">The path about to be operated on.</param>
     internal static void ThrowIfInsideDeleteTree(IReadOnlyList<JournalOperation> operations, string path)
     {
         foreach (JournalOperation operation in operations)
@@ -310,10 +310,10 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// 全削除するディレクトリの配下に、このトランザクションの操作があるときは拒否する
+    /// Rejects when this transaction has an operation under the directory to delete with DeleteTree.
     /// </summary>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="directoryPath">全削除するディレクトリ</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="directoryPath">The directory to delete with DeleteTree.</param>
     internal static void ThrowIfOperationUnderDirectory(IReadOnlyList<JournalOperation> operations, string directoryPath)
     {
         foreach (JournalOperation operation in operations)
@@ -327,11 +327,11 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ディレクトリ削除の直下条件を検証する（満たさなければ例外）
+    /// Checks the direct-children conditions of a directory delete (throws if they are not met).
     /// </summary>
-    /// <param name="directoryPath">対象ディレクトリ</param>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="transactionId">このトランザクションの ID</param>
+    /// <param name="directoryPath">The target directory.</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="transactionId">The ID of this transaction.</param>
     internal static void EnsureDirectoryDeleteAllowed(
         string directoryPath,
         IReadOnlyList<JournalOperation> operations,
@@ -344,12 +344,12 @@ internal static class StagingRules
     }
 
     /// <summary>
-    /// ディレクトリ削除の直下条件を満たすかを判定する
+    /// Returns whether the direct-children conditions of a directory delete are met.
     /// </summary>
-    /// <param name="directoryPath">対象ディレクトリ</param>
-    /// <param name="operations">現在の操作一覧</param>
-    /// <param name="transactionId">このトランザクションの ID</param>
-    /// <returns>直下が空、または予約済みの子だけなら <see langword="true"/></returns>
+    /// <param name="directoryPath">The target directory.</param>
+    /// <param name="operations">The current list of operations.</param>
+    /// <param name="transactionId">The ID of this transaction.</param>
+    /// <returns><see langword="true"/> if the directory has no direct children, or only scheduled ones.</returns>
     internal static bool MatchesDirectoryDeletePreconditions(
         string directoryPath,
         IReadOnlyList<JournalOperation> operations,

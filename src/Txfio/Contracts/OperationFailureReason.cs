@@ -1,52 +1,52 @@
 namespace Txfio;
 
 /// <summary>
-/// 操作を確定できなかった理由
+/// Why an operation could not be finished.
 /// </summary>
 public enum OperationFailureReason
 {
     /// <summary>
-    /// 対象が無い
+    /// The target does not exist.
     /// </summary>
     Missing = 0,
 
     /// <summary>
-    /// 既にある
+    /// It already exists.
     /// </summary>
     AlreadyExists = 1,
 
     /// <summary>
-    /// ファイルかディレクトリにすり替わった
+    /// It was swapped for a file or a directory.
     /// </summary>
     ReplacedByFile = 2,
 
     /// <summary>
-    /// ディレクトリの直下条件を満たさない
+    /// The direct-children conditions of a directory are not met.
     /// </summary>
     DirectoryPreconditions = 3,
 
     /// <summary>
-    /// Before と After のどちらとも一致しない
+    /// It matches neither Before nor After.
     /// </summary>
     BeforeAfterMismatch = 4,
 
     /// <summary>
-    /// 共有違反
+    /// A sharing violation.
     /// </summary>
     SharingViolation = 5,
 
     /// <summary>
-    /// それ以外の IO 失敗
+    /// Another IO failure.
     /// </summary>
     IoFailure = 6,
 
     /// <summary>
-    /// 記録した実ファイルのサイズか最終更新日時が違う
+    /// The size or last write time of the recorded real file differs.
     /// </summary>
     ExternalChange = 7,
 
     /// <summary>
-    /// Update かファイルの Delete の対象に読み取り専用属性が付いている
+    /// The target of an Update or a file Delete has the read-only attribute.
     /// </summary>
     ReadOnly = 8,
 }

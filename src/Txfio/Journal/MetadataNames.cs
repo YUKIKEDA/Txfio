@@ -1,71 +1,71 @@
 namespace Txfio;
 
 /// <summary>
-/// メタデータフォルダ、ジャーナル、ロックの名前
+/// Names of the metadata folder, journals, and locks.
 /// </summary>
 internal static class MetadataNames
 {
     /// <summary>
-    /// ワークフォルダ直下のメタデータフォルダ名
+    /// The name of the metadata folder directly under the work folder.
     /// </summary>
     internal const string FolderName = ".txfio";
 
     /// <summary>
-    /// ジャーナルファイルを列挙するときの検索パターン
+    /// The search pattern for enumerating journal files.
     /// </summary>
     internal const string JournalSearchPattern = "tx-*.journal";
 
     /// <summary>
-    /// ジャーナルの一時ファイルを列挙するときの検索パターン
+    /// The search pattern for enumerating journal temporary files.
     /// </summary>
     internal const string JournalTempSearchPattern = "tx-*.journal.tmp";
 
     /// <summary>
-    /// ジャーナルの一時ファイル名の末尾
+    /// The suffix of a journal temporary file name.
     /// </summary>
     internal const string JournalTempSuffix = ".tmp";
 
     /// <summary>
-    /// ロックファイルを置くフォルダ名
+    /// The name of the folder that holds lock files.
     /// </summary>
     internal const string LockFolderName = "locks";
 
     /// <summary>
-    /// メタデータフォルダの絶対パスを返す
+    /// Returns the absolute path of the metadata folder.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>`.txfio` フォルダのパス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <returns>The path of the <c>.txfio</c> folder.</returns>
     internal static string FolderPath(string workFolder)
     {
         return System.IO.Path.Combine(workFolder, FolderName);
     }
 
     /// <summary>
-    /// ロックファイルを置くフォルダの絶対パスを返す
+    /// Returns the absolute path of the folder that holds lock files.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>`.txfio/locks` フォルダのパス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <returns>The path of the <c>.txfio/locks</c> folder.</returns>
     internal static string LockFolderPath(string workFolder)
     {
         return System.IO.Path.Combine(FolderPath(workFolder), LockFolderName);
     }
 
     /// <summary>
-    /// ワークフォルダ全体のロックを持たないあいだに開くしるしのパスを返す
+    /// Returns the path of the share-lost marker, opened while the work-folder lock is not held.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <returns>しるし（`.txfio/share-lost.lock`）のパス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <returns>The path of the marker (<c>.txfio/share-lost.lock</c>).</returns>
     internal static string ShareLostLockPath(string workFolder)
     {
         return System.IO.Path.Combine(FolderPath(workFolder), "share-lost.lock");
     }
 
     /// <summary>
-    /// トランザクションに対応するジャーナルファイルのパスを返す
+    /// Returns the path of the journal file of a transaction.
     /// </summary>
-    /// <param name="workFolder">ワークフォルダ</param>
-    /// <param name="transactionId">トランザクション ID</param>
-    /// <returns>ジャーナルファイルのパス</returns>
+    /// <param name="workFolder">The work folder.</param>
+    /// <param name="transactionId">The transaction ID.</param>
+    /// <returns>The path of the journal file.</returns>
     internal static string JournalPath(string workFolder, Guid transactionId)
     {
         return System.IO.Path.Combine(
@@ -74,10 +74,10 @@ internal static class MetadataNames
     }
 
     /// <summary>
-    /// ジャーナルのパスから、そのジャーナルがあるワークフォルダを返す
+    /// Returns the work folder that contains a journal, from the journal's path.
     /// </summary>
-    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
-    /// <returns>`.txfio` の親のワークフォルダ</returns>
+    /// <param name="journalPath">The path of <c>.txfio/tx-{guid}.journal</c>.</param>
+    /// <returns>The work folder that is the parent of <c>.txfio</c>.</returns>
     internal static string WorkFolderFromJournal(string journalPath)
     {
         string metadataFolder = System.IO.Path.GetDirectoryName(journalPath)!;
@@ -85,31 +85,31 @@ internal static class MetadataNames
     }
 
     /// <summary>
-    /// ジャーナルと組になる生存ロックのパスを返す
+    /// Returns the path of the liveness lock paired with a journal.
     /// </summary>
-    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
-    /// <returns>`.txfio/tx-{guid}.lock` のパス</returns>
+    /// <param name="journalPath">The path of <c>.txfio/tx-{guid}.journal</c>.</param>
+    /// <returns>The path of <c>.txfio/tx-{guid}.lock</c>.</returns>
     internal static string LivenessLockPath(string journalPath)
     {
         return System.IO.Path.ChangeExtension(journalPath, ".lock");
     }
 
     /// <summary>
-    /// 上書き用の一時ファイルのパスを返す
+    /// Returns the path of the temporary file for overwriting.
     /// </summary>
-    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
-    /// <returns>`.txfio/tx-{guid}.journal.tmp` のパス</returns>
+    /// <param name="journalPath">The path of <c>.txfio/tx-{guid}.journal</c>.</param>
+    /// <returns>The path of <c>.txfio/tx-{guid}.journal.tmp</c>.</returns>
     internal static string JournalTempPath(string journalPath)
     {
         return journalPath + JournalTempSuffix;
     }
 
     /// <summary>
-    /// 一時ファイルのパスから、組になるジャーナルのパスを取る
+    /// Gets the path of the journal paired with a temporary file.
     /// </summary>
-    /// <param name="tempPath">`.txfio/tx-{guid}.journal.tmp` のパス</param>
-    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
-    /// <returns>ジャーナルの一時ファイルの名前なら <see langword="true"/></returns>
+    /// <param name="tempPath">The path of <c>.txfio/tx-{guid}.journal.tmp</c>.</param>
+    /// <param name="journalPath">The path of <c>.txfio/tx-{guid}.journal</c>.</param>
+    /// <returns><see langword="true"/> if it is the name of a journal temporary file.</returns>
     internal static bool TryGetJournalPathFromTemp(string tempPath, out string journalPath)
     {
         journalPath = string.Empty;
@@ -123,11 +123,11 @@ internal static class MetadataNames
     }
 
     /// <summary>
-    /// ジャーナルのファイル名からトランザクション ID を取る
+    /// Gets the transaction ID from a journal's file name.
     /// </summary>
-    /// <param name="journalPath">`.txfio/tx-{guid}.journal` のパス</param>
-    /// <param name="transactionId">取れた ID</param>
-    /// <returns>ファイル名が `tx-{guid}.journal` なら <see langword="true"/></returns>
+    /// <param name="journalPath">The path of <c>.txfio/tx-{guid}.journal</c>.</param>
+    /// <param name="transactionId">The ID that was found.</param>
+    /// <returns><see langword="true"/> if the file name is <c>tx-{guid}.journal</c>.</returns>
     internal static bool TryGetTransactionId(string journalPath, out Guid transactionId)
     {
         string name = System.IO.Path.GetFileName(journalPath);

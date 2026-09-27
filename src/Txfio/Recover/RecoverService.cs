@@ -1,20 +1,20 @@
 namespace Txfio;
 
 /// <summary>
-/// 未完了ジャーナルのロールバックとロールフォワード
+/// Rolls back and rolls forward unfinished journals.
 /// </summary>
 internal static class RecoverService
 {
     /// <summary>
-    /// ワークフォルダ内の残骸ジャーナルを、パスの大文字小文字を無視した辞書順で処理する
+    /// Processes the orphaned journals in the work folder in lexical order of the path, ignoring case.
     /// </summary>
-    /// <param name="workFolder">既存のワークフォルダ</param>
-    /// <param name="lockWait">ワークフォルダ全体のロックが取れないとき、この呼び出しで待つ上限</param>
-    /// <param name="cancellationToken">検出と復旧を取り消すトークン</param>
-    /// <returns>全体の結果と、処理したジャーナル（パスの大文字小文字を無視した辞書順であり、JSON として読めないジャーナルがあれば <see cref="RecoverResult.JournalUnreadable"/>）</returns>
-    /// <exception cref="IOException">ジャーナルの読み取りに失敗した（そのジャーナルは残る）</exception>
-    /// <exception cref="LockContentionException">期限までにワークフォルダ全体のロックを取れない</exception>
-    /// <exception cref="OperationCanceledException">ワークフォルダ全体のロックを待っているあいだに取り消された</exception>
+    /// <param name="workFolder">An existing work folder.</param>
+    /// <param name="lockWait">How long this call waits when the work-folder lock cannot be taken.</param>
+    /// <param name="cancellationToken">The token to cancel detection and recovery.</param>
+    /// <returns>The overall result and the journals processed (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON).</returns>
+    /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>
+    /// <exception cref="LockContentionException">The work-folder lock cannot be taken by the deadline.</exception>
+    /// <exception cref="OperationCanceledException">The wait for the work-folder lock was canceled.</exception>
     internal static async Task<RecoverReport> RecoverAsync(
         string workFolder,
         TimeSpan lockWait,
@@ -26,7 +26,7 @@ internal static class RecoverService
             return new RecoverReport(RecoverResult.NoPendingTransactions, Array.Empty<JournalReport>());
         }
 
-        // 処理中に別のトランザクションが確定したデータを、ロールフォワードやロールバックで消さない
+        // Do not delete, by roll-forward or rollback, data that another transaction committed during processing.
         PathLockSet sentinel = new PathLockSet();
         try
         {
@@ -39,7 +39,7 @@ internal static class RecoverService
                 MetadataNames.JournalSearchPattern,
                 SearchOption.TopDirectoryOnly);
 
-            // パスの大文字小文字を無視した辞書順（報告と、読み取り失敗より前に確定する範囲を毎回同じにする）
+            // Lexical order of the path, ignoring case (so the report, and what is finished before a read failure, are the same every time).
             Array.Sort(journals, static (left, right) => string.Compare(left, right, StringComparison.OrdinalIgnoreCase));
             RecoverReport report = await RecoverJournalsAsync(workFolder, journals, cancellationToken).ConfigureAwait(false);
             DeleteOrphanJournalTemps(metadataFolder);
@@ -51,7 +51,7 @@ internal static class RecoverService
         }
     }
 
-    // ワークフォルダ全体を排他にしているあいだは、他のトランザクションはパスロックも意図ロックも持っていない（持つには共有のワークフォルダ全体のロックが要るか、しるしが要る）
+    // While the whole work folder is held exclusively, no other transaction holds a path lock or intent lock (holding one needs the shared work-folder lock or the share-lost marker).
     private static void DeleteLockFiles(string workFolder)
     {
         string lockFolder = MetadataNames.LockFolderPath(workFolder);
@@ -68,12 +68,12 @@ internal static class RecoverService
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // 消せないものは残す（次の Recover でまた試す）
+                // Leave what cannot be deleted (the next Recover tries again).
             }
         }
     }
 
-    // 初回のジャーナルを rename する前に落ちると、一時ファイルだけが残る（持ち主が生きていれば触らない）
+    // A crash before the first journal is renamed leaves only the temporary file (do not touch it if the owner is alive).
     private static void DeleteOrphanJournalTemps(string metadataFolder)
     {
         string[] temps = Directory.GetFiles(
@@ -110,7 +110,7 @@ internal static class RecoverService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // 開けなければ持ち主が生きているので、ジャーナルにも残骸にも触れない
+            // If it cannot be opened, the owner is alive, so neither the journal nor its leftovers are touched.
             FileStream? liveness = LivenessLock.TryOpenStale(MetadataNames.LivenessLockPath(journalPath));
             if (liveness is null)
             {
@@ -119,21 +119,21 @@ internal static class RecoverService
 
             try
             {
-                // 一覧のあと持ち主が正常に終わっていれば、何もしない
+                // If the owner finished normally after the listing, do nothing.
                 if (!File.Exists(journalPath))
                 {
                     continue;
                 }
 
-                // 落ちた上書きの一時ファイルは、読む前に消す
+                // Delete the temporary file of a crashed overwrite before reading.
                 JournalStore.DeleteTemp(journalPath);
                 JournalReadResult read = await JournalStore.ReadAsync(journalPath, cancellationToken)
                     .ConfigureAwait(false);
                 JournalDocument? document = read.Document;
                 if (document is null)
                 {
-                    // 作ったディレクトリは文書が読めないので特定できず、ファイル名から取れた ID の .txnew と再ステージの退避だけ消す
-                    // 版が違うときは新しい版のライブラリが残したものかもしれないので、.txnew にも再ステージの退避にも触れない
+                    // The document cannot be read, so the created directories cannot be identified; delete only the .txnew files and restage backups of the ID taken from the file name.
+                    // With a different version, it may have been left by a newer library, so neither .txnew files nor restage backups are touched.
                     if (MetadataNames.TryGetTransactionId(journalPath, out Guid transactionId))
                     {
                         if (!read.UnsupportedVersion)
@@ -161,7 +161,7 @@ internal static class RecoverService
                     RecoverResult journalResult = RecoverResult.RolledForward;
                     if (!appliedAll)
                     {
-                        // 結果は 1 回だけ返し、次の Recover でやり直さない
+                        // Report the result only once, and do not redo it in the next Recover.
                         StagingApplier.DeleteStagingFiles(document.Operations);
                         operations = skipped;
                         journalResult = RecoverResult.ConflictDetected;
