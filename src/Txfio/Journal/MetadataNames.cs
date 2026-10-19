@@ -51,16 +51,6 @@ internal static class MetadataNames
     }
 
     /// <summary>
-    /// Returns the path of the share-lost marker, opened while the work-folder lock is not held.
-    /// </summary>
-    /// <param name="workFolder">The work folder.</param>
-    /// <returns>The path of the marker (<c>.txfio/share-lost.lock</c>).</returns>
-    internal static string ShareLostLockPath(string workFolder)
-    {
-        return System.IO.Path.Combine(FolderPath(workFolder), "share-lost.lock");
-    }
-
-    /// <summary>
     /// Returns the path of the journal file of a transaction.
     /// </summary>
     /// <param name="workFolder">The work folder.</param>

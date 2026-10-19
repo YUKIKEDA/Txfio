@@ -271,175 +271,53 @@ public sealed class DirectoryMoveTests
     }
 
     /// <summary>
-    /// When the share-lost marker is in use, the exclusive lock is given up and shared is restored.
+    /// A transaction that waits for an exclusive intent lock keeps the shared work-folder lock.
     /// </summary>
     /// <remarks>
-    /// <para>Given: the work-folder lock is held exclusively, and the marker is open as shared.</para>
-    /// <para>When: whether the marker is in use is checked.</para>
-    /// <para>Then: LockContentionException with Path set to the work folder; after the check fails, another set can take shared, but not exclusive.</para>
+    /// <para>Given: holder has staged sub/a.txt (so it holds the intent lock of sub as shared), and mover has a 3-second wait.</para>
+    /// <para>When: mover moves sub to other, and while it waits, another set tries to take the work-folder lock exclusively. Then holder is disposed.</para>
+    /// <para>Then: the exclusive attempt throws LockContentionException with Path set to the work folder, and the Move is scheduled after holder is disposed.</para>
     /// </remarks>
     [Fact]
-    public async Task RejectForeignLocks_ReturnsToSharedWhenMarkerIsInUse()
+    public async Task MoveAsync_KeepsSharedWorkFolderLockWhileWaitingForExclusiveIntent()
     {
         await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
-        using FileStream held = new FileStream(
-            MetadataNames.ShareLostLockPath(work.Path),
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.ReadWrite);
-        PathLockSet mover = new PathLockSet();
-        await mover.AcquireExclusiveAsync(work.Path, default);
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
+        ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await holder.WriteAllTextAsync("sub/a.txt", "a");
+        await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(3));
+        Task moving = mover.MoveAsync("sub", "other");
+        await Task.Delay(200);
+        Assert.False(moving.IsCompleted);
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.RejectForeignLocksAsync(work.Path, default));
-
-        Assert.Equal(work.Path, contention.Path);
-        PathLockSet other = new PathLockSet();
-        await other.AcquireSharedAsync(work.Path, default);
-        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path, default));
-        mover.Release();
-        other.Release();
-    }
-
-    /// <summary>
-    /// When shared cannot be restored while holding a path, the marker remains and blocks exclusive.
-    /// </summary>
-    /// <remarks>
-    /// <para>Given: a path lock is held, and reopening as exclusive and returning to shared both fail with sharing violations.</para>
-    /// <para>When: exclusive is taken, another set takes exclusive, the marker is checked, and the first set is disposed.</para>
-    /// <para>Then: the check throws LockContentionException with Path set to the work folder, and after disposal the marker can be opened without sharing.</para>
-    /// </remarks>
-    [Fact]
-    public async Task AcquireExclusive_MarkerRemainsWhenSharedIsLostWhileHoldingPath()
-    {
-        await using TempDirectory work = TempDirectory.Create();
-        string target = System.IO.Path.Combine(work.Path, "a.txt");
-        FaultInjector faults = new FaultInjector();
-        PathLockSet holder = new PathLockSet(faults);
-        await holder.AcquireSharedAsync(work.Path, default);
-        await holder.AcquireAsync(work.Path, new[] { target }, default);
-        faults.FailNextOpen(FileShare.None, SharingViolation());
-        faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
-        try
-        {
-            await Assert.ThrowsAsync<LockContentionException>(() => holder.AcquireExclusiveAsync(work.Path, default));
-        }
-        finally
-        {
-            faults.ClearOpenFailures();
-        }
-
-        string marker = MetadataNames.ShareLostLockPath(work.Path);
-        Assert.True(File.Exists(marker));
-        PathLockSet mover = new PathLockSet();
-        await mover.AcquireExclusiveAsync(work.Path, default);
+        PathLockSet exclusive = new PathLockSet();
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => mover.RejectForeignLocksAsync(work.Path, default));
-        Assert.Equal(work.Path, contention.Path);
-        holder.Release();
-        using (FileStream free = new FileStream(marker, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-        {
-            _ = free;
-        }
-
-        mover.Release();
-    }
-
-    /// <summary>
-    /// Even when raising to exclusive fails, shared is kept.
-    /// </summary>
-    /// <remarks>
-    /// <para>Given: two sets hold the work-folder lock as shared.</para>
-    /// <para>When: one tries to go exclusive. After that fails, the other is released, and a third takes exclusive.</para>
-    /// <para>Then: the raise throws LockContentionException, and the third cannot take exclusive either.</para>
-    /// </remarks>
-    [Fact]
-    public async Task AcquireExclusive_KeepsSharedWhenRaiseFails()
-    {
-        await using TempDirectory work = TempDirectory.Create();
-        PathLockSet holder = new PathLockSet();
-        PathLockSet mover = new PathLockSet();
-        await holder.AcquireSharedAsync(work.Path, default);
-        await mover.AcquireSharedAsync(work.Path, default);
-
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path, default));
+            () => exclusive.AcquireExclusiveAsync(work.Path, default));
+        await holder.DisposeAsync();
+        await moving;
 
         Assert.Equal(work.Path, contention.Path);
-        holder.Release();
-        PathLockSet third = new PathLockSet();
-        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path, default));
-        mover.Release();
-        third.Release();
+        Assert.Single(mover.GetPendingChanges());
+        exclusive.Release();
     }
 
     /// <summary>
-    /// An IO failure that prevents returning to shared is not swallowed, and shared is reopened at the next acquisition.
+    /// The exclusive work-folder lock is taken only by a set that holds no work-folder lock yet.
     /// </summary>
     /// <remarks>
-    /// <para>Given: the work-folder lock is held as shared. The raise fails with a sharing violation, and the return with another IOException.</para>
-    /// <para>When: exclusive is taken. After the failure is cleared, shared is taken again.</para>
-    /// <para>Then: the IOException from the return propagates as is. After shared is taken again, another set cannot take exclusive.</para>
+    /// <para>Given: a set holds the work-folder lock as shared.</para>
+    /// <para>When: the same set asks for the exclusive lock.</para>
+    /// <para>Then: InvalidOperationException; there is no raise from shared to exclusive any more.</para>
     /// </remarks>
     [Fact]
-    public async Task AcquireExclusive_ReopensSharedAtNextAcquisitionAfterReturnFailure()
+    public async Task AcquireExclusive_ThrowsWhenSharedIsHeld()
     {
         await using TempDirectory work = TempDirectory.Create();
-        FaultInjector faults = new FaultInjector();
-        PathLockSet mover = new PathLockSet(faults);
-        await mover.AcquireSharedAsync(work.Path, default);
-        faults.FailNextOpen(FileShare.None, SharingViolation());
-        faults.FailNextOpen(FileShare.ReadWrite, new IOException("disk"));
-        try
-        {
-            IOException failure = await Assert.ThrowsAsync<IOException>(() => mover.AcquireExclusiveAsync(work.Path, default));
-            Assert.Equal("disk", failure.Message);
-        }
-        finally
-        {
-            faults.ClearOpenFailures();
-        }
+        PathLockSet set = new PathLockSet();
+        await set.AcquireSharedAsync(work.Path, default);
 
-        await mover.AcquireSharedAsync(work.Path, default);
-        PathLockSet other = new PathLockSet();
-        await Assert.ThrowsAsync<LockContentionException>(() => other.AcquireExclusiveAsync(work.Path, default));
-        mover.Release();
-        other.Release();
-    }
-
-    /// <summary>
-    /// Exclusive after failing to return to shared reopens shared first.
-    /// </summary>
-    /// <remarks>
-    /// <para>Given: both the raise and the return to shared have failed with sharing violations.</para>
-    /// <para>When: the failure is cleared, and exclusive is retried while another set holds shared. That set is released, and a third takes exclusive.</para>
-    /// <para>Then: the retry throws LockContentionException, and the third cannot take exclusive either.</para>
-    /// </remarks>
-    [Fact]
-    public async Task AcquireExclusive_RestoresSharedBeforeTryingExclusiveAfterLosingLock()
-    {
-        await using TempDirectory work = TempDirectory.Create();
-        FaultInjector faults = new FaultInjector();
-        PathLockSet mover = new PathLockSet(faults);
-        await mover.AcquireSharedAsync(work.Path, default);
-        faults.FailNextOpen(FileShare.None, SharingViolation());
-        faults.FailNextOpen(FileShare.ReadWrite, SharingViolation());
-        try
-        {
-            await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path, default));
-        }
-        finally
-        {
-            faults.ClearOpenFailures();
-        }
-
-        PathLockSet holder = new PathLockSet();
-        await holder.AcquireSharedAsync(work.Path, default);
-        await Assert.ThrowsAsync<LockContentionException>(() => mover.AcquireExclusiveAsync(work.Path, default));
-        holder.Release();
-        PathLockSet third = new PathLockSet();
-        await Assert.ThrowsAsync<LockContentionException>(() => third.AcquireExclusiveAsync(work.Path, default));
-        mover.Release();
-        third.Release();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => set.AcquireExclusiveAsync(work.Path, default));
+        set.Release();
     }
 
     /// <summary>
@@ -548,12 +426,5 @@ public sealed class DirectoryMoveTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("build", "site", overwrite: true));
 
         Assert.Single(tx.GetPendingChanges());
-    }
-
-    private static IOException SharingViolation()
-    {
-        IOException exception = new IOException("sharing");
-        exception.HResult = unchecked((int)0x80070020);
-        return exception;
     }
 }

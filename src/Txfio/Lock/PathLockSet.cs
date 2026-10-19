@@ -28,9 +28,6 @@ internal sealed class PathLockSet
 
     private WorkFolderState _workFolderState;
 
-    // Open while a path lock or intent lock is held without the work-folder lock.
-    private FileStream? _shareLost;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="PathLockSet"/> class that neither fails nor stops partway.
     /// </summary>
@@ -67,11 +64,6 @@ internal sealed class PathLockSet
         /// Held exclusively.
         /// </summary>
         Exclusive,
-
-        /// <summary>
-        /// Could not go back to shared (reopen at the next acquisition).
-        /// </summary>
-        Lost,
     }
 
     /// <summary>
@@ -124,7 +116,7 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// Opens the work-folder lock as shared (does not reopen if already held; reopens if lost).
+    /// Opens the work-folder lock as shared (does not reopen if already held).
     /// </summary>
     /// <param name="workFolder">The work folder.</param>
     /// <param name="attempt">The lock wait of this call.</param>
@@ -133,12 +125,6 @@ internal sealed class PathLockSet
     /// <returns><see langword="true"/> when taken (otherwise an exception is thrown).</returns>
     internal async Task AcquireSharedAsync(string workFolder, LockAttempt attempt)
     {
-        if (_workFolderState == WorkFolderState.Lost)
-        {
-            await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
-            return;
-        }
-
         if (_workFolderState != WorkFolderState.None)
         {
             return;
@@ -157,31 +143,24 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// Opens the work-folder lock exclusively (if shared is held, closes it and takes it again).
+    /// Opens the work-folder lock exclusively (the lock-file cleanup of <c>RecoverAsync</c>; this set must hold no work-folder lock yet).
     /// </summary>
     /// <param name="workFolder">The work folder.</param>
     /// <param name="attempt">The lock wait of this call.</param>
     /// <exception cref="LockContentionException">The work-folder lock cannot be taken by the deadline.</exception>
     /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
-    /// <exception cref="IOException">A failure other than a sharing violation while going back to shared.</exception>
+    /// <exception cref="InvalidOperationException">This set already holds the work-folder lock as shared.</exception>
     /// <returns><see langword="true"/> when taken (otherwise an exception is thrown).</returns>
     internal async Task AcquireExclusiveAsync(string workFolder, LockAttempt attempt)
     {
-        if (_workFolderState == WorkFolderState.Lost)
-        {
-            await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
-        }
-
         if (_workFolderState == WorkFolderState.Exclusive)
         {
             return;
         }
 
-        bool restoreSharedOnFailure = _workFolderState == WorkFolderState.Shared;
-        if (restoreSharedOnFailure)
+        if (_workFolderState == WorkFolderState.Shared)
         {
-            HoldShareLostBeforeDrop(workFolder);
-            ReleaseWorkFolder();
+            throw new InvalidOperationException("The work-folder lock is already held as shared");
         }
 
         try
@@ -189,66 +168,10 @@ internal sealed class PathLockSet
             _workFolderHandle = await OpenWaitingAsync(FilePath(workFolder, workFolder), FileShare.None, attempt)
                 .ConfigureAwait(false);
             _workFolderState = WorkFolderState.Exclusive;
-            CloseShareLost();
-        }
-        catch (OperationCanceledException)
-        {
-            if (restoreSharedOnFailure)
-            {
-                RestoreAfterCancel(workFolder);
-            }
-
-            throw;
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
-            if (restoreSharedOnFailure)
-            {
-                await RestoreOrMarkLostAsync(workFolder, attempt).ConfigureAwait(false);
-            }
-
             throw Contention(workFolder);
-        }
-        catch (Exception exception) when (IoErrors.IsIo(exception))
-        {
-            if (restoreSharedOnFailure)
-            {
-                await RestoreOrMarkLostAsync(workFolder, attempt).ConfigureAwait(false);
-            }
-
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// Waits until the share-lost marker (<c>.txfio/share-lost.lock</c>) is free if it is in use (if it does not become free, gives up the exclusive lock and goes back to shared).
-    /// </summary>
-    /// <param name="workFolder">The work folder.</param>
-    /// <param name="attempt">The lock wait of this call.</param>
-    /// <exception cref="LockContentionException">The marker does not become free by the deadline.</exception>
-    /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
-    /// <returns>A task that completes when the marker is free (otherwise an exception is thrown).</returns>
-    internal async Task RejectForeignLocksAsync(string workFolder, LockAttempt attempt)
-    {
-        try
-        {
-            while (ShareLostBusy(workFolder))
-            {
-                if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
-                {
-                    HoldShareLostBeforeDrop(workFolder);
-                    ReleaseWorkFolder();
-                    await RestoreOrMarkLostAsync(workFolder, attempt).ConfigureAwait(false);
-                    throw Contention(workFolder);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            HoldShareLostBeforeDrop(workFolder);
-            ReleaseWorkFolder();
-            RestoreAfterCancel(workFolder);
-            throw;
         }
     }
 
@@ -342,8 +265,9 @@ internal sealed class PathLockSet
 
         _intents.Clear();
         _exclusiveIntents.Clear();
+
+        // Last, so that no path lock or intent lock is ever held without the work-folder lock.
         ReleaseWorkFolder();
-        CloseShareLost();
     }
 
     private static string RelativeKey(string workFolder, string fullPath)
@@ -463,36 +387,6 @@ internal sealed class PathLockSet
         _workFolderState = WorkFolderState.None;
     }
 
-    private async Task RestoreSharedAsync(string workFolder, LockAttempt attempt)
-    {
-        while (true)
-        {
-            try
-            {
-                RestoreSharedOnce(workFolder);
-                return;
-            }
-            catch (IOException exception) when (IsSharingViolation(exception))
-            {
-                if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
-                {
-                    throw Contention(workFolder);
-                }
-            }
-        }
-    }
-
-    private void RestoreSharedOnce(string workFolder)
-    {
-        if (_workFolderHandle is null)
-        {
-            _workFolderHandle = OpenLockFile(FilePath(workFolder, workFolder), FileShare.ReadWrite);
-            _workFolderState = WorkFolderState.Shared;
-        }
-
-        CloseShareLost();
-    }
-
     private async Task<FileStream> OpenWaitingAsync(string lockPath, FileShare share, LockAttempt attempt)
     {
         while (true)
@@ -508,101 +402,6 @@ internal sealed class PathLockSet
                     throw;
                 }
             }
-        }
-    }
-
-    private bool ShareLostBusy(string workFolder)
-    {
-        string path = MetadataNames.ShareLostLockPath(workFolder);
-        if (!File.Exists(path))
-        {
-            return false;
-        }
-
-        try
-        {
-            using FileStream probe = new FileStream(
-                path,
-                FileMode.Open,
-                FileAccess.ReadWrite,
-                FileShare.None);
-        }
-        catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return false;
-        }
-        catch (IOException exception) when (IsSharingViolation(exception))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    private void HoldShareLostBeforeDrop(string workFolder)
-    {
-        if (_shareLost is not null || !HoldsPathOrIntent())
-        {
-            return;
-        }
-
-        Directory.CreateDirectory(MetadataNames.FolderPath(workFolder));
-        _shareLost = new FileStream(
-            MetadataNames.ShareLostLockPath(workFolder),
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.ReadWrite,
-            bufferSize: 1);
-    }
-
-    private bool HoldsPathOrIntent()
-    {
-        return _intents.Count > 0 || _handles.Count > 0;
-    }
-
-    private void CloseShareLost()
-    {
-        if (_shareLost is null)
-        {
-            return;
-        }
-
-        _shareLost.Dispose();
-        _shareLost = null;
-    }
-
-    private void RestoreAfterCancel(string workFolder)
-    {
-        try
-        {
-            RestoreSharedOnce(workFolder);
-        }
-        catch (IOException exception) when (IsSharingViolation(exception))
-        {
-            _workFolderState = WorkFolderState.Lost;
-        }
-        catch (Exception exception) when (IoErrors.IsIo(exception))
-        {
-            _workFolderState = WorkFolderState.Lost;
-            throw;
-        }
-    }
-
-    private async Task RestoreOrMarkLostAsync(string workFolder, LockAttempt attempt)
-    {
-        try
-        {
-            await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
-        }
-        catch (LockContentionException)
-        {
-            _workFolderState = WorkFolderState.Lost;
-            throw;
-        }
-        catch (Exception exception) when (IoErrors.IsIo(exception))
-        {
-            _workFolderState = WorkFolderState.Lost;
-            throw;
         }
     }
 
@@ -656,8 +455,7 @@ internal sealed class PathLockSet
         }
     }
 
-    // Do not hold the work-folder lock while waiting for an exclusive intent lock.
-    // Holding it would block the other side from raising to exclusive.
+    // The shared work-folder lock is kept while waiting: nothing waits for the exclusive work-folder lock.
     private async Task AcquireExclusiveIntentAsync(string workFolder, string directory, LockAttempt attempt)
     {
         bool closedOwnShared = false;
@@ -668,7 +466,6 @@ internal sealed class PathLockSet
             closedOwnShared = true;
         }
 
-        bool releasedShared = false;
         try
         {
             while (true)
@@ -681,13 +478,6 @@ internal sealed class PathLockSet
                 }
                 catch (IOException exception) when (IsSharingViolation(exception))
                 {
-                    if (!releasedShared && _workFolderState == WorkFolderState.Shared)
-                    {
-                        HoldShareLostBeforeDrop(workFolder);
-                        ReleaseWorkFolder();
-                        releasedShared = true;
-                    }
-
                     if (!await attempt.WaitForRetryAsync().ConfigureAwait(false))
                     {
                         throw new LockContentionException(
@@ -714,29 +504,6 @@ internal sealed class PathLockSet
             }
 
             throw;
-        }
-        finally
-        {
-            if (releasedShared)
-            {
-                try
-                {
-                    await RestoreSharedAsync(workFolder, attempt).ConfigureAwait(false);
-                }
-                catch (LockContentionException)
-                {
-                    _workFolderState = WorkFolderState.Lost;
-                }
-                catch (OperationCanceledException)
-                {
-                    _workFolderState = WorkFolderState.Lost;
-                }
-                catch (Exception exception) when (IoErrors.IsIo(exception))
-                {
-                    _workFolderState = WorkFolderState.Lost;
-                    throw;
-                }
-            }
         }
     }
 

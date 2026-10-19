@@ -194,59 +194,28 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// When the share-lost marker becomes free, creating a directory succeeds.
+    /// A share-lost.lock left by an earlier version is neither used nor deleted.
     /// </summary>
     /// <remarks>
-    /// <para>Given: <c>.txfio/share-lost.lock</c> is open as shared, and the wait is 2 seconds.</para>
-    /// <para>When: the handle is closed after 200 ms, and sub is created with CreateDirectory.</para>
-    /// <para>Then: sub exists.</para>
+    /// <para>Given: <c>.txfio/share-lost.lock</c> is open without sharing (as a 0.1.0 client could leave it), and the wait is zero.</para>
+    /// <para>When: sub is created with CreateDirectory, the transaction is disposed, and RecoverAsync runs.</para>
+    /// <para>Then: sub exists, RecoverAsync is NoPendingTransactions, and share-lost.lock still exists.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_SucceedsWhenMarkerBecomesFree()
+    public async Task CreateDirectoryAsync_IgnoresLeftoverShareLostLock()
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
-        FileStream held = new FileStream(
-            MetadataNames.ShareLostLockPath(work.Path),
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.ReadWrite);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(2));
-        Task release = Task.Run(async () =>
+        string leftover = System.IO.Path.Combine(MetadataNames.FolderPath(work.Path), "share-lost.lock");
+        await using FileStream held = new FileStream(leftover, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
         {
-            await Task.Delay(200);
-            await held.DisposeAsync();
-        });
+            await tx.CreateDirectoryAsync("sub");
+            Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
+        }
 
-        await waiter.CreateDirectoryAsync("sub");
-        await release;
-
-        Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
-    }
-
-    /// <summary>
-    /// Even when the share-lost marker is in use, creating a directory does not wait for the work-folder lock.
-    /// </summary>
-    /// <remarks>
-    /// <para>Given: <c>.txfio/share-lost.lock</c> is open as shared, and the wait is zero.</para>
-    /// <para>When: sub is created with CreateDirectory.</para>
-    /// <para>Then: sub exists (only Recover makes the whole work folder exclusive).</para>
-    /// </remarks>
-    [Fact]
-    public async Task CreateDirectoryAsync_DoesNotWaitForWorkFolderLockWhenMarkerInUse()
-    {
-        await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
-        await using FileStream held = new FileStream(
-            MetadataNames.ShareLostLockPath(work.Path),
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.ReadWrite);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path);
-
-        await waiter.CreateDirectoryAsync("sub");
-
-        Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.True(File.Exists(leftover));
         _ = held;
     }
 
