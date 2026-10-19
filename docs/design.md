@@ -477,7 +477,7 @@ The path lock and the exclusive intent lock on that directory, held until the tr
 The work-folder lock stays shared.
 Other transactions cannot stage under it until this transaction ends; they get `LockContentionException` with `Path` set to that directory.
 Operations of this transaction under it take their own path locks; the intent lock it already holds exclusively satisfies their shared request.
-The plain file API is not affected, so other processes can still write into the directory.
+The plain file API is not affected, so other processes can still write into the directory; discard still deletes what they wrote there ("Cleanup on failure" below).
 
 Previously the intent lock was not exclusive, and other transactions could stage and commit under the directory.
 If this transaction was then discarded, or crashed before `Committing`, the recursive delete below removed their committed work.
