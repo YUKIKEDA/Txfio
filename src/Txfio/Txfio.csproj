@@ -5,7 +5,7 @@
     <AssemblyName>Txfio</AssemblyName>
     <IsPackable>true</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>0.2.0</VersionPrefix>
     <PackageId>Txfio</PackageId>
     <Authors>YUKIKEDA</Authors>
     <Description>Transactional file IO for Windows (NTFS/SMB), inspired by git staging and commit.</Description>
@@ -21,7 +21,17 @@
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     <PackageTags>filesystem;transaction;windows;ntfs;smb</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>First release of transactional file IO for Windows (NTFS and SMB).</PackageReleaseNotes>
+    <PackageReleaseNotes>
+0.2.0 has breaking changes. A crashed transaction no longer blocks the whole work folder.
+
+Breaking changes:
+- BeginAsync no longer throws RecoveryRequiredException. Staging methods and CommitAsync throw it only for paths that recovering a crashed transaction may change; RecoveryRequiredException.Path is the overlapping path (the work folder when the journal cannot be read).
+- RecoverAsync holds the work folder as shared and recovers each crashed journal while holding the locks on its paths, so it runs while other transactions are alive. It no longer throws LockContentionException because a transaction is alive. The new RecoverResult.Contended reports journals whose paths another transaction still holds.
+- CreateDirectoryAsync reserves its directory until the transaction ends: other transactions get LockContentionException when they stage under it.
+- Do not let a 0.1.0 client share a work folder with this version; the two lock the work folder in incompatible ways. A share-lost.lock left by 0.1.0 is neither used nor deleted.
+
+Details: https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.md
+    </PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
