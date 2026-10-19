@@ -274,17 +274,18 @@ public sealed class DirectoryMoveTests
     /// A transaction that waits for an exclusive intent lock keeps the shared work-folder lock.
     /// </summary>
     /// <remarks>
-    /// <para>Given: holder has staged sub/a.txt (so it holds the intent lock of sub as shared), and mover has a 3-second wait.</para>
-    /// <para>When: mover moves sub to other, and while it waits, another set tries to take the work-folder lock exclusively. Then holder is disposed.</para>
-    /// <para>Then: the exclusive attempt throws LockContentionException with Path set to the work folder, and the Move is scheduled after holder is disposed.</para>
+    /// <para>Given: a lock set holds the intent lock of sub as shared (through a path lock on sub/a.txt) without the work-folder lock, so mover is the only work-folder holder. mover has a 3-second wait.</para>
+    /// <para>When: mover moves sub to other, and while it waits, another set tries to take the work-folder lock exclusively. Then the lock set is released.</para>
+    /// <para>Then: the exclusive attempt throws LockContentionException with Path set to the work folder, and the Move is scheduled after the lock set is released.</para>
     /// </remarks>
     [Fact]
     public async Task MoveAsync_KeepsSharedWorkFolderLockWhileWaitingForExclusiveIntent()
     {
         await using TempDirectory work = TempDirectory.Create();
-        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await holder.WriteAllTextAsync("sub/a.txt", "a");
+        string sub = System.IO.Path.Combine(work.Path, "sub");
+        Directory.CreateDirectory(sub);
+        PathLockSet blocker = new PathLockSet();
+        await blocker.AcquireAsync(work.Path, new[] { System.IO.Path.Combine(sub, "a.txt") }, default);
         await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(3));
         Task moving = mover.MoveAsync("sub", "other");
         await Task.Delay(200);
@@ -293,12 +294,12 @@ public sealed class DirectoryMoveTests
         PathLockSet exclusive = new PathLockSet();
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
             () => exclusive.AcquireExclusiveAsync(work.Path, default));
-        await holder.DisposeAsync();
+        exclusive.Release();
+        blocker.Release();
         await moving;
 
         Assert.Equal(work.Path, contention.Path);
         Assert.Single(mover.GetPendingChanges());
-        exclusive.Release();
     }
 
     /// <summary>
