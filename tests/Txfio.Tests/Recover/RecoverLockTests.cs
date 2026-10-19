@@ -43,15 +43,15 @@ public sealed class RecoverLockTests
     }
 
     /// <summary>
-    /// While another transaction holds a lock, Recover does not proceed, and that transaction can still commit a path outside the orphan's footprint.
+    /// While another transaction holds a lock outside the orphan's footprint, Recover processes the orphan.
     /// </summary>
     /// <remarks>
     /// <para>Given: after holder begins, an Add of a.txt is stopped at AfterCommitting and disposed. holder has added b.txt.</para>
-    /// <para>When: RecoverAsync runs, and holder calls CommitAsync. After holder is disposed, RecoverAsync runs again.</para>
-    /// <para>Then: the first Recover is LockContentionException and a.txt does not exist. The commit succeeds and b.txt exists. The second is RolledForward, and a.txt has the stopped Add content.</para>
+    /// <para>When: RecoverAsync runs, and holder calls CommitAsync.</para>
+    /// <para>Then: Recover is RolledForward and a.txt has the stopped Add content. The commit succeeds and b.txt exists.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_DoesNotProcessWhileRetakenLockExists()
+    public async Task RecoverAsync_ProcessesOrphanWhileAnotherTransactionHoldsUnrelatedPath()
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -70,19 +70,13 @@ public sealed class RecoverLockTests
             await using MemoryStream heldContent = LeftoverAddFiles.Utf8Stream("held");
             await holder.AddAsync("b.txt", heldContent);
 
-            LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-                () => global::Txfio.Txfio.RecoverAsync(work.Path));
-            Assert.Equal(work.Path, contention.Path);
-            Assert.False(File.Exists(target));
+            RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+            Assert.Equal(RecoverResult.RolledForward, result.Result);
+            Assert.Equal("staged", await File.ReadAllTextAsync(target));
 
             Assert.Equal(CommitResult.Succeeded, (await holder.CommitAsync()).Result);
             Assert.Equal("held", await File.ReadAllTextAsync(held));
         }
-
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
-        Assert.Equal(RecoverResult.RolledForward, result.Result);
-        Assert.Equal("staged", await File.ReadAllTextAsync(target));
-        Assert.Equal("held", await File.ReadAllTextAsync(held));
     }
 
     /// <summary>
@@ -121,12 +115,12 @@ public sealed class RecoverLockTests
     }
 
     /// <summary>
-    /// While a live transaction holds locks, Recover does nothing, so the lock files remain.
+    /// While a live transaction holds the shared work-folder lock, Recover skips the lock-file cleanup.
     /// </summary>
     /// <remarks>
     /// <para>Given: a transaction has added a.txt.</para>
     /// <para>When: RecoverAsync runs.</para>
-    /// <para>Then: LockContentionException, and the lock file of a.txt remains.</para>
+    /// <para>Then: NoPendingTransactions without an exception, and the lock file of a.txt remains.</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_KeepsLockFilesWhileTransactionIsAlive()
@@ -136,7 +130,7 @@ public sealed class RecoverLockTests
         await holder.WriteAllTextAsync("a.txt", "a");
         string lockFile = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
 
-        await Assert.ThrowsAsync<LockContentionException>(() => global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
 
         Assert.True(File.Exists(lockFile));
     }

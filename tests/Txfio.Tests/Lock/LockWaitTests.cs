@@ -274,26 +274,26 @@ public sealed class LockWaitTests
     }
 
     /// <summary>
-    /// Recovery also waits until the work-folder lock is free.
+    /// Recovery waits until it can take the work-folder lock as shared.
     /// </summary>
     /// <remarks>
-    /// <para>Given: a transaction has added a.txt.</para>
-    /// <para>When: Recover with a 300 ms wait fails, the transaction is disposed, and Recover runs with a 2-second wait.</para>
+    /// <para>Given: the metadata folder exists, and the work-folder lock is held exclusively (as the lock-file cleanup of another RecoverAsync does).</para>
+    /// <para>When: Recover with a 300 ms wait fails, the exclusive lock is released, and Recover runs with a 2-second wait.</para>
     /// <para>Then: the first is LockContentionException with Path set to the work folder, and the second is NoPendingTransactions.</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_WaitsUntilWorkFolderLockIsFree()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
-        await holder.AddAsync("a.txt", held);
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
+        PathLockSet holder = new PathLockSet();
+        await holder.AcquireExclusiveAsync(work.Path, LockAttempt.Start(TimeSpan.Zero, CancellationToken.None));
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
             () => global::Txfio.Txfio.RecoverAsync(work.Path, TimeSpan.FromMilliseconds(300)));
 
         Assert.Equal(System.IO.Path.GetFullPath(work.Path), contention.Path);
-        await holder.DisposeAsync();
+        holder.Release();
         RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path, TimeSpan.FromSeconds(2));
         Assert.Equal(RecoverResult.NoPendingTransactions, report.Result);
     }

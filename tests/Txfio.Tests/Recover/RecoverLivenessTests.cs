@@ -5,15 +5,15 @@ namespace Txfio.Tests.Recover;
 public sealed class RecoverLivenessTests
 {
     /// <summary>
-    /// While a transaction is making changes, Recover cannot take the work-folder lock and does nothing.
+    /// While a transaction is making changes, Recover runs but skips its journal.
     /// </summary>
     /// <remarks>
     /// <para>Given: a transaction has an Add and a CreateDirectory, and has written into the created directory with the plain file API.</para>
     /// <para>When: RecoverAsync runs without Dispose or commit, then CommitAsync runs on the same transaction.</para>
-    /// <para>Then: LockContentionException (Path is the work folder); the journal, the .txnew, and the directory contents remain; and the commit is Succeeded.</para>
+    /// <para>Then: NoPendingTransactions with no journals listed; the journal, the .txnew, and the directory contents remain; and the commit is Succeeded.</para>
     /// </remarks>
     [Fact]
-    public async Task RecoverAsync_DoesNothingWithLockContentionWhileTransactionIsActive()
+    public async Task RecoverAsync_SkipsJournalWhileTransactionIsActive()
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
@@ -25,10 +25,10 @@ public sealed class RecoverLivenessTests
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(raw, "raw");
 
-        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => global::Txfio.Txfio.RecoverAsync(work.Path));
+        RecoverReport skipped = await global::Txfio.Txfio.RecoverAsync(work.Path);
 
-        Assert.Equal(work.Path, contention.Path);
+        Assert.Equal(RecoverResult.NoPendingTransactions, skipped.Result);
+        Assert.Empty(skipped.Journals);
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Equal("raw", await File.ReadAllTextAsync(raw));
@@ -94,7 +94,7 @@ public sealed class RecoverLivenessTests
     /// <remarks>
     /// <para>Given: an Add is stopped at AfterCommitting and not disposed yet.</para>
     /// <para>When: RecoverAsync runs, the transaction is disposed, and RecoverAsync runs again.</para>
-    /// <para>Then: the first is LockContentionException and the target does not exist; the second is RolledForward and the target has the Add content.</para>
+    /// <para>Then: the first is NoPendingTransactions and the target does not exist; the second is RolledForward and the target has the Add content.</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_DoesNotTouchCommittingWhileOwnerIsAlive()
@@ -111,7 +111,7 @@ public sealed class RecoverLivenessTests
 
         await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
 
-        await Assert.ThrowsAsync<LockContentionException>(() => global::Txfio.Txfio.RecoverAsync(work.Path));
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.False(File.Exists(target));
 
         await tx.DisposeAsync();

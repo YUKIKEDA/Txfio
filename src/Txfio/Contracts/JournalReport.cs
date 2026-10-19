@@ -10,7 +10,7 @@ public sealed class JournalReport
     /// </summary>
     /// <param name="transactionId">The transaction ID of the journal.</param>
     /// <param name="result">The result of that journal.</param>
-    /// <param name="operations">The operations skipped because of conflicts (empty when there is no conflict, and when the journal is unreadable).</param>
+    /// <param name="operations">The operations skipped because of conflicts (empty when there is no conflict, when the journal is unreadable, and when it is contended).</param>
     public JournalReport(Guid transactionId, RecoverResult result, IReadOnlyList<OperationReport> operations)
     {
         ArgumentNullException.ThrowIfNull(operations);
@@ -30,7 +30,7 @@ public sealed class JournalReport
     public RecoverResult Result { get; }
 
     /// <summary>
-    /// Gets the operations skipped because of conflicts (empty when there is no conflict, and when the journal is unreadable).
+    /// Gets the operations skipped because of conflicts (empty when there is no conflict, when the journal is unreadable, and when it is contended).
     /// </summary>
     public IReadOnlyList<OperationReport> Operations { get; }
 }
