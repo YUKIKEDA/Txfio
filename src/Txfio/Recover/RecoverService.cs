@@ -247,7 +247,7 @@ internal static class RecoverService
         tally.Add(journalPath, new JournalReport(transactionId, RecoverResult.JournalUnreadable, Array.Empty<OperationReport>()));
     }
 
-    // Optional last step: only when the exclusive work-folder lock and the share-lost marker are free right now. No failure here is thrown, because every journal has already been processed.
+    // Optional last step: only when the exclusive work-folder lock is free right now. No failure here is thrown, because every journal has already been processed.
     private static async Task TryDeleteLockFilesAsync(string workFolder)
     {
         PathLockSet exclusive = new PathLockSet();
@@ -255,7 +255,6 @@ internal static class RecoverService
         {
             LockAttempt once = LockAttempt.Start(TimeSpan.Zero, CancellationToken.None);
             await exclusive.AcquireExclusiveAsync(workFolder, once).ConfigureAwait(false);
-            await exclusive.RejectForeignLocksAsync(workFolder, once).ConfigureAwait(false);
             DeleteLockFiles(workFolder);
         }
         catch (LockContentionException)
@@ -272,7 +271,7 @@ internal static class RecoverService
         }
     }
 
-    // While the whole work folder is held exclusively, no other transaction holds a path lock or intent lock (holding one needs the shared work-folder lock or the share-lost marker).
+    // While the whole work folder is held exclusively, no other transaction holds a path lock or intent lock (a transaction holds the shared work-folder lock for as long as it holds any).
     private static void DeleteLockFiles(string workFolder)
     {
         string lockFolder = MetadataNames.LockFolderPath(workFolder);
