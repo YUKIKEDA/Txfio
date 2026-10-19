@@ -1369,6 +1369,7 @@ For both files and directories, the lock for a path is `.txfio/locks/{hex}.lock`
 - Transactions that touch different paths can run in parallel while they share the work-folder lock
 - `RecoverAsync` holds it as shared too. Only the lock-file cleanup at the end of `RecoverAsync` takes it exclusively, once and without waiting ("Cleaning up lock files")
 - Every operation holds the work-folder lock as shared; intent locks protect what is under a directory
+- A transaction holds the shared work-folder lock for as long as it holds any path lock or intent lock, including while it waits for another lock. When it ends, it closes its path locks and intent locks first, then the work-folder lock
 - Scheduling under a directory: "Intent locks"
 
 Previously, directory Move, `DeleteTree`, directory Copy and Import, `CreateDirectory`, ZIP creation from a directory, and extract took the work-folder lock exclusively during the call.
@@ -1446,31 +1447,18 @@ The order is below. The waits share the one deadline from "When contention is de
 
 ### The share-lost marker
 
-Just before letting go of the work-folder lock while still holding a path lock or intent lock, a transaction opens one `.txfio/share-lost.lock`.
-It is not placed in `.txfio/locks/`.
-It is opened with `FileMode.OpenOrCreate`, `FileAccess.ReadWrite`, `FileShare.ReadWrite`.
-`DeleteOnClose` is not used,
-because once a closed handle marks the file for deletion, it cannot be reopened while others still hold it.
-Several transactions can hold it at the same time.
-It is not opened when the transaction holds no path lock or intent lock.
-The handle is closed after the work-folder lock is held again (shared or exclusive), or when all path locks and intent locks are closed.
-Discard closes this handle together with the locks it holds, even without the work-folder lock.
-If it cannot be opened, the work-folder lock is not let go, and that exception is returned.
-While the work-folder lock is already lost, the handle opened before letting go is kept open.
-When a process crashes, the OS closes the handle.
-Even if the file remains, it is not in use when nobody holds it, because the exclusive check can open it.
+Removed.
+A transaction never lets go of the shared work-folder lock while it holds a path lock or intent lock ("The work-folder lock"), so there is nothing for a marker to report.
+An existing `.txfio/share-lost.lock` left by an earlier version is neither opened nor deleted, because deleting it is not needed.
 
-Only the lock-file cleanup of `RecoverAsync` takes the exclusive work-folder lock ("Cleaning up lock files").
-After it is taken, the cleanup opens only this file with `FileMode.Open`, `FileAccess.ReadWrite`, `FileShare.None`.
-`DeleteOnClose` is not used.
-If the file does not exist, no transaction holds other locks without the work-folder lock.
-If it opens, it is closed right away, and it is not in use.
-On a sharing violation it is in use, and the cleanup deletes nothing. It does not reopen or wait.
-Failures other than a sharing violation are returned as that exception.
-`.txfio/locks/` is not enumerated for this check.
-The handle used for the check is closed right away.
-The path `.lock` files and intent lock files stay.
-`RecoverAsync` deletes them ("Cleaning up lock files").
+Clients of an earlier version must not share a work folder with this version.
+For example, a 0.1.0 transaction lets go of the shared work-folder lock while it waits for an exclusive intent lock and relies on the marker, but the lock-file cleanup no longer checks the marker, so it could delete lock files that transaction holds.
+A 0.1.0 `BeginAsync` also rejects any orphan, and a 0.1.0 `RecoverAsync` holds the work-folder lock exclusively for the whole call.
+
+Previously, a transaction let go of the shared work-folder lock while it waited for an exclusive intent lock, so that `RecoverAsync` could raise the work-folder lock to exclusive.
+Before letting go, it opened this marker, and the exclusive holder checked that the marker was free.
+When it could not take the shared lock back, it remembered the work-folder lock as lost.
+Nothing waits for the exclusive work-folder lock any more ("Cleaning up lock files"), so the drop, the marker, and the lost state are gone.
 
 ### When contention is detected
 
@@ -1502,9 +1490,9 @@ Cancellation after the locks are taken works as each API already does (after the
 
 It waits only when it opens something intending to hold it as a lock and gets a sharing violation:
 the shared work-folder lock, intent locks, path locks, and the shared work-folder lock of `RecoverAsync`. `RecoverAsync` retries the footprint locks of a journal in rounds within the same deadline ("Recover API").
-The exclusive work-folder lock and the share-lost marker check of the lock-file cleanup do not wait ("Cleaning up lock files").
+The exclusive work-folder lock of the lock-file cleanup does not wait ("Cleaning up lock files").
 The exclusive intent lock is held until the transaction ends ("Intent locks").
-While waiting for a path lock or intent lock, the work-folder lock already taken and the locks taken earlier in lexical order are kept.
+While waiting for a path lock or intent lock, including an exclusive intent lock, the work-folder lock already taken and the locks taken earlier in lexical order are kept.
 If it cannot be taken by the deadline, `LockContentionException`, with `Path` set to the path that could not be taken.
 On cancellation, the locks already taken are kept too.
 
@@ -1553,15 +1541,14 @@ While it does, no live transaction holds a path that overlaps the footprint.
 `.txfio/locks/*.lock` for path locks and intent locks grows by one per touched path and each of its ancestors.
 `RecoverAsync` deletes them as a last step, after every journal is processed and the locks taken for the journals are closed.
 It closes its shared work-folder lock and opens the work-folder lock exclusively, once and without waiting.
-If that opens, it checks the share-lost marker once, without waiting ("The share-lost marker").
-When both are free, it deletes `*.lock` in `.txfio/locks/`, then closes the work-folder lock.
-At that point no other transaction holds a path lock or intent lock (holding one requires the shared work-folder lock or the marker), so there is no race where someone has a deleted file open.
-When either is in use (a sharing violation), it closes what it opened, deletes nothing, and returns the report as usual.
+If that opens, it deletes `*.lock` in `.txfio/locks/`, then closes the work-folder lock.
+At that point no other transaction holds a path lock or intent lock (holding one requires the shared work-folder lock, "The work-folder lock"), so there is no race where someone has a deleted file open.
+When the work-folder lock is in use (a sharing violation), it deletes nothing and returns the report as usual.
 This is not an error and is not reported. Lock files that stay only use disk space, and a later `RecoverAsync` deletes them.
 Other failures in this step are not thrown either: every journal has already been processed, and throwing would lose the `RecoverReport`.
 When an operation locks the same path after the delete, it recreates the file with `FileMode.OpenOrCreate`.
 Files that cannot be deleted (sharing violation, access denied) are left and it continues.
-The liveness locks (`tx-{guid}.lock`) and the marker (`share-lost.lock`) are not deleted.
+The liveness locks (`tx-{guid}.lock`) and a `share-lost.lock` left by an earlier version are not deleted.
 Only one level of `.txfio/locks/` is enumerated; the work folder is not walked.
 If `.txfio/` does not exist, nothing happens.
 
@@ -1896,7 +1883,6 @@ When none is passed, `TimeSpan.Zero`.
 When the work-folder lock cannot be opened by the deadline, it returns `LockContentionException` (`Path` is the work folder), processing nothing.
 When cancelled while waiting, it also processes nothing and returns `OperationCanceledException`.
 The shared work-folder lock is held until the end of the call, and its `.lock` is not deleted when closed.
-It does not check the share-lost marker before processing: a transaction that holds locks without the work-folder lock still holds its path locks and intent locks, and the footprint locks below conflict with them.
 If `.txfio/` does not exist, it returns `NoPendingTransactions` without opening the work-folder lock.
 
 Stale means that the journal's liveness lock `.txfio/tx-{guid}.lock` can be opened with `FileMode.OpenOrCreate`, `FileShare.None`, `FileOptions.DeleteOnClose`.
