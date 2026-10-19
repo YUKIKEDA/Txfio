@@ -1486,7 +1486,7 @@ Then it throws `OperationCanceledException`, not `LockContentionException`.
 Cancellation after the locks are taken works as each API already does (after the commit's apply starts, the token is not observed).
 
 It waits only when it opens something intending to hold it as a lock and gets a sharing violation:
-the shared work-folder lock, intent locks, path locks, and the shared work-folder lock and footprint locks of `RecoverAsync` ("Recover API").
+the shared work-folder lock, intent locks, path locks, and the shared work-folder lock of `RecoverAsync`. `RecoverAsync` retries the footprint locks of a journal in rounds within the same deadline ("Recover API").
 The exclusive work-folder lock of the lock-file cleanup does not wait ("Cleaning up lock files").
 The exclusive intent lock is held until the transaction ends ("Intent locks").
 While waiting for a path lock or intent lock, including an exclusive intent lock, the work-folder lock already taken and the locks taken earlier in lexical order are kept.
@@ -1542,7 +1542,7 @@ If that opens, it deletes `*.lock` in `.txfio/locks/`, then closes the work-fold
 At that point no other transaction holds a path lock or intent lock (holding one requires the shared work-folder lock, "The work-folder lock"), so there is no race where someone has a deleted file open.
 When the work-folder lock is in use (a sharing violation), it deletes nothing and returns the report as usual.
 This is not an error and is not reported. Lock files that stay only use disk space, and a later `RecoverAsync` deletes them.
-Failures other than a sharing violation are returned as that exception.
+Other failures in this step are not thrown either: every journal has already been processed, and throwing would lose the `RecoverReport`.
 When an operation locks the same path after the delete, it recreates the file with `FileMode.OpenOrCreate`.
 Files that cannot be deleted (sharing violation, access denied) are left and it continues.
 The liveness locks (`tx-{guid}.lock`) and a `share-lost.lock` left by an earlier version are not deleted.
@@ -1620,6 +1620,11 @@ The owner is gone, so no one writes it; readers open it for reading and allow ot
 A journal that is gone, or is being deleted, when it is read is not an orphan any more (`RecoverAsync` finished it).
 Failures other than a sharing violation, and `IOException` from reading, are returned as that exception.
 Each check lists `.txfio/` once and opens one liveness lock per live journal; on SMB each open is one CreateFile.
+Staging n paths while k other transactions are alive costs n listings and n × k opens.
+This cost is accepted: staging already writes the journal and a `.txnew`, and k is the number of concurrent transactions.
+The opens cannot be skipped when the listing is unchanged, because a live transaction can crash without its journal changing.
+The staging check stops wasted work early; correctness rests on the commit check, which always opens.
+A new orphan that a staging check missed is still caught at commit, at the cost of holding a footprint lock, so `RecoverAsync` reports that journal as `Contended` until this transaction ends.
 
 `BeginAsync` does not check.
 The check happens in two places
@@ -1642,7 +1647,7 @@ While the owner was alive its locks kept this transaction off its paths, but a f
 `RecoverAsync` holds the work-folder lock as shared, so it can run at the same time as these checks.
 It processes a journal only while it holds the liveness lock and the footprint locks ("Recover API").
 So when a check takes a sharing violation because `RecoverAsync` is processing the journal, the footprint is locked: this transaction neither holds a path that overlaps it nor can take one.
-Before it takes the footprint locks, `RecoverAsync` opens the liveness lock only for the short time it reads the journal (the window below).
+Before it holds the footprint locks, `RecoverAsync` opens the liveness lock only to open and close it (the window below).
 
 A liveness lock can be opened by only one handle at a time, so while another transaction's check has the same orphan's liveness lock open, it is taken to be alive because of the sharing violation.
 This very short window is accepted, with no retry (a live transaction always gives a sharing violation, and waiting would delay every staging call and commit).
@@ -1882,26 +1887,31 @@ When the file does not exist (a crashed transaction, or a journal left by a vers
 On a sharing violation, the owner is alive (in the same process or another), so the journal is skipped: it is not deleted, and neither its `.txnew` files nor its `CreateDirectory` directories are touched.
 Failures other than a sharing violation are returned as that exception.
 
-Each journal is processed in these steps:
+Each journal is processed in these steps. Within the steps, every lock is tried once, without waiting:
 
 1. Open the liveness lock. On a sharing violation, the owner is alive: skip the journal without reading it, and do not list it.
-   If it opens, read the journal while holding it. If the journal is gone, the owner finished normally: close the lock and do not count it. If it is unreadable, follow "Unreadable journals".
-   Then close the liveness lock
+   If it opens, close it right away, then read the journal, as the transaction check does ("Rejecting while an orphaned journal exists").
+   If the journal is gone, the owner or another `RecoverAsync` finished it: do not count it. If it is unreadable, follow "Unreadable journals"
 2. Take the locks of its footprint ("The footprint of an orphaned journal"): the shared intent locks of the ancestors, then the exclusive intent lock of each entry, then the path lock of each entry, in the order of "Intent locks".
-   The waits share the call's one deadline.
    Locks already held by this call are not reopened.
-   If one cannot be taken by the deadline, close the locks taken for this journal, list the journal as `Contended`, and go on to the next journal
-3. Open the liveness lock again, waiting within the same deadline like a lock ("When contention is detected").
-   If it is not opened by the deadline, close the locks taken for this journal and list it as `Contended`.
+   If one cannot be taken, close the locks taken for this journal; the journal is retried
+3. Open the liveness lock again. On a sharing violation (another opener, for a moment), close the locks taken for this journal; the journal is retried.
    If the journal is gone, another `RecoverAsync` finished it: close the locks and do not count it
 4. Process the journal while holding the liveness lock and the footprint locks. After the journal is deleted, close the liveness lock, then the footprint locks
 
+The first pass goes through every journal in order.
+The journals to retry are then tried again until the call's deadline (`lockWait`), in rounds on the 100 ms interval of "When contention is detected".
+Each round tries each remaining journal once, in order, starting from step 2 (it is known to be orphaned, and its footprint is known).
+So one journal whose paths are held does not hold back the others, even with `Timeout.InfiniteTimeSpan`.
+With `TimeSpan.Zero` there are no rounds.
+A journal still not processed at the deadline is listed as `Contended`, unless it is gone by then (another `RecoverAsync` finished it), in which case it is not counted.
+When cancelled while waiting between rounds, it closes the locks taken for the journals and the work-folder lock, and returns `OperationCanceledException`. Journals processed earlier are not undone.
+
 The journal of a live transaction is never read, because the owner writes it with `FileShare.None` and a reader would make that write fail.
 An orphaned journal no longer changes, so what step 1 read is what step 4 processes.
-The liveness lock is closed while the footprint locks are taken, because the wait can be long, and a transaction's orphan check takes a held liveness lock as a live owner.
+The liveness lock is not held while the journal is read or while the footprint locks are taken, because a transaction's orphan check takes a held liveness lock as a live owner.
+The opens in steps 1 and 3 are the same kind of short window as two checks opening the same liveness lock, and are accepted the same way.
 While the journal is processed, the footprint locks are held, so a check that takes the sharing violation as a live owner holds no path that overlaps the footprint and cannot take one ("Rejecting while an orphaned journal exists").
-The short open in step 1 is the same kind of window as two checks opening the same liveness lock, and is accepted the same way.
-When cancelled while waiting in step 2 or 3, it closes the locks taken for that journal and the work-folder lock, and returns `OperationCanceledException`. Journals processed earlier are not undone.
 Even when an operation matches neither Before nor After during roll-forward, the remaining operations continue to be applied, and the journal is deleted after the `.txnew` of the operations that were not applied are deleted.
 The result reports `ConflictDetected` only once, and the next `RecoverAsync` does not process that journal again.
 Even if `RecoverAsync` runs concurrently on the same work folder, one side cannot take the footprint locks or the liveness lock and skips the journal, so the same journal is never processed twice.
