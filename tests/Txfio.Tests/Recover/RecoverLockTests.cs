@@ -43,12 +43,12 @@ public sealed class RecoverLockTests
     }
 
     /// <summary>
-    /// With a lock retaken after a crashed transaction, neither commit nor Recover proceeds.
+    /// While another transaction holds a lock, Recover does not proceed, and that transaction can still commit a path outside the orphan's footprint.
     /// </summary>
     /// <remarks>
-    /// <para>Given: after holder begins, an Add is stopped at AfterCommitting and disposed. holder has added another path.</para>
+    /// <para>Given: after holder begins, an Add of a.txt is stopped at AfterCommitting and disposed. holder has added b.txt.</para>
     /// <para>When: RecoverAsync runs, and holder calls CommitAsync. After holder is disposed, RecoverAsync runs again.</para>
-    /// <para>Then: the first Recover is LockContentionException and the target does not exist. The commit throws RecoveryRequiredException and holder's target does not exist either. The second is RolledForward, and the target has the stopped Add content.</para>
+    /// <para>Then: the first Recover is LockContentionException and a.txt does not exist. The commit succeeds and b.txt exists. The second is RolledForward, and a.txt has the stopped Add content.</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_DoesNotProcessWhileRetakenLockExists()
@@ -75,14 +75,14 @@ public sealed class RecoverLockTests
             Assert.Equal(work.Path, contention.Path);
             Assert.False(File.Exists(target));
 
-            await Assert.ThrowsAsync<RecoveryRequiredException>(() => holder.CommitAsync());
-            Assert.False(File.Exists(held));
+            Assert.Equal(CommitResult.Succeeded, (await holder.CommitAsync()).Result);
+            Assert.Equal("held", await File.ReadAllTextAsync(held));
         }
 
         RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
-        Assert.False(File.Exists(held));
+        Assert.Equal("held", await File.ReadAllTextAsync(held));
     }
 
     /// <summary>

@@ -32,7 +32,7 @@ Until you call `CommitAsync`, the new content is kept in a `.txnew` file in the 
 | `PartialConflict` | External interference during apply. The commit still went through    |
 | `Failed`          | The check before apply failed. The real paths have not changed yet   |
 
-The next `RecoverAsync` rolls a crashed journal back or forward. `RecoverReport.Result` is `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable`. The journals it processed are in `Journals`, in lexical order of the path ignoring case. For `ConflictDetected`, the skipped operations are listed there too. Journals of transactions that are still alive, in another process or in this one, are not touched and are not in `Journals`. While a crashed journal remains, `BeginAsync` and `CommitAsync` throw `RecoveryRequiredException`. A journal that cannot be read as JSON is not deleted, so the same exception stays until you fix or delete it.
+The next `RecoverAsync` rolls a crashed journal back or forward. `RecoverReport.Result` is `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable`. The journals it processed are in `Journals`, in lexical order of the path ignoring case. For `ConflictDetected`, the skipped operations are listed there too. Journals of transactions that are still alive, in another process or in this one, are not touched and are not in `Journals`. While a crashed journal remains, staging and `CommitAsync` on a path it touched throw `RecoveryRequiredException`; other paths stay usable. A journal that cannot be read as JSON is not deleted, and blocks every path until you fix or delete it.
 
 ## What it cannot do
 
@@ -158,9 +158,9 @@ flowchart TD
 
 `ConflictDetected` means someone changed a file after the crash, and it can be neither rolled back nor forward safely. That operation is skipped, the others go forward, and the `.txnew` files and journal are deleted. The skipped operations are in `Journals` of that call. The next `RecoverAsync` does not retry.
 
-`JournalUnreadable` means the journal cannot be read as JSON. The journal stays, and only the `.txnew` files identified by the file name are deleted. Directories made with `CreateDirectoryAsync` cannot be identified, so they stay. Until you fix or delete it, `BeginAsync` and `CommitAsync` stay `RecoveryRequiredException`. If even one journal is unreadable, this result is returned even after the others are processed.
+`JournalUnreadable` means the journal cannot be read as JSON. The journal stays, and only the `.txnew` files identified by the file name are deleted. Directories made with `CreateDirectoryAsync` cannot be identified, so they stay. Until you fix or delete it, staging and `CommitAsync` on any path stay `RecoveryRequiredException`. If even one journal is unreadable, this result is returned even after the others are processed.
 
-While a crashed journal remains, a new transaction gets `RecoveryRequiredException` from both `BeginAsync` and `CommitAsync`. This keeps recovery from deleting data committed under a directory after the crash. When `CommitAsync` refuses, it has not touched the real files. Dispose the transaction, then call `RecoverAsync`.
+While a crashed journal remains, a transaction gets `RecoveryRequiredException` when it stages, or commits, a path that recovering that journal may change: the paths of a journal that had started to commit, and the directories it created (with everything under them). `BeginAsync` does not check, and other paths stay usable. This keeps recovery from deleting data committed under a directory after the crash. When `CommitAsync` refuses, it has not touched the real files. Dispose the transaction, then call `RecoverAsync`.
 
 `RecoverAsync` does not run automatically. Call it first every time you open the folder. Also call it first when leftover `.txnew` files may remain after deleting a whole directory or moving a directory.
 
@@ -513,11 +513,11 @@ Commit success or failure is not an exception. Check `CommitReport.Result`. Reje
 | Already staged by another operation, Move or Copy under itself, a reparse point inside                     | `InvalidOperationException`     |
 | The path is outside the work folder, the Import source is inside, the Export destination is inside         | `ArgumentException`             |
 | Another Txfio holds the path or the work folder                                                             | `LockContentionException`       |
-| A crashed journal remains (call `RecoverAsync` first)                                                       | `RecoveryRequiredException`     |
+| The path overlaps what a crashed journal may change (call `RecoverAsync` first)                             | `RecoveryRequiredException`     |
 | Cannot be read as JSON                                                                                      | `JsonException`                 |
 | A dangerous ZIP entry name, or a corrupt ZIP                                                                | `InvalidDataException`          |
 
-`ExternalConflictException` and `LockContentionException` have one failed path. The `Path` of `RecoveryRequiredException` is the work folder.
+`ExternalConflictException` and `LockContentionException` have one failed path. The `Path` of `RecoveryRequiredException` is the overlapping path, or the work folder when the journal cannot be read.
 
 ## TxFileManager and SQLite
 

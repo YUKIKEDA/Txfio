@@ -10,7 +10,7 @@ public sealed class CommitApplyExceptionTests
     /// <remarks>
     /// <para>Given: a CreateDirectory and an Add under it are staged.</para>
     /// <para>When: CommitAsync throws FileNotFoundException at the start of apply, then the transaction is disposed and RecoverAsync runs.</para>
-    /// <para>Then: the exception reaches the caller as is; the directory, the .txnew, and the journal remain; after Recover the result is RolledForward and the target has the Add content.</para>
+    /// <para>Then: the exception reaches the caller as is; the directory, the .txnew, and the journal remain; another transaction cannot stage d/b.txt under the directory; after Recover the result is RolledForward and the target has the Add content.</para>
     /// </remarks>
     [Fact]
     public async Task CommitAsync_ExceptionDuringApplyKeepsStateAndRecoverFinishesAdd()
@@ -34,7 +34,13 @@ public sealed class CommitApplyExceptionTests
         Assert.False(File.Exists(target));
         Assert.Single(Directory.GetFiles(tree, "*.txnew"));
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
-        await Assert.ThrowsAsync<RecoveryRequiredException>(() => global::Txfio.Txfio.BeginAsync(work.Path));
+        await using (ITransaction other = await global::Txfio.Txfio.BeginAsync(work.Path))
+        {
+            await using MemoryStream inside = LeftoverAddFiles.Utf8Stream("inside");
+            RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
+                () => other.AddAsync("d/b.txt", inside));
+            Assert.Equal(System.IO.Path.Combine(tree, "b.txt"), required.Path);
+        }
 
         Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));

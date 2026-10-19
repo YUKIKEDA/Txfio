@@ -316,13 +316,10 @@ internal sealed partial class Transaction
         }
 
         EnsureCopyDestinationFree(archive);
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
-                _workFolder,
+        using PathLockSet.ReadingScope reading = await LockForReadingAsync(
                 roots.Select(static root => root.SourcePath).Append(archive).ToArray(),
                 Array.Empty<string>(),
-                roots.Where(static root => root.IsDirectory).Select(static root => root.SourcePath).ToArray(),
-                _lockAttempt)
+                roots.Where(static root => root.IsDirectory).Select(static root => root.SourcePath).ToArray())
             .ConfigureAwait(false);
         foreach (ArchiveRoot root in roots)
         {

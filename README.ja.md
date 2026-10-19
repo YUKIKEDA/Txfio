@@ -32,7 +32,7 @@ CommitReport report = await tx.CommitAsync();
 | `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
 | `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
 
-落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。処理したジャーナルは `Journals` に、パスの大文字小文字を無視した辞書順で載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` です。JSON として読めないジャーナルは消さないので、直すか消すまで同じ例外のままです。
+落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` です。処理したジャーナルは `Journals` に、パスの大文字小文字を無視した辞書順で載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、それが触ったパスへのステージと `CommitAsync` は `RecoveryRequiredException` です。ほかのパスはそのまま使えます。JSON として読めないジャーナルは消さず、直すか消すまですべてのパスを止めます。
 
 ## できないこと
 
@@ -158,9 +158,9 @@ flowchart TD
 
 `ConflictDetected` は、落ちたあとにだれかがファイルを変えていて、戻すことも進めることも安全にできないときです。その操作は飛ばし、ほかの操作は進めて、`.txnew` とジャーナルを消します。飛ばした操作は、そのときの `Journals` に載ります。次の `RecoverAsync` はやり直しません。
 
-`JournalUnreadable` は、ジャーナルが JSON として読めないときです。ジャーナルは残し、ファイル名から分かる `.txnew` だけ消します。`CreateDirectoryAsync` で作ったディレクトリは特定できないので残します。直すか消すまで、`BeginAsync` と `CommitAsync` は `RecoveryRequiredException` のままです。1 件でも読めなければ、ほかを処理したあともこの結果を返します。
+`JournalUnreadable` は、ジャーナルが JSON として読めないときです。ジャーナルは残し、ファイル名から分かる `.txnew` だけ消します。`CreateDirectoryAsync` で作ったディレクトリは特定できないので残します。直すか消すまで、どのパスへのステージと `CommitAsync` も `RecoveryRequiredException` のままです。1 件でも読めなければ、ほかを処理したあともこの結果を返します。
 
-落ちたジャーナルが残っているあいだ、新しいトランザクションは `BeginAsync` でも `CommitAsync` でも `RecoveryRequiredException` です。落ちたあとに配下へ確定したデータを、復旧が消さないようにするためです。`CommitAsync` で断られたときは本物に触れていません。破棄してから `RecoverAsync` を呼びます。
+落ちたジャーナルが残っているあいだ、そのジャーナルの復旧が変えうるパスをステージまたはコミットすると、トランザクションは `RecoveryRequiredException` を受けます。変えうるのは、コミットを始めていたジャーナルのパスと、それが作ったディレクトリ（配下すべてを含む）です。`BeginAsync` は確かめず、ほかのパスはそのまま使えます。落ちたあとに配下へ確定したデータを、復旧が消さないようにするためです。`CommitAsync` で断られたときは本物に触れていません。破棄してから `RecoverAsync` を呼びます。
 
 `RecoverAsync` は自動では走りません。開くたびに先に呼んでください。ディレクトリの全削除やディレクトリの移動のあと、残骸の `.txnew` が残っているかもしれないときも、先に呼びます。
 
@@ -513,11 +513,11 @@ flowchart TD
 | 別操作でステージング済み、自分自身の配下への Move や Copy、内側のリパースポイント | `InvalidOperationException`     |
 | パスがワークフォルダの外、Import の元が中、Export の先が中                            | `ArgumentException`             |
 | ほかの Txfio がパスまたはワークフォルダを押さえている                                 | `LockContentionException`       |
-| 落ちたジャーナルが残っている（先に `RecoverAsync`）                                   | `RecoveryRequiredException`     |
+| 落ちたジャーナルが変えうるパスに重なる（先に `RecoverAsync`）                         | `RecoveryRequiredException`     |
 | JSON として読めない                                                                   | `JsonException`                 |
 | ZIP のエントリ名が危険、または ZIP が壊れている                                       | `InvalidDataException`          |
 
-`ExternalConflictException` と `LockContentionException` は、失敗したパスを 1 つ持ちます。`RecoveryRequiredException` の `Path` はワークフォルダです。
+`ExternalConflictException` と `LockContentionException` は、失敗したパスを 1 つ持ちます。`RecoveryRequiredException` の `Path` は重なったパスで、ジャーナルが読めないときはワークフォルダです。
 
 ## TxFileManager と SQLite
 

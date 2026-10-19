@@ -22,8 +22,9 @@ internal sealed partial class Transaction
             return new CommitReport(CommitResult.Succeeded, Array.Empty<OperationReport>());
         }
 
-        // Even for leftovers of a transaction that crashed after it began, committed data is not deleted.
-        StaleJournals.ThrowIfAny(_workFolder);
+        // A transaction may crash after this one staged, and a footprint can cover more than its owner locked.
+        await _orphans.ThrowIfOverlapAsync(_locks.LockedPaths, _locks.ExclusiveIntentPaths, CancellationToken.None)
+            .ConfigureAwait(false);
 
         Func<JournalOperation, bool>? isExternalChange = _externalChanges is null
             ? null

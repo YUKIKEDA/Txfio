@@ -75,6 +75,16 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
+    /// Gets the paths this set holds a path lock on.
+    /// </summary>
+    internal IReadOnlyCollection<string> LockedPaths => _handles.Keys;
+
+    /// <summary>
+    /// Gets the directories this set holds an exclusive intent lock on.
+    /// </summary>
+    internal IReadOnlyCollection<string> ExclusiveIntentPaths => _exclusiveIntents;
+
+    /// <summary>
     /// Returns the absolute path of a lock file.
     /// </summary>
     /// <param name="workFolder">The work folder.</param>

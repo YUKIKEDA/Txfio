@@ -142,7 +142,7 @@ public sealed class PathLockTests
     /// <remarks>
     /// <para>Given: after an Add, the journal is opened without sharing.</para>
     /// <para>When: DisposeAsync, then BeginAsync; the journal is closed, RecoverAsync runs, and another transaction adds the same path.</para>
-    /// <para>Then: DisposeAsync throws nothing, the .txnew is gone, BeginAsync throws RecoveryRequiredException (Path is the work folder), Recover is RolledBack, and the Add works afterwards.</para>
+    /// <para>Then: DisposeAsync throws nothing, the .txnew is gone, the journal remains, BeginAsync succeeds, Recover is RolledBack, and the Add works afterwards.</para>
     /// </remarks>
     [WindowsFact("An open file cannot be deleted")]
     public async Task DisposeAsync_ClosesLocksWhenJournalDeleteFails()
@@ -158,9 +158,9 @@ public sealed class PathLockTests
             await first.DisposeAsync();
             Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
 
-            RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
-                () => global::Txfio.Txfio.BeginAsync(work.Path));
-            Assert.Equal(work.Path, required.Path);
+            Assert.True(File.Exists(journal));
+            await using ITransaction during = await global::Txfio.Txfio.BeginAsync(work.Path);
+            Assert.Empty(during.GetPendingChanges());
         }
 
         Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);

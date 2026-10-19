@@ -88,8 +88,7 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, new[] { sourcePath, destinationPath }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { sourcePath, destinationPath }).ConfigureAwait(false);
         if (!File.Exists(sourcePath))
         {
             throw new ExternalConflictException("The source file to copy does not exist: " + sourcePath, sourcePath);
@@ -118,13 +117,10 @@ internal sealed partial class Transaction
         IProgress<TransferProgress>? progress,
         CancellationToken cancellationToken)
     {
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        using PathLockSet.ReadingScope reading = await _locks.AcquireForReadingAsync(
-                _workFolder,
+        using PathLockSet.ReadingScope reading = await LockForReadingAsync(
                 new[] { sourcePath, destinationPath },
                 new[] { destinationPath },
-                new[] { sourcePath },
-                _lockAttempt)
+                new[] { sourcePath })
             .ConfigureAwait(false);
         if (!Directory.Exists(sourcePath))
         {

@@ -24,8 +24,7 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("This path is already staged by another operation");
         }
 
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { targetPath }).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (File.Exists(targetPath) || Directory.Exists(targetPath))
         {

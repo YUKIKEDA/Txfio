@@ -13,7 +13,6 @@ public static class Txfio
     /// <returns>The transaction that was started.</returns>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(string path, CancellationToken cancellationToken = default)
     {
         return BeginAsync(path, TimeSpan.Zero, detectExternalChanges: false, cancellationToken);
@@ -28,7 +27,6 @@ public static class Txfio
     /// <returns>The transaction that was started.</returns>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(
         string path,
         bool detectExternalChanges,
@@ -47,7 +45,6 @@ public static class Txfio
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(string path, TimeSpan lockWait, CancellationToken cancellationToken = default)
     {
         return BeginAsync(path, lockWait, detectExternalChanges: false, cancellationToken);
@@ -64,7 +61,6 @@ public static class Txfio
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     public static Task<ITransaction> BeginAsync(
         string path,
         TimeSpan lockWait,
@@ -125,7 +121,6 @@ public static class Txfio
     /// <returns>The transaction that was started.</returns>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     internal static Task<ITransaction> BeginAsync(
         string path,
         IFaultInjector faults,
@@ -146,7 +141,6 @@ public static class Txfio
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="RecoveryRequiredException">An orphaned journal remains.</exception>
     internal static async Task<ITransaction> BeginAsync(
         string path,
         TimeSpan lockWait,
@@ -166,7 +160,6 @@ public static class Txfio
 
         cancellationToken.ThrowIfCancellationRequested();
         EnsureMetadataFolder(workFolder);
-        StaleJournals.ThrowIfAny(workFolder);
 
         Guid transactionId = Guid.NewGuid();
         string journalPath = MetadataNames.JournalPath(workFolder, transactionId);
