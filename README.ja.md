@@ -568,9 +568,9 @@ TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`�
 
 日本語訳: [`docs/design.ja.md`](docs/design.ja.md)、[`docs/roadmap.ja.md`](docs/roadmap.ja.md)、[`docs/conventions.ja.md`](docs/conventions.ja.md)、[`docs/language.ja.md`](docs/language.ja.md)、[`CONTRIBUTING.ja.md`](CONTRIBUTING.ja.md)。英語版が正本です。
 
-## ローカル検証
+## 検証
 
-Windows では `./build.ps1` がゲートです。restore / format / build はソリューション全体、テストは単体テストだけです。耐久テストは `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回します。Linux ではこのスクリプトを実行せず、ソリューションに対して restore / format / build を回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行します。Linux では Windows 専用のテストが Skip になります。
+マージのゲートは、Windows と Linux の CI が緑であることです（`.github/workflows/build.yml`）。Windows では `./build.ps1` で同じ確認をローカルに回せます。restore / format / build はソリューション全体、テストは単体テストだけです。耐久テストは `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回します。Linux ではこのスクリプトを実行せず、ソリューションに対して restore / format / build を回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行します。Linux では Windows 専用のテストが Skip になります。
 
 ```powershell
 ./build.ps1

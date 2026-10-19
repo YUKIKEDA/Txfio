@@ -24,7 +24,9 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 | Host | Verify |
 | --- | --- |
 | Windows | `./build.ps1` (full gate: restore → format verify → build → test) |
-| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx` then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. **Do not run `./build.ps1`.** Before opening a PR, every test in `Txfio.Tests` must pass except the ones skipped as `Windows only` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. This is a pre-PR check, not the merge gate: the merge gate stays `./build.ps1` on Windows |
+| Linux | `dotnet restore Txfio.slnx` then `dotnet format Txfio.slnx --verify-no-changes` then `dotnet build Txfio.slnx` then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. **Do not run `./build.ps1`.** Before opening a PR, every test in `Txfio.Tests` must pass except the ones skipped as `Windows only` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check |
+
+The merge gate is green CI (`.github/workflows/build.yml`) on both the `windows` job (`./build.ps1`, including `WindowsFact`) and the `linux` job. Local runs are a pre-PR check.
 
 ## Always-apply rules
 
@@ -45,7 +47,7 @@ If `dotnet --list-sdks` does not show **10.x**, install a .NET 10 SDK yourself. 
 - A sentence in `docs/design.md` is a past decision, not proof it is still best. Propose the current optimum. If it differs, change the design. Do not add public API only to keep an older shape (`.cursor/rules/design-docs.mdc`)
 - Branch: `type/<issue-number>-<slug>`
 - Commits / PR titles: Conventional Commits, in English
-- Local verification gate: `./build.ps1` against **`Txfio.slnx`** on Windows
+- Merge gate: green CI on Windows (`./build.ps1` against **`Txfio.slnx`**) and Linux
 - Layout: `src/Txfio` ↔ `tests/Txfio.Tests`, shared helpers in `tests/Txfio.TestSupport`, stress tests in `tests/Txfio.Stress` (explicit `dotnet test` only, not the merge gate), TFM `net8.0`, namespace `Txfio`
 - Private fields: `_camelCase`. Do not prefix members with `this.` unless needed for disambiguation
 - **English is the repository language**: code, comments, tests, docs, commits, Issues, PRs (`.cursor/rules/language.mdc`). Chat with the user may be in any language

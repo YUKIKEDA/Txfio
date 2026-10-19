@@ -568,9 +568,9 @@ The TxFileManager features are based on its public README and `DeleteDirectoryOp
 
 Japanese translations: [`README.ja.md`](README.ja.md), [`docs/design.ja.md`](docs/design.ja.md), [`docs/roadmap.ja.md`](docs/roadmap.ja.md), [`docs/conventions.ja.md`](docs/conventions.ja.md), [`CONTRIBUTING.ja.md`](CONTRIBUTING.ja.md).
 
-## Local verification
+## Verification
 
-On Windows, `./build.ps1` is the gate. Restore / format / build cover the whole solution, and the tests are the unit tests only. Run the stress tests explicitly with `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj`. On Linux, do not run this script; run restore / format / build on the solution, then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. On Linux, Windows-only tests are skipped.
+The merge gate is green CI on Windows and Linux (`.github/workflows/build.yml`). On Windows, `./build.ps1` runs the same checks locally. Restore / format / build cover the whole solution, and the tests are the unit tests only. Run the stress tests explicitly with `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj`. On Linux, do not run this script; run restore / format / build on the solution, then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. On Linux, Windows-only tests are skipped.
 
 ```powershell
 ./build.ps1

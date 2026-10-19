@@ -24,7 +24,7 @@
 2. **Issue 作成**（テンプレ必須。空白 Issue は禁止）
 3. 実装可能な粒度に落とせないときだけ **再 Grill**し、本文やチェックリストに書き戻す
 4. **ブランチ作成:** `type/<issue号>-<slug>`（Issue 番号必須）
-5. **作業**（Windows では `./build.ps1`）
+5. **作業**（Windows では `./build.ps1`、Linux では下の手順）
 6. **PR 作成**（テンプレ厳守。`## Related` に単独行で `Closes #N`）
 7. **人間レビュー → squash マージ**
 8. 次の Issue へ
@@ -91,9 +91,14 @@ docs/language.md
 
 SemVer。`0.x` は破壊的変更可。版の正本は git タグ（`v0.1.0` など）。nuget.org への push は GitHub を public にしたあと（Phase 3 完了後）。
 
-## ローカル検証（正本）
+## 検証
 
-GitHub Actions の workflow はリポジトリに置くが、**利用制限により CI が動かないことがある**。マージ前のゲートは Windows 上の `./build.ps1` とする。Actions が動き始めたら CI 緑も必須にする（そのとき PR テンプレにチェックを足す）。
+マージの関門は、**CI**（`.github/workflows/build.yml`）の両方のジョブが緑であること。
+
+- `windows`: `./build.ps1` を実行するので、`WindowsFact` を含むすべての単体テストが走る
+- `linux`: restore / format の確認 / build / test を直接実行する。`WindowsFact` は Skip になる
+
+push の前に同じ確認をローカルで回すことは推奨で、必須ではない。
 
 ```powershell
 ./build.ps1
@@ -101,11 +106,11 @@ GitHub Actions の workflow はリポジトリに置くが、**利用制限に�
 
 想定内容: `dotnet restore` → `dotnet format --verify-no-changes` → `dotnet build` → `dotnet test`。restore / format / build の対象は **`Txfio.slnx`**。`dotnet test` の対象は **`tests/Txfio.Tests/Txfio.Tests.csproj`**。耐久テスト（`tests/Txfio.Stress`）は関門に含めず、`dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。
 
-このスクリプトは **Windows 専用** です。Linux では `./build.ps1` を実行せず、`Txfio.slnx` に対して restore / format / build を順に回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行する。PR を出す前に、`Windows only` として Skip されるもの（`WindowsFact`）以外の単体テストがすべて通っていること。これは PR 前の条件で、マージの関門ではない。マージ前のテスト記録は Windows 側が必要です。テストの実行には .NET 10 SDK に加えて .NET 8 ランタイムが要る。
+このスクリプトは **Windows 専用** です。Linux では `./build.ps1` を実行せず、`Txfio.slnx` に対して restore / format / build を順に回し、`dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行する。Linux では、`Windows only` として Skip されるもの（`WindowsFact`）以外の単体テストがすべて通ること。Skip されるものは CI の Windows ジョブが実行する。テストの実行には .NET 10 SDK に加えて .NET 8 ランタイムが要る。
 
 クラッシュインジェクションと SMB 検証は、Issue の受け入れ条件に書いたときだけローカル必須とする。
 
-PR の Verification には、`./build.ps1` を実行した旨を書く。
+PR の Verification では、CI の両方のジョブが緑であることを確かめ、ローカルで回したものがあれば書く。
 
 ## マージ
 

@@ -22,7 +22,8 @@ After opening the PR, check that the Issue appears under Development / Linked is
 
 ## Verification
 
-- [ ] Ran `./build.ps1` on Windows (the required gate while GitHub Actions cannot run)
+- [ ] CI is green on both jobs (`windows`: `./build.ps1`; `linux`)
+- Local runs (optional):
 
 ## Risk / Rollback
 
