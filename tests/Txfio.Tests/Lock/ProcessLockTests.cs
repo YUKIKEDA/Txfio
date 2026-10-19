@@ -57,12 +57,12 @@ public sealed class ProcessLockTests
     }
 
     /// <summary>
-    /// The lock of another process that exited without Dispose can be taken again after Recover.
+    /// The lock of another process that exited without Dispose can be taken again, even before Recover.
     /// </summary>
     /// <remarks>
     /// <para>Given: a child process has added a.txt and holds the lock.</para>
-    /// <para>When: the child process exits without Dispose, and the parent process calls BeginAsync. Then RecoverAsync runs and the same path is added.</para>
-    /// <para>Then: BeginAsync before Recover throws RecoveryRequiredException, the Add works after Recover, and the lock file remains.</para>
+    /// <para>When: the child process exits without Dispose, and the parent process adds the same path. After the parent is disposed, RecoverAsync runs.</para>
+    /// <para>Then: the Add works before Recover (an uncommitted orphan's file paths are not in its footprint), the lock file remains, and Recover is RolledBack.</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_TakesSamePathAfterAnotherProcessExitsWithoutDispose()
@@ -76,15 +76,14 @@ public sealed class ProcessLockTests
         Assert.True(File.Exists(lockFile));
         await child.KillAsync();
 
-        RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
-            () => global::Txfio.Txfio.BeginAsync(work.Path));
-        Assert.Equal(work.Path, required.Path);
-        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        await using (ITransaction parent = await global::Txfio.Txfio.BeginAsync(work.Path))
+        {
+            await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");
+            await parent.AddAsync("a.txt", content);
+            Assert.True(File.Exists(lockFile));
+            Assert.Single(parent.GetPendingChanges());
+        }
 
-        await using ITransaction parent = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");
-        await parent.AddAsync("a.txt", content);
-        Assert.True(File.Exists(lockFile));
-        Assert.Single(parent.GetPendingChanges());
+        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
     }
 }

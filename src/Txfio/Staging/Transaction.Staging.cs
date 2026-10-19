@@ -43,15 +43,10 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfInsideDeleteTree(_paths.Rows, targetPath);
         StagingRules.ThrowIfCreateDirectoryPath(_paths.Rows, targetPath);
         StagingRules.ThrowIfOverwriteMovePath(_paths.Rows, targetPath);
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        if (Directory.Exists(targetPath))
-        {
-            await _locks.AcquireReservingAsync(_workFolder, new[] { targetPath }, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
-        }
-        else
-        {
-            await _locks.AcquireAsync(_workFolder, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
-        }
+        await LockForStagingAsync(
+                new[] { targetPath },
+                Directory.Exists(targetPath) ? new[] { targetPath } : null)
+            .ConfigureAwait(false);
 
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (!Directory.Exists(targetPath))
@@ -345,15 +340,10 @@ internal sealed partial class Transaction
             }
         }
 
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        if (replacesDirectory)
-        {
-            await _locks.AcquireReservingAsync(_workFolder, new[] { sourcePath, destPath }, new[] { sourcePath, destPath }, _lockAttempt).ConfigureAwait(false);
-        }
-        else
-        {
-            await _locks.AcquireAsync(_workFolder, new[] { sourcePath, destPath }, _lockAttempt).ConfigureAwait(false);
-        }
+        await LockForStagingAsync(
+                new[] { sourcePath, destPath },
+                replacesDirectory ? new[] { sourcePath, destPath } : null)
+            .ConfigureAwait(false);
 
         StagingRules.EnsureParentDirectoryExists(destPath);
         _externalChanges?.NoteRemoval(_paths.Rows, sourcePath);
@@ -485,8 +475,7 @@ internal sealed partial class Transaction
         }
 
         StagingRules.ThrowIfDirectoryReplaceConflicts(_paths.Rows, _createdDirectories, sourcePath, destPath);
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { sourcePath, destPath }, new[] { sourcePath, destPath }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { sourcePath, destPath }, new[] { sourcePath, destPath }).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!Directory.Exists(sourcePath))
         {
@@ -564,8 +553,7 @@ internal sealed partial class Transaction
         }
 
         StagingRules.ThrowIfDirectoryMoveConflicts(_paths.Rows, root, destPath);
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { root, destPath }, new[] { root, destPath }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { root, destPath }, new[] { root, destPath }).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(destPath);
         if (!destIsMoveSource)
         {
@@ -642,8 +630,7 @@ internal sealed partial class Transaction
         CancellationToken cancellationToken,
         int replaceIndex = -1)
     {
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { directoryPath }, new[] { directoryPath }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { directoryPath }, new[] { directoryPath }).ConfigureAwait(false);
         if (!Directory.Exists(directoryPath))
         {
             throw new ExternalConflictException("The directory to delete does not exist: " + directoryPath, directoryPath);
@@ -853,8 +840,7 @@ internal sealed partial class Transaction
             out bool addOntoFileMove,
             out PendingChangeKind recordedKind);
 
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireAsync(_workFolder, new[] { targetPath }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { targetPath }).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (kind == PendingChangeKind.Update)
         {

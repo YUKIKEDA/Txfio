@@ -14,6 +14,7 @@ internal sealed partial class Transaction : ITransaction
     private readonly PathLockSet _locks;
     private readonly TimeSpan _lockWait;
     private readonly ExternalChangeSet? _externalChanges;
+    private readonly OrphanFootprints _orphans;
 
     // The rows and created directories known to be in the journal (set to null when unknown, to rewrite the whole journal).
     private JournalOperation[]? _persistedRows = Array.Empty<JournalOperation>();
@@ -52,6 +53,7 @@ internal sealed partial class Transaction : ITransaction
         _faults = faults;
         _locks = new PathLockSet(faults);
         _externalChanges = detectExternalChanges ? new ExternalChangeSet() : null;
+        _orphans = new OrphanFootprints(workFolder);
     }
 
     /// <inheritdoc />
@@ -199,6 +201,34 @@ internal sealed partial class Transaction : ITransaction
         {
             throw new InvalidOperationException("This transaction has already been committed");
         }
+    }
+
+    // Rejects paths that overlap an orphaned journal's footprint before taking any lock, so a rejected call holds no lock that would make RecoverAsync skip that journal.
+    private async Task LockForStagingAsync(string[] paths, string[]? exclusiveIntentPaths = null)
+    {
+        string[] exclusive = exclusiveIntentPaths ?? Array.Empty<string>();
+        await _orphans.ThrowIfOverlapAsync(paths, exclusive, CancellationToken.None).ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        if (exclusive.Length == 0)
+        {
+            await _locks.AcquireAsync(_workFolder, paths, _lockAttempt).ConfigureAwait(false);
+        }
+        else
+        {
+            await _locks.AcquireReservingAsync(_workFolder, paths, exclusive, _lockAttempt).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<PathLockSet.ReadingScope> LockForReadingAsync(
+        string[] paths,
+        string[] reservedPaths,
+        string[] readDirectories)
+    {
+        await _orphans.ThrowIfOverlapAsync(paths, reservedPaths.Concat(readDirectories), CancellationToken.None)
+            .ConfigureAwait(false);
+        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
+        return await _locks.AcquireForReadingAsync(_workFolder, paths, reservedPaths, readDirectories, _lockAttempt)
+            .ConfigureAwait(false);
     }
 
     private int FindOperationIndex(string path)

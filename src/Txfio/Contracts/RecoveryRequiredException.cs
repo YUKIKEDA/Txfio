@@ -1,15 +1,15 @@
 namespace Txfio;
 
 /// <summary>
-/// An orphaned journal remains; calling <see cref="Txfio.RecoverAsync(string, CancellationToken)"/> resolves it.
+/// A path overlaps the footprint of an orphaned journal (the paths that recovering it may change); calling <see cref="Txfio.RecoverAsync(string, CancellationToken)"/> resolves it.
 /// </summary>
 public sealed class RecoveryRequiredException : TxfioException
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="RecoveryRequiredException"/> class with a message and the work folder.
+    /// Initializes a new instance of the <see cref="RecoveryRequiredException"/> class with a message and the overlapping path.
     /// </summary>
     /// <param name="message">The exception message.</param>
-    /// <param name="path">The work folder.</param>
+    /// <param name="path">The overlapping path, or the work folder when the journal cannot be read.</param>
     public RecoveryRequiredException(string message, string path)
         : base(message)
     {
@@ -17,7 +17,7 @@ public sealed class RecoveryRequiredException : TxfioException
     }
 
     /// <summary>
-    /// Gets the work folder.
+    /// Gets the overlapping path, or the work folder when the journal cannot be read (its footprint is then the whole work folder).
     /// </summary>
     public string Path { get; }
 }

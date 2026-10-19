@@ -84,8 +84,7 @@ internal sealed partial class Transaction
 
     private async Task AcquireExtractLocksAsync(string destination)
     {
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { destination }, new[] { destination }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { destination }, new[] { destination }).ConfigureAwait(false);
     }
 
     private async Task ExtractAsync(

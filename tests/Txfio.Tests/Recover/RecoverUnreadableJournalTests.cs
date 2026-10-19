@@ -9,8 +9,8 @@ public sealed class RecoverUnreadableJournalTests
     /// </summary>
     /// <remarks>
     /// <para>Given: d/ exists with the .txnew of an Add inside, and a .txnew of another guid. The journal is truncated JSON.</para>
-    /// <para>When: RecoverAsync runs, then BeginAsync.</para>
-    /// <para>Then: JournalUnreadable. The journal, d/, and the other guid's .txnew remain. The Add's .txnew is deleted. Begin throws RecoveryRequiredException.</para>
+    /// <para>When: RecoverAsync runs, then a transaction begins and adds x.txt.</para>
+    /// <para>Then: JournalUnreadable. The journal, d/, and the other guid's .txnew remain. The Add's .txnew is deleted. Begin succeeds, and the Add throws RecoveryRequiredException with Path set to the work folder.</para>
     /// </remarks>
     [Fact]
     public async Task RecoverAsync_KeepsBrokenJournalDeletesOnlyTxnewAndReturnsJournalUnreadable()
@@ -36,8 +36,10 @@ public sealed class RecoverUnreadableJournalTests
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.True(Directory.Exists(directory));
         Assert.True(File.Exists(other));
+        await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("x");
         RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
-            () => global::Txfio.Txfio.BeginAsync(work.Path));
+            () => next.AddAsync("x.txt", content));
         Assert.Equal(work.Path, required.Path);
     }
 

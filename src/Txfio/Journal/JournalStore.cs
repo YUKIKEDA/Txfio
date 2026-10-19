@@ -87,56 +87,53 @@ internal static class JournalStore
     internal static async Task<JournalReadResult> ReadAsync(string journalPath, CancellationToken cancellationToken)
     {
         byte[] payload = await File.ReadAllBytesAsync(journalPath, cancellationToken).ConfigureAwait(false);
+        return Parse(payload, journalPath);
+    }
 
-        // If the version on the first line is not 1, return "different version" before interpreting operations (so .txnew files are not deleted even if deserialization fails on an unknown kind).
-        if (IsUnsupportedVersion(FirstRecord(payload)))
-        {
-            return JournalReadResult.OtherVersion();
-        }
-
-        JournalDocument? document;
+    /// <summary>
+    /// Reads the journal of a transaction whose owner is gone, allowing other readers and deletion while it is open.
+    /// </summary>
+    /// <remarks>
+    /// Several transactions check the same orphaned journal, and <c>RecoverAsync</c> may delete it while they read, so neither side may make the other fail.
+    /// </remarks>
+    /// <param name="journalPath">The path to read from.</param>
+    /// <param name="cancellationToken">The token to cancel the operation.</param>
+    /// <returns>The same result as <see cref="ReadAsync(string, CancellationToken)"/>, or <see langword="null"/> when the journal is gone or is being deleted.</returns>
+    /// <exception cref="IOException">The read failed.</exception>
+    internal static async Task<JournalReadResult?> ReadOrphanAsync(string journalPath, CancellationToken cancellationToken)
+    {
+        byte[] payload;
         try
         {
-            document = ReadLines(payload);
-        }
-        catch (JsonException)
-        {
-            return JournalReadResult.Corrupt();
-        }
-
-        if (document is null)
-        {
-            return JournalReadResult.Corrupt();
-        }
-
-        if (document.Version != CurrentVersion)
-        {
-            return JournalReadResult.OtherVersion();
-        }
-
-        foreach (JournalOperation operation in document.Operations)
-        {
-            if (operation is null || !IsComplete(operation))
+            FileStream stream = new FileStream(
+                journalPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                bufferSize: 4096,
+                FileOptions.Asynchronous);
+            await using (stream.ConfigureAwait(false))
             {
-                return JournalReadResult.Corrupt();
+                using MemoryStream buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+                payload = buffer.ToArray();
             }
         }
-
-        try
+        catch (FileNotFoundException)
         {
-            document = JournalPaths.ToAbsolute(document, MetadataNames.WorkFolderFromJournal(journalPath));
+            return null;
         }
-        catch (JsonException)
+        catch (DirectoryNotFoundException)
         {
-            return JournalReadResult.Corrupt();
+            return null;
+        }
+        catch (UnauthorizedAccessException) when (!File.Exists(journalPath))
+        {
+            // On Windows, a file that is being deleted cannot be opened until the last handle closes.
+            return null;
         }
 
-        if (document is null)
-        {
-            return JournalReadResult.Corrupt();
-        }
-
-        return JournalReadResult.Readable(document);
+        return Parse(payload, journalPath);
     }
 
     /// <summary>
@@ -203,6 +200,59 @@ internal static class JournalStore
         }
 
         return Task.CompletedTask;
+    }
+
+    private static JournalReadResult Parse(byte[] payload, string journalPath)
+    {
+        // If the version on the first line is not 1, return "different version" before interpreting operations (so .txnew files are not deleted even if deserialization fails on an unknown kind).
+        if (IsUnsupportedVersion(FirstRecord(payload)))
+        {
+            return JournalReadResult.OtherVersion();
+        }
+
+        JournalDocument? document;
+        try
+        {
+            document = ReadLines(payload);
+        }
+        catch (JsonException)
+        {
+            return JournalReadResult.Corrupt();
+        }
+
+        if (document is null)
+        {
+            return JournalReadResult.Corrupt();
+        }
+
+        if (document.Version != CurrentVersion)
+        {
+            return JournalReadResult.OtherVersion();
+        }
+
+        foreach (JournalOperation operation in document.Operations)
+        {
+            if (operation is null || !IsComplete(operation))
+            {
+                return JournalReadResult.Corrupt();
+            }
+        }
+
+        try
+        {
+            document = JournalPaths.ToAbsolute(document, MetadataNames.WorkFolderFromJournal(journalPath));
+        }
+        catch (JsonException)
+        {
+            return JournalReadResult.Corrupt();
+        }
+
+        if (document is null)
+        {
+            return JournalReadResult.Corrupt();
+        }
+
+        return JournalReadResult.Readable(document);
     }
 
     private static async Task WriteAsync(

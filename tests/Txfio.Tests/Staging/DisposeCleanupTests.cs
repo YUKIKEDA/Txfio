@@ -43,9 +43,8 @@ public sealed class DisposeCleanupTests
                 path => System.IO.Path.GetFileName(path).StartsWith("b.txt.", StringComparison.OrdinalIgnoreCase));
             Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "empty")));
             Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
-            RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
-                () => global::Txfio.Txfio.BeginAsync(work.Path));
-            Assert.Equal(work.Path, required.Path, StringComparer.OrdinalIgnoreCase);
+            await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+            Assert.Empty(next.GetPendingChanges());
         }
         finally
         {

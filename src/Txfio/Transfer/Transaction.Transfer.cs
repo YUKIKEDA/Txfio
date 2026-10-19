@@ -156,8 +156,7 @@ internal sealed partial class Transaction
         StagingRules.ThrowIfOperationUnderDirectory(_paths.Rows, target);
         ThrowIfCopyPathIsStaged(target);
         EnsureCopyDestinationFree(target);
-        await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
-        await _locks.AcquireReservingAsync(_workFolder, new[] { target }, new[] { target }, _lockAttempt).ConfigureAwait(false);
+        await LockForStagingAsync(new[] { target }, new[] { target }).ConfigureAwait(false);
         if (!Directory.Exists(external))
         {
             throw new ExternalConflictException("The source directory to copy does not exist: " + external, external);
