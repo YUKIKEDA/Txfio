@@ -29,4 +29,9 @@ public enum RecoverResult
     /// A journal could not be read as JSON.
     /// </summary>
     JournalUnreadable = 4,
+
+    /// <summary>
+    /// The locks on at least one orphaned journal's paths could not be taken by the deadline (another transaction holds them); that journal remains, and a later call can process it.
+    /// </summary>
+    Contended = 5,
 }

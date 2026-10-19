@@ -71,14 +71,14 @@ public static class Txfio
     }
 
     /// <summary>
-    /// Detects unfinished transactions and rolls them back or forward (with no wait for the work-folder lock).
+    /// Detects unfinished transactions and rolls them back or forward, each while holding the locks on its paths (without waiting for locks). Other transactions may stay alive meanwhile.
     /// </summary>
     /// <param name="path">An existing work folder.</param>
     /// <param name="cancellationToken">The token to cancel detection and recovery.</param>
-    /// <returns>The overall result and the journals processed (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON).</returns>
+    /// <returns>The overall result and the journals processed or left (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON, <see cref="RecoverResult.Contended"/> if another transaction holds the paths of a journal).</returns>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="LockContentionException">Another transaction holds the work folder.</exception>
+    /// <exception cref="LockContentionException">The work-folder lock is held exclusively (by the lock-file cleanup of another call).</exception>
     /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>
     public static Task<RecoverReport> RecoverAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -86,17 +86,17 @@ public static class Txfio
     }
 
     /// <summary>
-    /// Detects unfinished transactions and rolls them back or forward.
+    /// Detects unfinished transactions and rolls them back or forward, each while holding the locks on its paths. Other transactions may stay alive meanwhile.
     /// </summary>
     /// <param name="path">An existing work folder.</param>
-    /// <param name="lockWait">How long this call waits when the work-folder lock cannot be taken (zero does not wait).</param>
+    /// <param name="lockWait">How long this call waits for the work-folder lock, and retries journals whose paths another transaction holds (zero does not wait).</param>
     /// <param name="cancellationToken">The token to cancel detection and recovery.</param>
-    /// <returns>The overall result and the journals processed (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON).</returns>
+    /// <returns>The overall result and the journals processed or left (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON, <see cref="RecoverResult.Contended"/> if another transaction holds the paths of a journal).</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
-    /// <exception cref="LockContentionException">The work folder cannot be taken by the deadline.</exception>
-    /// <exception cref="OperationCanceledException">The wait for the work-folder lock was canceled.</exception>
+    /// <exception cref="LockContentionException">The work-folder lock cannot be taken as shared by the deadline.</exception>
+    /// <exception cref="OperationCanceledException">The wait for the work-folder lock was canceled (cancelling while retrying journals returns the report instead).</exception>
     /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>
     public static async Task<RecoverReport> RecoverAsync(string path, TimeSpan lockWait, CancellationToken cancellationToken = default)
     {
