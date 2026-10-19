@@ -328,17 +328,18 @@ public sealed class PathLockTests
     }
 
     /// <summary>
-    /// After CreateDirectory, other transactions can touch unrelated paths and what is under it.
+    /// After CreateDirectory, other transactions can touch unrelated paths, but not what is under it; the owner still can.
     /// </summary>
     /// <remarks>
     /// <para>Given: another file a.txt exists.</para>
-    /// <para>When: CreateDirectory, then another transaction deletes a.txt and adds a file directly under the created directory.</para>
-    /// <para>Then: both succeed.</para>
+    /// <para>When: first creates drop, then second deletes a.txt and adds drop/a.txt, then first adds drop/b.txt and creates drop/sub.</para>
+    /// <para>Then: second's Delete succeeds, its Add throws LockContentionException with Path set to drop, and first's operations under drop are staged.</para>
     /// </remarks>
     [Fact]
-    public async Task CreateDirectoryAsync_DoesNotReserveUnderDirectoryAfterReturn()
+    public async Task CreateDirectoryAsync_ReservesUnderDirectoryForOtherTransactions()
     {
         await using TempDirectory work = TempDirectory.Create();
+        string drop = System.IO.Path.Combine(work.Path, "drop");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
         await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
         await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
@@ -346,10 +347,40 @@ public sealed class PathLockTests
 
         await second.DeleteAsync("a.txt");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
-        await second.AddAsync("drop/a.txt", content);
+        LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
+            () => second.AddAsync("drop/a.txt", content));
+        await first.WriteAllTextAsync("drop/b.txt", "own");
+        await first.CreateDirectoryAsync("drop/sub");
 
-        Assert.Equal(PendingChangeKind.CreateDirectory, Assert.Single(first.GetPendingChanges()).Kind);
-        Assert.Equal(2, second.GetPendingChanges().Count);
+        Assert.Equal(drop, contention.Path);
+        Assert.Single(second.GetPendingChanges());
+        Assert.Equal(3, first.GetPendingChanges().Count);
+    }
+
+    /// <summary>
+    /// A transaction that waits to stage under another transaction's CreateDirectory directory goes ahead once that transaction ends.
+    /// </summary>
+    /// <remarks>
+    /// <para>Given: first has created drop and committed nothing yet; second has a 3-second wait.</para>
+    /// <para>When: second adds drop/a.txt, and first commits about 200 ms later.</para>
+    /// <para>Then: the Add waits, then succeeds after first's commit.</para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateDirectoryAsync_OtherTransactionStagesUnderItAfterOwnerEnds()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await first.CreateDirectoryAsync("drop");
+        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(3));
+        await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
+
+        Task adding = second.AddAsync("drop/a.txt", content);
+        await Task.Delay(200);
+        Assert.False(adding.IsCompleted);
+        Assert.Equal(CommitResult.Succeeded, (await first.CommitAsync()).Result);
+        await adding;
+
+        Assert.Single(second.GetPendingChanges());
     }
 
     /// <summary>

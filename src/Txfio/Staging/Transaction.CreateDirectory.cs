@@ -24,7 +24,8 @@ internal sealed partial class Transaction
             throw new InvalidOperationException("This path is already staged by another operation");
         }
 
-        await LockForStagingAsync(new[] { targetPath }).ConfigureAwait(false);
+        // Exclusive until the end, so no other transaction stages under it (discard deletes the tree recursively).
+        await LockForStagingAsync(new[] { targetPath }, new[] { targetPath }).ConfigureAwait(false);
         StagingRules.EnsureParentDirectoryExists(targetPath);
         if (File.Exists(targetPath) || Directory.Exists(targetPath))
         {

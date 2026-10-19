@@ -119,7 +119,7 @@ public interface ITransaction : IAsyncDisposable
     Task MoveAsync(string oldPath, string newPath, bool overwrite, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates an empty directory when called (normal operations work under it, and its contents can also be written with the plain file API).
+    /// Creates an empty directory when called (normal operations of this transaction work under it, and its contents can also be written with the plain file API; other transactions cannot stage under it until this one ends).
     /// </summary>
     /// <param name="path">The target path (relative to the work folder, or absolute inside the work folder).</param>
     /// <param name="cancellationToken">The token to cancel the operation.</param>
