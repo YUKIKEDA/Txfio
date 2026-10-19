@@ -473,10 +473,14 @@ A `DeleteTree` or directory Move of an ancestor fails, because this operation is
 
 #### Locks
 
-The path lock on that directory; the intent lock is not exclusive ("Intent locks").
+The path lock and the exclusive intent lock on that directory, held until the transaction ends ("Intent locks").
 The work-folder lock stays shared.
-The shared lock is held until the transaction ends.
-Operations under it take their own path locks and shared intent locks on the ancestors.
+Other transactions cannot stage under it until this transaction ends; they get `LockContentionException` with `Path` set to that directory.
+Operations of this transaction under it take their own path locks; the intent lock it already holds exclusively satisfies their shared request.
+The plain file API is not affected, so other processes can still write into the directory; discard still deletes what they wrote there ("Cleanup on failure" below).
+
+Previously the intent lock was not exclusive, and other transactions could stage and commit under the directory.
+If this transaction was then discarded, or crashed before `Committing`, the recursive delete below removed their committed work.
 
 #### Journal
 
@@ -1380,7 +1384,7 @@ The shared work-folder lock is held until a transaction ends, so while any other
 | Operation | Takes |
 | --- | --- |
 | Delete of a directory | That directory's path lock and its exclusive intent lock. Child paths are not locked |
-| `CreateDirectory` | That directory is locked too. Operations under it also take their own normal path locks |
+| `CreateDirectory` | That directory's path lock and its exclusive intent lock. Operations of this transaction under it also take their own normal path locks |
 | File `CopyAsync` | The source and destination, in addition to the shared work-folder lock |
 | Directory `CopyAsync` | The source and destination. Children are not locked. The destination's intent lock is exclusive |
 | Directory Import | The destination. Its intent lock is exclusive |
@@ -1418,6 +1422,7 @@ It is not given back when the method returns, when operations are folded, when a
 - The destination of a directory `CopyAsync`, and the destination of a directory `ImportAsync`
 - The destination of `ExtractArchiveAsync` and `ImportArchiveAsync`. The source ZIP is not scheduled
 - A directory `DeleteAsync`. The delete at commit still looks only at direct children. An operation that stages a grandchild also opens this directory as an ancestor, so it conflicts
+- The directory of `CreateDirectoryAsync`. Unlike the others, the same transaction may stage under it ("CreateDirectoryAsync")
 
 The copy source, and the input directory of ZIP creation, hold the intent lock exclusively only during the call, and close it when the method returns.
 This stops other transactions from staging or committing under it while it is being read (a transaction that has staged under it holds that ancestor's intent lock as shared, so the exclusive lock cannot be taken and the call fails with `LockContentionException`, with `Path` set to that directory).
@@ -1426,9 +1431,8 @@ The bytes have been written to `.txnew` by the time the method returns.
 
 #### Not exclusive
 
-- `CreateDirectoryAsync` takes only the path lock on the target directory. Other transactions can stage under it
 - `CreateArchiveAsync` from a directory (including a list that contains a directory) writes the bytes read during the call into the ZIP. The input directory's intent lock is not exclusive
-- The same transaction touching what is under its own scheduled directory is a contract violation, and stays `InvalidOperationException` before any lock
+- The same transaction touching what is under its own scheduled directory is a contract violation, and stays `InvalidOperationException` before any lock (except under its own `CreateDirectoryAsync` directory)
 
 #### Order
 
@@ -1645,7 +1649,7 @@ The check happens in two places
 
 The check at staging is not enough, so it is also checked at commit.
 Another transaction may crash after this one staged.
-While the owner was alive its locks kept this transaction off its paths, but a footprint can cover more than the owner locked (the tree under a `CreateDirectory`, which other transactions may stage under, or the whole work folder for an unreadable journal).
+Its staging check may have run while the owner was still alive, and then taken a lock the owner released when it crashed. An unreadable journal's footprint, the whole work folder, also covers more than its owner locked.
 
 `RecoverAsync` holds the work-folder lock as shared, so it can run at the same time as these checks.
 It processes a journal only while it holds the liveness lock and the footprint locks ("Recover API").
