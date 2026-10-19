@@ -13,7 +13,7 @@ Human source of truth: `CONTRIBUTING.md`.
 2. Create a GitHub Issue from a template (blank issues are disabled)
 3. **Grill again if needed** and fold answers into the Issue body, or checklists
 4. Create branch `type/<issue-number>-<slug>`
-5. Implement; run `./build.ps1` on Windows
+5. Implement; run `./build.ps1` on Windows (or the Linux steps in `AGENTS.md`) before pushing; CI must be green before merge
 6. Open PR using `.github/pull_request_template.md`
    - **Must** include `Closes #N` on its **own line** in `## Related`
    - Verify the Issue shows as linked

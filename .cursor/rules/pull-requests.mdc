@@ -24,10 +24,9 @@ Follow `.github/pull_request_template.md` exactly — same section headings:
 - Write the title and body in **English** (`.cursor/rules/language.mdc`)
 - If the PR changes a bilingual document, it changes its `*.ja.md` pair too, or says why not and links a follow-up Issue
 - Empty optional fields: write `N/A`, do not delete the section
-- Verification must record local `./build.ps1` on Windows
+- Verification: CI must be green on both the `windows` and `linux` jobs; note any local runs
 - **Issue link (required):** In `## Related`, put a GitHub closing keyword on its **own line**:
   - `Closes #N` or `Fixes #N` or `Resolves #N`
   - A bare URL, or sometimes `- Closes #N` in a list, is **not enough**
   - After `gh pr create` / `gh pr edit`, verify with `gh pr view --json closingIssuesReferences`
-- Do not add a "CI green" checkbox until GitHub Actions are confirmed working
 - Full process: `CONTRIBUTING.md`

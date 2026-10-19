@@ -1,8 +1,7 @@
-# CI
-
-# NOTE: GitHub Actions may be unavailable due to account/org limits.
-# Local gate of record is ./build.ps1 — do not treat this workflow as required green
-# until Actions are confirmed working.
+# CI: the merge gate. Both jobs must be green.
+# Windows runs ./build.ps1 (all unit tests, including WindowsFact).
+# Linux runs the same steps directly; WindowsFact tests are skipped there.
+# Stress tests (tests/Txfio.Stress) are not run here.
 
 name: build
 
@@ -13,14 +12,35 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "10.0.x"
-      - name: Local gate script
+          dotnet-version: |
+            10.0.x
+            8.0.x
+      - name: Gate script
         shell: pwsh
         run: ./build.ps1
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            8.0.x
+      - name: Restore
+        run: dotnet restore Txfio.slnx
+      - name: Format
+        run: dotnet format Txfio.slnx --verify-no-changes
+      - name: Build
+        run: dotnet build Txfio.slnx --no-restore -c Release
+      - name: Test
+        run: dotnet test tests/Txfio.Tests/Txfio.Tests.csproj --no-build -c Release

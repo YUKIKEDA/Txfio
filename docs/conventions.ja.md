@@ -123,7 +123,7 @@ API ごとに節を分け、次の見出しをこの順番で置く。当ては�
 - 乱数で約束を確かめる耐久テストは `tests/Txfio.Stress/` に置く。対応する `src/` のフォルダは無い
   - ランダム操作列はメモリ上のモデルと比べ、失敗したら手を外して縮めた列を出す。ファイルの Add / Update / Delete / Move / Read の列、ディレクトリの作成、空の削除、木の削除、上書きしない Move の列、移動先を置き換える Move の列、ファイルとディレクトリの Copy / Import / Export の列、文字列と JSON の読み書きの列、ZIP の作成と展開と取り込みと書き出しの列を持つ。ディレクトリの奪い合いは、少数を待たずに競合させる版と、多めを競合したらやり直す版の 2 つを持つ。クラッシュは親が子を殺し、Recover のあと記録かその 1 件先とディスクを比べる
   - 多プロセスの耐久は、耐久プロジェクトの実行ファイル自身を子プロセスとして起動する（`Program.cs` の入口）
-  - 関門（`./build.ps1` と Linux の PR 前確認）の `dotnet test` は `tests/Txfio.Tests/Txfio.Tests.csproj` だけを実行する。耐久は `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。既定はその実行で短く終わる規模にする。長く、または大きく回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES`、`TXFIO_STRESS_FILES`、`TXFIO_STRESS_MAX_BYTES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
+  - 関門（CI、`./build.ps1`、Linux の PR 前確認）の `dotnet test` は `tests/Txfio.Tests/Txfio.Tests.csproj` だけを実行する。耐久は `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj` で明示的に回す。既定はその実行で短く終わる規模にする。長く、または大きく回すときは環境変数 `TXFIO_STRESS_SEED`、`TXFIO_STRESS_ITERATIONS`、`TXFIO_STRESS_PROCESSES`、`TXFIO_STRESS_FILES`、`TXFIO_STRESS_MAX_BYTES` で変える。失敗メッセージのシードを渡すと同じ列を再現できる
   - 多プロセスの耐久は、少数のファイルを待たずに奪い合う版（競合の組み合わせを増やす）と、多めのファイルを競合したらやり直す版（使い方に近い負荷）の 2 つを持つ。結果の件数はテストの出力に出る
   - 見つかった不具合はテストで隠さず、別 Issue にする
 
@@ -133,7 +133,7 @@ API ごとに節を分け、次の見出しをこの順番で置く。当ては�
 
 - Windows の挙動そのものに頼るテストは `[WindowsFact("理由")]`（`tests/Txfio.TestSupport/`）にする。対象は、ジャンクション、ドライブ文字のパス、開いたままのファイルを rename や削除できないこと。Windows 以外では `Windows only: reason` として Skip になる
 - パスの区切りはテストでも `/` か `Path.Combine` を使う。`\` は Linux ではファイル名の一部になる
-- Linux では、PR を出す前に `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行し、`WindowsFact` 以外のテストがすべて通っていること。耐久テストはこの確認に含めない。マージの関門は Windows の `./build.ps1` のままで、Windows では Skip は 0 件である
+- Linux では、PR を出す前に `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj` を実行し、`WindowsFact` 以外のテストがすべて通っていること。耐久テストはこの確認に含めない。マージの関門は、CI の Windows ジョブ（`./build.ps1`。Skip は 0 件）と Linux ジョブの両方が緑であること
 - ロック競合の判定（`PathLockSet.IsSharingViolation`）は、Linux の EAGAIN（`HResult` = 11）も共有違反とみなす。テストを回すためのもので、実行時の保証ではない。macOS は実機で確かめるまで足さない
 
 ## 書式

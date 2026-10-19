@@ -22,7 +22,7 @@ Work that touches code or conventions **always** goes in this order. Starting im
 2. **Create the Issue** (a template is required; blank Issues are not allowed)
 3. **Grill again** only when the work cannot be broken down to an implementable size, and write the answers back into the body or a checklist
 4. **Create the branch:** `type/<issue-number>-<slug>` (the Issue number is required)
-5. **Work** (`./build.ps1` on Windows)
+5. **Work** (`./build.ps1` on Windows, or the Linux steps below)
 6. **Open the PR** (follow the template strictly; `Closes #N` on its own line in `## Related`)
 7. **Human review → squash merge**
 8. Next Issue
@@ -89,9 +89,14 @@ docs/language.md
 
 SemVer. `0.x` may have breaking changes. The source of truth for the version is the git tag (`v0.1.0` and so on). Pushing to nuget.org happens after the GitHub repository is public (after Phase 3 is done).
 
-## Local verification (source of truth)
+## Verification
 
-The GitHub Actions workflow is in the repository, but **CI may not run because of usage limits**. The gate before merge is `./build.ps1` on Windows. Once Actions run, a green CI will be required too (the PR template will get a checkbox then).
+The merge gate is **green CI** (`.github/workflows/build.yml`) on both jobs:
+
+- `windows`: runs `./build.ps1`, so every unit test runs, including `WindowsFact`
+- `linux`: runs restore / format verify / build / test directly; `WindowsFact` tests are skipped
+
+Running the same checks locally before pushing is recommended, not required:
 
 ```powershell
 ./build.ps1
@@ -99,11 +104,11 @@ The GitHub Actions workflow is in the repository, but **CI may not run because o
 
 It runs `dotnet restore` → `dotnet format --verify-no-changes` → `dotnet build` → `dotnet test`. Restore / format / build target **`Txfio.slnx`**. `dotnet test` targets **`tests/Txfio.Tests/Txfio.Tests.csproj`**. Stress tests (`tests/Txfio.Stress`) are not part of the gate; run them explicitly with `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj`.
 
-This script is **Windows only**. On Linux, do not run `./build.ps1`; run restore / format / build on `Txfio.slnx` in order, then run `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. Before opening a PR, every unit test must pass except those skipped as `Windows only` (`WindowsFact`). This is a condition before the PR, not the merge gate. The test record before merge must come from Windows. Running the tests needs the .NET 8 runtime in addition to the .NET 10 SDK.
+This script is **Windows only**. On Linux, do not run `./build.ps1`; run restore / format / build on `Txfio.slnx` in order, then run `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. On Linux, every unit test must pass except those skipped as `Windows only` (`WindowsFact`); the Windows CI job runs those. Running the tests needs the .NET 8 runtime in addition to the .NET 10 SDK.
 
 Crash injection and SMB verification are required locally only when the Issue's acceptance criteria say so.
 
-In the PR's Verification, state that `./build.ps1` was run.
+In the PR's Verification, check that CI is green on both jobs, and note any local runs.
 
 ## Merging
 

@@ -1,5 +1,5 @@
 ---
-description: Engineering standards — layout, TFM, analyzers, local build gate
+description: Engineering standards — layout, TFM, analyzers, verification gate
 alwaysApply: true
 ---
 
@@ -44,8 +44,8 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 
 ## Verification gate
 
-- Windows: `./build.ps1` before merge (restore → format verify → build on **`Txfio.slnx`**, then `dotnet test` on **`tests/Txfio.Tests`** only)
-- Linux: do **not** run `./build.ps1`. Run restore / format verify / build on `Txfio.slnx`, then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. Before a PR, all tests in that project must pass except those skipped as `Windows only` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. This does not replace the Windows merge gate
+- Merge gate: green CI (`.github/workflows/build.yml`) on both jobs. `windows` runs `./build.ps1`; `linux` runs the Linux steps below
+- Windows: `./build.ps1` (restore → format verify → build on **`Txfio.slnx`**, then `dotnet test` on **`tests/Txfio.Tests`** only)
+- Linux: do **not** run `./build.ps1`. Run restore / format verify / build on `Txfio.slnx`, then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. Before a PR, all tests in that project must pass except those skipped as `Windows only` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. The CI Windows job runs the `WindowsFact` tests
 - Tests that depend on Windows-only behavior (junctions, drive letters, open files that cannot be renamed or deleted) use `[WindowsFact("reason")]`
-- GitHub Actions workflow may exist but **must not be assumed runnable** while Actions are restricted
 - Crash injection / SMB tests are required only when the Issue acceptance says so
