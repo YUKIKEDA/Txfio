@@ -1280,7 +1280,7 @@ Commit success or failure is not an exception; it is returned as `CommitReport`.
 | `InvalidOperationException` / `ArgumentException` | Misuse. Includes overlapping calls on the same transaction and reparse points inside the work folder |
 | `InvalidDataException` | A dangerous entry name in a ZIP extract |
 | `System.IO.Compression` exceptions | The ZIP itself cannot be read |
-| `LockContentionException` | Another transaction holds the path, an intent lock on an ancestor directory, or the work folder. Has one failed path. No inner exception. The same exception after waiting until the deadline. Cancelling the wait is `OperationCanceledException` ("When contention is detected") |
+| `LockContentionException` | Another transaction holds the path, an intent lock on an ancestor directory, or the work folder. Has one failed path. No inner exception. The same exception after waiting until the deadline. Cancelling the wait is `OperationCanceledException` ("When contention is detected"), except between the rounds of `RecoverAsync` ("Recover API") |
 | `RecoveryRequiredException` | Staging on a path that overlaps the footprint of an orphaned journal, and `CommitAsync` while this transaction holds such a path ("Rejecting while an orphaned journal exists"). `Path` is the overlapping path, or the work folder for an unreadable journal. No inner exception |
 
 A readable journal is resolved with `RecoverAsync`.
@@ -1485,7 +1485,7 @@ The interval cannot be passed by the caller.
 On SMB each attempt is a CreateFile that opens a lock file, so the library fixes the interval.
 `TimeSpan.Zero` does not sleep and tries once, as before.
 The sleep while waiting is cut short by that call's `CancellationToken`.
-Then it throws `OperationCanceledException`, not `LockContentionException`.
+Then it throws `OperationCanceledException`, not `LockContentionException` (except between the rounds of `RecoverAsync`, "Recover API").
 Cancellation after the locks are taken works as each API already does (after the commit's apply starts, the token is not observed).
 
 It waits only when it opens something intending to hold it as a lock and gets a sharing violation:

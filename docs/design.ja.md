@@ -1284,7 +1284,7 @@ null のときは通知しない。
 | `InvalidOperationException` / `ArgumentException` | 使い方の誤り。同じトランザクションへの重なった呼び出し、ワークフォルダ内側のリパースポイントを含む |
 | `InvalidDataException` | ZIP の展開で危険なエントリ名がある |
 | `System.IO.Compression` の例外 | ZIP 自体が読めない |
-| `LockContentionException` | 他のトランザクションがパス、祖先ディレクトリの意図ロック、またはワークフォルダを押さえている。失敗したパスを 1 つ持つ。内部例外は持たない。期限まで待っても同じ例外。待ちの取り消しは `OperationCanceledException`（「競合検知のタイミング」） |
+| `LockContentionException` | 他のトランザクションがパス、祖先ディレクトリの意図ロック、またはワークフォルダを押さえている。失敗したパスを 1 つ持つ。内部例外は持たない。期限まで待っても同じ例外。待ちの取り消しは `OperationCanceledException`（「競合検知のタイミング」）。ただし `RecoverAsync` の周回のあいだは除く（「Recover API」） |
 | `RecoveryRequiredException` | 残骸ジャーナルのフットプリントに重なるパスへのステージと、そのようなパスを持っているあいだの `CommitAsync`（「残骸ジャーナルがあるあいだの拒否」）。`Path` は重なったパスで、読めないジャーナルのときはワークフォルダ。内部例外は持たない |
 
 読めるジャーナルは `RecoverAsync` で解消する。
@@ -1490,7 +1490,7 @@ Pessimistic。
 SMB 上の試行はロックファイルを開く CreateFile なので、間隔はライブラリが固定する。
 `TimeSpan.Zero` はスリープせず、今と同じく 1 回だけ試す。
 待ちのスリープは、その呼び出しの `CancellationToken` で切れる。
-切れたときは `OperationCanceledException` で、`LockContentionException` にはしない。
+切れたときは `OperationCanceledException` で、`LockContentionException` にはしない（`RecoverAsync` の周回のあいだは除く。「Recover API」）。
 ロックが取れたあとのキャンセルは、今の各 API のままである（コミットの適用が始まったあとはトークンを見ない）。
 
 待つのは、ロックを持つつもりで開いて共有違反になったときだけである。
