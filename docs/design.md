@@ -1922,7 +1922,10 @@ Each round tries each remaining journal once, in order, starting from step 2 (it
 So one journal whose paths are held does not hold back the others, even with `Timeout.InfiniteTimeSpan`.
 With `TimeSpan.Zero` there are no rounds.
 A journal still not processed at the deadline is listed as `Contended`, unless it is gone by then (another `RecoverAsync` finished it), in which case it is not counted.
-When cancelled while waiting between rounds, it closes the locks taken for the journals and the work-folder lock, and returns `OperationCanceledException`. Journals processed earlier are not undone.
+When cancelled while waiting between rounds, it attempts nothing more and returns the `RecoverReport` as at the deadline: the remaining journals are `Contended`, and the lock-file cleanup is skipped.
+It does not throw `OperationCanceledException` there, because the first pass may already have processed journals, and throwing would lose their results (the next `RecoverAsync` does not see them again).
+No footprint locks are held between rounds, so only the work-folder lock is closed.
+Cancellation while waiting for the work-folder lock, before any journal is processed, still throws `OperationCanceledException`.
 
 The journal of a live transaction is never read, because the owner writes it with `FileShare.None` and a reader would make that write fail.
 An orphaned journal no longer changes, so what step 1 read is what step 4 processes.
@@ -1931,7 +1934,7 @@ The opens in steps 1 and 3 are the same kind of short window as two checks openi
 While the journal is processed, the footprint locks are held, so a check that takes the sharing violation as a live owner holds no path that overlaps the footprint and cannot take one ("Rejecting while an orphaned journal exists").
 Even when an operation matches neither Before nor After during roll-forward, the remaining operations continue to be applied, and the journal is deleted after the `.txnew` of the operations that were not applied are deleted.
 The result reports `ConflictDetected` only once, and the next `RecoverAsync` does not process that journal again.
-Even if `RecoverAsync` runs concurrently on the same work folder, one side cannot take the footprint locks or the liveness lock and skips the journal, so the same journal is never processed twice.
+Even if `RecoverAsync` runs concurrently on the same work folder, one side cannot take the footprint locks or the liveness lock while the other processes the journal, and finds it gone afterwards, so the same journal is never processed twice.
 After all journals, it tries to delete the lock files ("Cleaning up lock files").
 The library tells roll-forward from rollback by the presence of the `Committing` marker, runs it, and returns the result.
 To avoid files changing at unexpected times, nothing runs until the application calls it.
@@ -1984,7 +1987,7 @@ There are no gaps.
 `ConflictDetected` means that external interference caused an operation that matches neither Before nor After, and that journal is gone.
 `JournalUnreadable` means that at least one journal was unreadable.
 That journal remains.
-`Contended` means that the locks on at least one journal's footprint could not be taken by the deadline ("Recover API").
+`Contended` means that the locks on at least one journal's footprint could not be taken by the deadline, or before the call was cancelled between rounds ("Recover API").
 That journal is orphaned, was not processed, and remains.
 Call `RecoverAsync` again after the transactions that hold those paths end.
 When several results apply, only one is returned, in the order `JournalUnreadable`, `Contended`, `ConflictDetected`, `RolledForward`, `RolledBack`.
