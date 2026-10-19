@@ -166,6 +166,31 @@ public sealed class RecoveryRequiredTests
     }
 
     /// <summary>
+    /// A rejected call takes no lock, and the footprint the transaction kept is dropped once the journal is recovered.
+    /// </summary>
+    /// <remarks>
+    /// <para>Given: d/ exists and a journal with Committing has an Add of d/a.txt, without a liveness lock. A transaction has begun and staged nothing.</para>
+    /// <para>When: the transaction adds d/a.txt, RecoverAsync runs while it is still open (rolling d/a.txt forward), and the transaction updates d/a.txt.</para>
+    /// <para>Then: the first Add throws RecoveryRequiredException. RecoverAsync is RolledForward (it would get LockContentionException if the rejected call had taken the shared work-folder lock). The Update is staged.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AddAsync_RejectedCallTakesNoLockAndKeptFootprintIsDroppedAfterRecover()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
+        await LeftoverAddFiles.WriteAddAsync(work.Path, committing: true, System.IO.Path.Combine("d", "a.txt"), "staged");
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
+        await Assert.ThrowsAsync<RecoveryRequiredException>(() => tx.AddAsync("d/a.txt", first));
+        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
+        await tx.UpdateAsync("d/a.txt", second);
+
+        Assert.Single(tx.GetPendingChanges());
+    }
+
+    /// <summary>
     /// A commit without operations does not check for orphaned journals.
     /// </summary>
     /// <remarks>
