@@ -67,6 +67,7 @@ Use these words. The left column is the design or Japanese concept; the right is
 | しるし (`share-lost.lock`) | share-lost marker |
 | 生存ロック (`tx-{guid}.lock`) | liveness lock |
 | 残骸ジャーナル | orphaned journal |
+| フットプリント (the paths that recovering an orphaned journal may change) | footprint (of an orphaned journal); each path in it is an entry |
 | 読めないジャーナル | unreadable journal |
 | ステージングファイル、サイドカー (`.txnew`) | staging file (`.txnew`); "sidecar" only in the design's write model |
 | 再ステージの退避 (`.prev`) | restage backup (`.prev`) |
