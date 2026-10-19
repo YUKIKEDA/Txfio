@@ -171,7 +171,7 @@ public sealed class RecoveryRequiredTests
     /// <remarks>
     /// <para>Given: d/ exists and a journal with Committing has an Add of d/a.txt, without a liveness lock. A transaction has begun and staged nothing.</para>
     /// <para>When: the transaction adds d/a.txt, RecoverAsync runs while it is still open (rolling d/a.txt forward), and the transaction updates d/a.txt.</para>
-    /// <para>Then: the first Add throws RecoveryRequiredException. RecoverAsync is RolledForward (it would get LockContentionException if the rejected call had taken the shared work-folder lock). The Update is staged.</para>
+    /// <para>Then: the first Add throws RecoveryRequiredException. RecoverAsync is RolledForward (it would report Contended if the rejected call had taken a lock on d/a.txt). The Update is staged.</para>
     /// </remarks>
     [Fact]
     public async Task AddAsync_RejectedCallTakesNoLockAndKeptFootprintIsDroppedAfterRecover()
