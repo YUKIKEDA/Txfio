@@ -25,6 +25,7 @@ internal sealed partial class Transaction : ITransaction
     private bool _disposed;
     private int _callDepth;
     private LockAttempt _lockAttempt;
+    private CancellationToken _callCancellation;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Transaction"/> class on the given work folder and journal.
@@ -185,6 +186,7 @@ internal sealed partial class Transaction : ITransaction
         }
 
         _lockAttempt = LockAttempt.Start(_lockWait, cancellationToken);
+        _callCancellation = cancellationToken;
         return new CallScope(this);
     }
 
@@ -207,7 +209,7 @@ internal sealed partial class Transaction : ITransaction
     private async Task LockForStagingAsync(string[] paths, string[]? exclusiveIntentPaths = null)
     {
         string[] exclusive = exclusiveIntentPaths ?? Array.Empty<string>();
-        await _orphans.ThrowIfOverlapAsync(paths, exclusive, CancellationToken.None).ConfigureAwait(false);
+        await _orphans.ThrowIfOverlapAsync(paths, exclusive, _callCancellation).ConfigureAwait(false);
         await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
         if (exclusive.Length == 0)
         {
@@ -224,7 +226,7 @@ internal sealed partial class Transaction : ITransaction
         string[] reservedPaths,
         string[] readDirectories)
     {
-        await _orphans.ThrowIfOverlapAsync(paths, reservedPaths.Concat(readDirectories), CancellationToken.None)
+        await _orphans.ThrowIfOverlapAsync(paths, reservedPaths.Concat(readDirectories), _callCancellation)
             .ConfigureAwait(false);
         await _locks.AcquireSharedAsync(_workFolder, _lockAttempt).ConfigureAwait(false);
         return await _locks.AcquireForReadingAsync(_workFolder, paths, reservedPaths, readDirectories, _lockAttempt)
