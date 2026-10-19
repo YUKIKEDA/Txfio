@@ -1449,8 +1449,11 @@ The order is below. The waits share the one deadline from "When contention is de
 
 Removed.
 A transaction never lets go of the shared work-folder lock while it holds a path lock or intent lock ("The work-folder lock"), so there is nothing for a marker to report.
-An existing `.txfio/share-lost.lock` left by an earlier version is neither opened nor deleted.
-It is one small file, and a client of an earlier version that still shares the folder keeps using it.
+An existing `.txfio/share-lost.lock` left by an earlier version is neither opened nor deleted, because deleting it is not needed.
+
+Clients of an earlier version must not share a work folder with this version.
+For example, a 0.1.0 transaction lets go of the shared work-folder lock while it waits for an exclusive intent lock and relies on the marker, but the lock-file cleanup no longer checks the marker, so it could delete lock files that transaction holds.
+A 0.1.0 `BeginAsync` also rejects any orphan, and a 0.1.0 `RecoverAsync` holds the work-folder lock exclusively for the whole call.
 
 Previously, a transaction let go of the shared work-folder lock while it waited for an exclusive intent lock, so that `RecoverAsync` could raise the work-folder lock to exclusive.
 Before letting go, it opened this marker, and the exclusive holder checked that the marker was free.
