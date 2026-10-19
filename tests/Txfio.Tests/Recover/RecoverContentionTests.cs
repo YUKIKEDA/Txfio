@@ -85,15 +85,21 @@ public sealed class RecoverContentionTests
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles other = await LeftoverAddFiles.WriteAddAsync(work.Path, committing: true, "b.txt", "other");
         (PathLockSet holder, _) = await HoldOrphanPathAsync(work.Path);
-        using CancellationTokenSource cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        try
+        {
+            using CancellationTokenSource cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path, Timeout.InfiniteTimeSpan, cancel.Token);
+            RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path, Timeout.InfiniteTimeSpan, cancel.Token);
 
-        Assert.Equal(RecoverResult.Contended, report.Result);
-        Assert.Contains(report.Journals, journal => journal.Result == RecoverResult.RolledForward);
-        Assert.Equal("other", await File.ReadAllTextAsync(other.TargetPath));
-        Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
-        holder.Release();
+            Assert.Equal(RecoverResult.Contended, report.Result);
+            Assert.Contains(report.Journals, journal => journal.Result == RecoverResult.RolledForward);
+            Assert.Equal("other", await File.ReadAllTextAsync(other.TargetPath));
+            Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+        }
+        finally
+        {
+            holder.Release();
+        }
     }
 
     /// <summary>
