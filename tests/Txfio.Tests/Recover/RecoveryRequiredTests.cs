@@ -41,40 +41,41 @@ public sealed class RecoveryRequiredTests
     }
 
     /// <summary>
-    /// If another transaction crashes after this one staged under its directory, the commit is rejected without touching the disk.
+    /// A transaction whose staging check passed while the owner was alive, and that took the lock the owner dropped when it crashed, cannot commit.
     /// </summary>
     /// <remarks>
-    /// <para>Given: tx1 creates directory d. tx2 adds d/important.txt. Then tx1 is stopped at AfterCommitting and disposed.</para>
-    /// <para>When: tx2 calls CommitAsync, is disposed, and RecoverAsync runs.</para>
-    /// <para>Then: the commit throws RecoveryRequiredException with Path d/important.txt, and d/important.txt is not created. Recover is RolledForward, d remains, and no journal remains.</para>
+    /// <para>Given: tx1 has added a.txt. tx2, with a 5-second wait, starts adding a.txt and waits for tx1's path lock.</para>
+    /// <para>When: tx1 is stopped at AfterCommitting and disposed, tx2's Add completes, and tx2 calls CommitAsync. Then tx2 is disposed and RecoverAsync runs.</para>
+    /// <para>Then: the commit throws RecoveryRequiredException with Path a.txt and does not touch the disk. Recover is RolledForward, a.txt has tx1's content, and no journal remains.</para>
     /// </remarks>
     [Fact]
-    public async Task CommitAsync_ThrowsRecoveryRequiredWithoutTouchingDiskWhenAnotherTransactionCrashesAfterStaging()
+    public async Task CommitAsync_ThrowsRecoveryRequiredWhenLockWasTakenFromCrashedOwner()
     {
         await using TempDirectory work = TempDirectory.Create();
-        string tree = System.IO.Path.Combine(work.Path, "d");
-        string important = System.IO.Path.Combine(tree, "important.txt");
+        string target = System.IO.Path.Combine(work.Path, "a.txt");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction tx2 = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx2 = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(5)))
         {
+            Task adding;
             await using (ITransaction tx1 = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
             {
-                await tx1.CreateDirectoryAsync("d");
-                await using MemoryStream content = LeftoverAddFiles.Utf8Stream("important");
-                await tx2.AddAsync("d/important.txt", content);
+                await tx1.WriteAllTextAsync("a.txt", "first");
+                adding = tx2.WriteAllTextAsync("a.txt", "second");
+                await Task.Delay(200);
+                Assert.False(adding.IsCompleted);
                 await Assert.ThrowsAsync<CrashInjectionException>(() => tx1.CommitAsync());
             }
 
+            await adding;
             RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(() => tx2.CommitAsync());
 
-            Assert.Equal(important, required.Path);
-            Assert.False(File.Exists(important));
+            Assert.Equal(target, required.Path);
+            Assert.False(File.Exists(target));
         }
 
-        Assert.Empty(Directory.GetFiles(tree, "*.txnew"));
         Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
-        Assert.True(Directory.Exists(tree));
+        Assert.Equal("first", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
 
