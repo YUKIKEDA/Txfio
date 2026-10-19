@@ -98,6 +98,35 @@ public sealed class RecoverContentionTests
         Assert.Equal(2, Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal").Length);
     }
 
+    /// <summary>
+    /// A journal whose footprint has one entry under another does not contend with itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>Given: a transaction creates directory d, adds d/a.txt, and is stopped at AfterCommitting and disposed, so its footprint has d and d/a.txt.</para>
+    /// <para>When: RecoverAsync runs.</para>
+    /// <para>Then: RolledForward (not Contended), d/a.txt has the Add content, and no journal remains.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RecoverAsync_RollsForwardJournalWithNestedFootprintEntries()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        FaultInjector faults = new FaultInjector();
+        faults.Arm(IFaultInjector.AfterCommitting);
+        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        {
+            await crashed.CreateDirectoryAsync("d");
+            await crashed.WriteAllTextAsync("d/a.txt", "staged");
+            await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
+        }
+
+        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+
+        Assert.Equal(RecoverResult.RolledForward, report.Result);
+        Assert.Equal(RecoverResult.RolledForward, Assert.Single(report.Journals).Result);
+        Assert.Equal("staged", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "d", "a.txt")));
+        Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
+    }
+
     // Leaves a committing orphan whose footprint (directory d) the returned live transaction holds a shared intent lock under.
     private static async Task<ITransaction> HoldUnderCrashedDirectoryAsync(string workFolder)
     {
