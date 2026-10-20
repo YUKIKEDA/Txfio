@@ -86,9 +86,9 @@ Txfio creates three kinds of staging entries in the same directory as the target
 
 | Entry | Name | Exists |
 | --- | --- | --- |
-| Staged content | `{name}.{txid}.txnew` | From staging until commit or discard |
-| Restage backup | `{name}.{txid}.txnew.prev` | While a call restages the same `.txnew` ("Created directories") |
-| Swap backup | `{name}.{txid}.txold` | While a swap is applied ("Swapping a directory") |
+| Staged content | `{name}.{txid}.txnew` | From staging until commit or discard, or until `RecoverAsync` after a crash |
+| Restage backup | `{name}.{txid}.txnew.prev` | While a call restages the same `.txnew` ("Created directories"), or until `RecoverAsync` after a crash |
+| Swap backup | `{name}.{txid}.txold` (a file or a directory, the kind of the original destination) | While a swap is applied ("Swapping a directory"), or until `RecoverAsync` after a crash |
 
 - `{name}` is the target's file or directory name, and is never empty
 - `{txid}` is the transaction ID formatted with `Guid.ToString("D")`: 32 lowercase hexadecimal digits in groups of 8, 4, 4, 4, and 12, separated by hyphens
@@ -107,17 +107,18 @@ Besides them, it can see:
 
 A path with any segment, relative to the work folder, that matches a staging name is not a target of any API, read or write.
 It is `InvalidOperationException`, before any lock, like a path under `.txfio` ("Directory operations").
+The check looks at the normalized path, the same form as lock names ("Path lock names"): existing components are normalized to their long names, and trailing dots and spaces are trimmed as `Path.GetFullPath` does. So an 8.3 short name, or a trailing dot or space, cannot reach a staging entry.
 So a user's file or directory inside the work folder never has such a name, and recognizing staging entries by name has no false positives.
 
-- `ImportAsync` fails before staging when the source, or a file or directory under it, has such a name (`InvalidOperationException`, with that path in the message)
+- `ImportAsync` fails before staging when the source, or a file or directory under it, has such a name (`InvalidOperationException`, with that path in the message). The source path the caller passes is normalized the same way; names found by enumerating it are already long names
 - Extract rejects entries whose names have such a segment ("Extract checks")
 
 #### Skipping staging entries
 
 Walks of a tree inside the work folder skip the staging entries of every transaction, not only their own: `GetEntriesAsync`, the source of a directory `CopyAsync`, `ExportAsync`, and the input of `CreateArchiveAsync`.
 A staging entry is never user data in any view; another transaction's `.txnew` is its uncommitted content, and one left by a crashed transaction waits for `RecoverAsync`.
-A `.txold` is a directory; it is skipped with everything under it.
-The direct-children condition of a directory `DeleteAsync` still sees them, because they are on disk ("DeleteAsync").
+A `.txold` that is a directory is skipped with everything under it; one that is a file is skipped like a `.txnew`.
+The direct-children condition of a directory `DeleteAsync` still sees them, because they are on disk. Since they are invisible through the API, the `ExternalConflictException` names the blocking child in `Path` ("DeleteAsync").
 
 #### `Txfio.IsStagingName`
 
@@ -125,6 +126,8 @@ The direct-children condition of a directory `DeleteAsync` still sees them, beca
 
 - `name` is one name, not a path. A name that contains a directory separator (`\` or `/`) throws `ArgumentException`; null throws `ArgumentNullException`
 - It does not touch the disk and does not depend on a work folder
+- Trailing dots and spaces are trimmed before matching, as Windows does when it opens a name, so `a.{txid}.txnew.` is a staging name too
+- `""`, `"."`, and `".."` return `false`
 - To skip staging entries in a plain enumeration, test the last segment of each entry with it
 
 ### Created directories
@@ -246,7 +249,8 @@ A parent with an Update, a remaining Add, or a `CreateDirectory` is an error too
 An Add / Update / Move / `CreateDirectory` into a directory scheduled for deletion is an error, and so is making that directory itself the Move destination.
 This matches the operation-log idea of always stating explicitly "what is being changed", and avoids pulling things in implicitly.
 The scan of direct children excludes this transaction's `.txnew` files.
-Leftover sidecars of another transaction, and any other entry, are untracked and cause an error.
+Leftover staging entries of another transaction, and any other entry, are untracked and cause an error.
+The `ExternalConflictException` at staging has `Path` set to the first such child, in lexical order of the upper-cased paths, so the caller can find a child that `GetEntriesAsync` does not show (a staging entry, "Names of staging files").
 
 #### Locks
 
