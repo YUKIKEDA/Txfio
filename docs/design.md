@@ -80,12 +80,52 @@ The IO cost is the same (the data is written at the same time; only the moment i
 
 Even if the process crashes before the write to `.txnew` completes, the original path always holds only "the complete state before the change" (applying at commit means the real path is never touched before commit, so the choice of write model solves this problem automatically).
 
-### Naming of `.txnew`
+### Names of staging files
 
-The file name includes the transaction ID as well as the target file name (for example `foo.txt.{txid}.txnew`).
-This lets Recover tell exactly which transaction a `.txnew` left after a crash belongs to.
-The restage backup is `foo.txt.{txid}.txnew.prev`.
-Rollback also deletes this backup ("Created directories").
+Txfio creates three kinds of staging entries in the same directory as the target:
+
+| Entry | Name | Exists |
+| --- | --- | --- |
+| Staged content | `{name}.{txid}.txnew` | From staging until commit or discard |
+| Restage backup | `{name}.{txid}.txnew.prev` | While a call restages the same `.txnew` ("Created directories") |
+| Swap backup | `{name}.{txid}.txold` | While a swap is applied ("Swapping a directory") |
+
+- `{name}` is the target's file or directory name, and is never empty
+- `{txid}` is the transaction ID formatted with `Guid.ToString("D")`: 32 lowercase hexadecimal digits in groups of 8, 4, 4, 4, and 12, separated by hyphens
+- Txfio writes these names in lowercase. A name matches when it ends in `.`, a `{txid}` in that form, and `.txnew`, `.txnew.prev`, or `.txold`, after a non-empty `{name}`, compared ignoring case (`OrdinalIgnoreCase`), like every path in the work folder
+- The transaction ID in the name lets Recover tell exactly which transaction an entry left after a crash belongs to. Rollback deletes the restage backup too ("Created directories")
+- These names are part of the contract. Changing the format is a breaking change (clients of different versions must not share a work folder anyway, "The share-lost marker")
+
+An application that enumerates the work folder with the plain file API sees these entries, including those of other transactions.
+It recognizes them with `Txfio.IsStagingName` below, or by the same rule.
+Besides them, it can see:
+
+- The metadata folder `.txfio` and everything in it (the journal's temporary file is only there)
+- Directories that an uncommitted `CreateDirectoryAsync`, directory copy or Import, or extract has created. They have their real names, so no name rule can hide them; they are visible before commit (dirty read)
+
+#### Reserved names
+
+A path with any segment, relative to the work folder, that matches a staging name is not a target of any API, read or write.
+It is `InvalidOperationException`, before any lock, like a path under `.txfio` ("Directory operations").
+So a user's file or directory inside the work folder never has such a name, and recognizing staging entries by name has no false positives.
+
+- `ImportAsync` fails before staging when the source, or a file or directory under it, has such a name (`InvalidOperationException`, with that path in the message)
+- Extract rejects entries whose names have such a segment ("Extract checks")
+
+#### Skipping staging entries
+
+Walks of a tree inside the work folder skip the staging entries of every transaction, not only their own: `GetEntriesAsync`, the source of a directory `CopyAsync`, `ExportAsync`, and the input of `CreateArchiveAsync`.
+A staging entry is never user data in any view; another transaction's `.txnew` is its uncommitted content, and one left by a crashed transaction waits for `RecoverAsync`.
+A `.txold` is a directory; it is skipped with everything under it.
+The direct-children condition of a directory `DeleteAsync` still sees them, because they are on disk ("DeleteAsync").
+
+#### `Txfio.IsStagingName`
+
+`public static bool IsStagingName(string name)` on the static `Txfio` class returns whether a single file or directory name matches a staging name.
+
+- `name` is one name, not a path. A name that contains a directory separator (`\` or `/`) throws `ArgumentException`; null throws `ArgumentNullException`
+- It does not touch the disk and does not depend on a work folder
+- To skip staging entries in a plain enumeration, test the last segment of each entry with it
 
 ### Created directories
 
@@ -523,7 +563,7 @@ What stays in the journal is an Add per file; no kind for empty directories is a
 
 #### Preconditions
 
-This transaction's `.txnew` files are excluded.
+Staging entries of every transaction are excluded ("Names of staging files").
 Uncommitted Adds are not on disk under their real names, so they are not included.
 Junctions and symbolic links are not followed, and those entries are not copied.
 If the destination has a file or directory, it fails; nothing is merged.
@@ -582,6 +622,7 @@ The same as `CopyAsync` ("Created directories").
 | Type | Condition |
 | --- | --- |
 | `ArgumentException` | The source is inside the work folder |
+| `InvalidOperationException` | The source, or a file or directory under it, has a staging name ("Names of staging files" › "Reserved names"). Nothing is staged |
 
 #### Cleanup on failure
 
@@ -603,6 +644,7 @@ Nothing is locked even for a directory.
 It neither overwrites nor creates the destination's parent.
 This operation creates the destination directory itself and its empty subdirectories.
 Junctions and symbolic links are not followed, and those entries are not copied.
+Staging entries of every transaction are not copied ("Names of staging files").
 
 #### Locks
 
@@ -710,8 +752,8 @@ It enumerates the direct children once and checks existence for each candidate, 
 #### Preconditions
 
 Candidates come from the direct children on disk (the real directory behind the view; for the destination of a directory Move, its source), and from this transaction's operations whose parent is that directory (Add, Update, Move destination, `CreateDirectory`); each is checked in the "post-commit view".
-This transaction's `.txnew`, `.txnew.prev`, and `.txold` are not included.
-Staging files of another transaction are on disk, so they are visible (dirty read).
+Staging entries of every transaction (`.txnew`, `.txnew.prev`, `.txold`) are not included ("Names of staging files").
+Directories that another transaction created before commit are on disk under their real names, so they are visible (dirty read).
 Path resolution and exceptions are the same as `ExistsAsync`.
 
 #### Locks
@@ -790,7 +832,7 @@ When omitted, `compressionLevel` is `Optimal`, `includeBaseDirectory` is false (
 Turns a file or directory inside the work folder into a ZIP inside the work folder.
 The ZIP is written to `.txnew` and kept as one Add.
 Input is read the same way as `CopyAsync`, walking the tree on disk.
-This transaction's `.txnew` files are excluded, and uncommitted Adds are not included.
+Staging entries of every transaction are excluded, and uncommitted Adds are not included.
 Junctions and symbolic links are not followed, and are not put in the ZIP.
 Empty subdirectories are added as directory entries.
 For a file, there is one entry with the file name, and `includeBaseDirectory` is ignored.
@@ -934,7 +976,7 @@ The same as `ExtractArchiveAsync`.
 
 Extract (`ExtractArchiveAsync` / `ImportArchiveAsync`) checks every entry name in the central directory before it starts writing.
 If even one matches any of the following, nothing is staged, the destination is not created, and it fails with `InvalidDataException`:
-names that leave the destination (`..`, absolute paths, drive letters), names that are not valid in a Windows path, names ending in `.txnew`, duplicate names (compared after folding with `ToUpperInvariant`, so names that differ only in case are duplicates too), and a name that appears as both a file and a directory.
+names that leave the destination (`..`, absolute paths, drive letters), names that are not valid in a Windows path, names with a segment that is a staging name ("Names of staging files"), duplicate names (compared after folding with `ToUpperInvariant`, so names that differ only in case are duplicates too), and a name that appears as both a file and a directory.
 When .NET cannot read the ZIP itself (it is corrupt, encrypted, and so on), the `System.IO.Compression` exception propagates as is.
 
 #### Preconditions
@@ -1037,7 +1079,7 @@ Export writes nothing.
 | Type | Condition |
 | --- | --- |
 | `ArgumentNullException` | `entries`, an element, or `SourcePath` is null |
-| `ArgumentException` | `""` for a file element. Entry names are checked by the same rules as extract (names that leave the destination, names not valid in a Windows path, names ending in `.txnew`, duplicates ignoring case, a file and a directory with the same name), and a match throws |
+| `ArgumentException` | `""` for a file element. Entry names are checked by the same rules as extract (names that leave the destination, names not valid in a Windows path, names with a staging-name segment, duplicates ignoring case, a file and a directory with the same name), and a match throws |
 | `InvalidOperationException` | Create reads the tree on disk, and an element is already staged in this transaction, this transaction has an operation under a directory element, or an element is under a scheduled `DeleteTree`. The ZIP path is the same as an element, or is under a directory element |
 
 #### Cleanup on failure
@@ -1281,7 +1323,7 @@ Commit success or failure is not an exception; it is returned as `CommitReport`.
 | --- | --- |
 | `ExternalConflictException` | A precondition on disk no longer holds. Has one failed path. The target is missing, already exists, the destination is a directory, the parent or work folder is missing, a directory has an unexpected direct child, or the copy destination is occupied |
 | `UnsupportedOperationException` | Not supported. `DeleteTreeAsync` on a file, a Move across volumes, `ReadAsync` of a directory |
-| `InvalidOperationException` / `ArgumentException` | Misuse. Includes overlapping calls on the same transaction and reparse points inside the work folder |
+| `InvalidOperationException` / `ArgumentException` | Misuse. Includes overlapping calls on the same transaction, reparse points inside the work folder, and paths with a staging name ("Names of staging files") |
 | `InvalidDataException` | A dangerous entry name in a ZIP extract |
 | `System.IO.Compression` exceptions | The ZIP itself cannot be read |
 | `LockContentionException` | Another transaction holds the path, an intent lock on an ancestor directory, or the work folder. Has one failed path. No inner exception. The same exception after waiting until the deadline. Cancelling the wait is `OperationCanceledException` ("When contention is detected"), except between the rounds of `RecoverAsync` ("Recover API") |
@@ -1312,6 +1354,10 @@ Each API's steps are defined in that API's section. This section only has the pa
 
 The work folder itself cannot be deleted.
 The metadata folder (`.txfio`) and everything under it are not targets of any write API (an error).
+
+#### Staging names are not targets
+
+A path with a segment that matches a staging name is not a target of any API ("Names of staging files" › "Reserved names").
 
 #### Reparse points inside are not followed
 
