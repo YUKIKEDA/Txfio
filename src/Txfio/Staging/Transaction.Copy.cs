@@ -132,7 +132,7 @@ internal sealed partial class Transaction
         List<PlannedTreeFile> files = new List<PlannedTreeFile>();
         if (!WorkPath.IsReparsePoint(sourcePath))
         {
-            PlanCopiedTree(sourcePath, sourcePath, destinationPath, directories, files, cancellationToken);
+            PlanCopiedTree(sourcePath, sourcePath, destinationPath, rejectStagingNames: false, directories, files, cancellationToken);
         }
 
         await ApplyCopiedTreeAsync(directories, files, progress, cancellationToken)

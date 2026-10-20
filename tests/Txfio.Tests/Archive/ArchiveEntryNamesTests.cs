@@ -47,7 +47,7 @@ public sealed class ArchiveEntryNamesTests
     [InlineData("lpt1.log")]
     [InlineData("space ")]
     [InlineData("a\u0001.txt")]
-    [InlineData("dir.TXNEW/a.txt")]
+    [InlineData("dir.3F2504E0-4F89-11D3-9A0C-0305E82C3301.TXOLD/a.txt")]
     public void Split_UnusableNameThrowsInvalidDataException(string fullName)
     {
         Assert.Throws<InvalidDataException>(() => ArchiveEntryNames.Split(fullName, out _));

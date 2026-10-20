@@ -54,7 +54,7 @@ internal sealed partial class Transaction
         foreach (string entry in Directory.EnumerateFileSystemEntries(real))
         {
             string name = System.IO.Path.GetFileName(entry);
-            if (!IsThisTransactionSidecar(name))
+            if (!StagingNames.IsMatch(name))
             {
                 candidates.Add(System.IO.Path.Combine(target, name));
             }
@@ -159,14 +159,5 @@ internal sealed partial class Transaction
             System.IO.Path.TrimEndingDirectorySeparator(fullPath),
             System.IO.Path.TrimEndingDirectorySeparator(_workFolder),
             StringComparison.OrdinalIgnoreCase);
-    }
-
-    // This transaction's staging files, restage backups, and swap backups.
-    private bool IsThisTransactionSidecar(string name)
-    {
-        string id = "." + _transactionId.ToString("D") + ".";
-        return name.EndsWith(id + "txnew", StringComparison.OrdinalIgnoreCase)
-            || name.EndsWith(id + "txnew.prev", StringComparison.OrdinalIgnoreCase)
-            || name.EndsWith(id + "txold", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -16,7 +16,7 @@ internal static class WorkPath
     /// <param name="path">The relative or absolute target path.</param>
     /// <returns>The normalized absolute path.</returns>
     /// <exception cref="ArgumentException">The path points outside the work folder.</exception>
-    /// <exception cref="InvalidOperationException">The target itself, or an ancestor other than the work folder itself, is a reparse point.</exception>
+    /// <exception cref="InvalidOperationException">A segment below the work folder is a staging name, or the target itself, or an ancestor other than the work folder itself, is a reparse point.</exception>
     /// <exception cref="IOException">The long name of an existing component cannot be obtained.</exception>
     internal static string ResolveInWorkFolder(string workFolder, string path)
     {
@@ -30,6 +30,7 @@ internal static class WorkPath
             throw new ArgumentException("The path must be inside the work folder", nameof(path));
         }
 
+        StagingNames.ThrowIfReserved(workFolder, fullPath);
         ThrowIfReparseInside(workFolder, fullPath);
         return fullPath;
     }
