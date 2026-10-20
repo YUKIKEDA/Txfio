@@ -116,7 +116,7 @@ public static class Txfio
     /// Returns whether a single file or directory name is the name of a staging entry (<c>{name}.{txid}.txnew</c>, <c>{name}.{txid}.txnew.prev</c>, or <c>{name}.{txid}.txold</c>) of any transaction.
     /// </summary>
     /// <remarks>
-    /// <para>Trailing dots and spaces are trimmed before matching, as Windows does when it opens a name. The transaction ID is matched ignoring case.</para>
+    /// <para>Trailing dots and spaces are trimmed before matching, as Windows does when it opens a name. This applies on every OS, so on Linux a name such as <c>a.{txid}.txnew.</c> is a staging name too. The transaction ID is matched ignoring case.</para>
     /// <para>It does not touch the disk. To skip staging entries in a plain enumeration of the work folder, test the last segment of each entry.</para>
     /// <para>A path inside the work folder with a segment that is a staging name is not a target of any API (<see cref="InvalidOperationException"/>).</para>
     /// </remarks>
