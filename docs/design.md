@@ -251,6 +251,7 @@ This matches the operation-log idea of always stating explicitly "what is being 
 The scan of direct children excludes this transaction's `.txnew` files.
 Leftover staging entries of another transaction, and any other entry, are untracked and cause an error.
 The `ExternalConflictException` at staging has `Path` set to the first such child, in lexical order of the upper-cased paths, so the caller can find a child that `GetEntriesAsync` does not show (a staging entry, "Names of staging files").
+When such a child appears between staging and commit, the commit check reports the operation with the directory's path and `DirectoryPreconditions` (an `OperationReport` has one path); the caller finds the child by listing the directory with the plain file API and `Txfio.IsStagingName`.
 
 #### Locks
 
