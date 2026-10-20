@@ -332,14 +332,16 @@ internal static class StagingRules
     /// <param name="directoryPath">The target directory.</param>
     /// <param name="operations">The current list of operations.</param>
     /// <param name="transactionId">The ID of this transaction.</param>
+    /// <exception cref="ExternalConflictException">A condition is not met. <see cref="ExternalConflictException.Path"/> is the first blocking direct child on disk (in ordinal order of the upper-cased paths), or the directory when an operation blocks it.</exception>
     internal static void EnsureDirectoryDeleteAllowed(
         string directoryPath,
         IReadOnlyList<JournalOperation> operations,
         Guid transactionId)
     {
-        if (!MatchesDirectoryDeletePreconditions(directoryPath, operations, transactionId))
+        if (!CheckDirectoryDeletePreconditions(directoryPath, operations, transactionId, out string? blockingChild))
         {
-            throw new ExternalConflictException("The directory has a child that is not scheduled: " + directoryPath, directoryPath);
+            string reportedPath = blockingChild ?? directoryPath;
+            throw new ExternalConflictException("The directory has a child that is not scheduled: " + reportedPath, reportedPath);
         }
     }
 
@@ -355,6 +357,16 @@ internal static class StagingRules
         IReadOnlyList<JournalOperation> operations,
         Guid transactionId)
     {
+        return CheckDirectoryDeletePreconditions(directoryPath, operations, transactionId, out _);
+    }
+
+    private static bool CheckDirectoryDeletePreconditions(
+        string directoryPath,
+        IReadOnlyList<JournalOperation> operations,
+        Guid transactionId,
+        out string? blockingChild)
+    {
+        blockingChild = null;
         if (!Directory.Exists(directoryPath) || File.Exists(directoryPath))
         {
             return false;
@@ -396,6 +408,8 @@ internal static class StagingRules
             return false;
         }
 
+        // Report the same child every time: staging entries are invisible through the API, so the caller needs this path to find one.
+        Array.Sort(entries, static (left, right) => string.CompareOrdinal(left.ToUpperInvariant(), right.ToUpperInvariant()));
         foreach (string entry in entries)
         {
             if (WorkPath.IsThisTransactionStagingFile(entry, transactionId))
@@ -405,6 +419,7 @@ internal static class StagingRules
 
             if (!IsChildAccountedForDelete(directoryPath, entry, operations))
             {
+                blockingChild = entry;
                 return false;
             }
         }

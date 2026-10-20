@@ -121,6 +121,32 @@ public sealed class ShortNameLockTests
         Assert.Equal(longFile, Assert.Single(viaShort.GetPendingChanges()).Path, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The 8.3 short name of a staging entry cannot reach it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Given: a directory d.{txid}.txold, as a swap backup left by a crash, which also has an 8.3 short name.</para>
+    /// <para>When: ExistsAsync and WriteAllTextAsync are called through the short name.</para>
+    /// <para>Then: InvalidOperationException for both, and nothing is pending.</para>
+    /// </remarks>
+    [ShortNameFact]
+    public async Task ExistsAsync_ShortNameOfStagingEntryThrowsInvalidOperationException()
+    {
+        await using TempDirectory work = TempDirectory.Create();
+        string longDirectory = System.IO.Path.Combine(work.Path, "d.3f2504e0-4f89-11d3-9a0c-0305e82c3301.txold");
+        Directory.CreateDirectory(longDirectory);
+        string? shortDirectory = QueryShortPath(longDirectory);
+        Assert.NotNull(shortDirectory);
+        Assert.NotEqual(longDirectory, shortDirectory, StringComparer.OrdinalIgnoreCase);
+        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ExistsAsync(shortDirectory));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => tx.WriteAllTextAsync(System.IO.Path.Combine(shortDirectory, "a.txt"), "x"));
+
+        Assert.Empty(tx.GetPendingChanges());
+    }
+
     private static string? QueryShortPath(string path)
     {
         var buffer = new StringBuilder(Math.Max(path.Length + 1, 260));

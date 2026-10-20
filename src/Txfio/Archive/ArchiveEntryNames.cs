@@ -16,7 +16,7 @@ internal static class ArchiveEntryNames
     /// </summary>
     /// <param name="entries">The ZIP entries.</param>
     /// <returns>The relative path and kind of each entry.</returns>
-    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a duplicate, or a file and a directory with the same name.</exception>
+    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a name with a staging-name segment, a duplicate, or a file and a directory with the same name.</exception>
     internal static IReadOnlyList<ArchiveEntryPlan> Plan(IReadOnlyCollection<ZipArchiveEntry> entries)
     {
         List<ArchiveEntryPlan> plans = new List<ArchiveEntryPlan>(entries.Count);
@@ -35,7 +35,7 @@ internal static class ArchiveEntryNames
     /// Checks every entry name that is about to be written.
     /// </summary>
     /// <param name="fullNames">The entry names (directories end with <c>/</c>).</param>
-    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a duplicate, or a file and a directory with the same name.</exception>
+    /// <exception cref="InvalidDataException">There is a dangerous name, a name not valid on Windows, a name with a staging-name segment, a duplicate, or a file and a directory with the same name.</exception>
     internal static void Validate(IEnumerable<string> fullNames)
     {
         NameSet names = new NameSet();
@@ -53,7 +53,7 @@ internal static class ArchiveEntryNames
     /// <param name="fullName">The ZIP entry name.</param>
     /// <param name="isDirectory">Returns <see langword="true"/> for a directory entry that ends with a separator.</param>
     /// <returns>The split name.</returns>
-    /// <exception cref="InvalidDataException">The name leaves the destination, or is not valid on Windows.</exception>
+    /// <exception cref="InvalidDataException">The name leaves the destination, is not valid on Windows, or has a segment that is a staging name.</exception>
     internal static string[] Split(string fullName, out bool isDirectory)
     {
         string normalized = fullName.Replace('\\', '/');
@@ -83,9 +83,9 @@ internal static class ArchiveEntryNames
             throw new InvalidDataException("The entry name is not valid in a Windows path: " + fullName);
         }
 
-        if (segment.EndsWith(".txnew", StringComparison.OrdinalIgnoreCase))
+        if (StagingNames.IsMatch(segment))
         {
-            throw new InvalidDataException("An entry name ending in .txnew cannot be extracted: " + fullName);
+            throw new InvalidDataException("An entry name with a staging name cannot be used: " + fullName);
         }
     }
 

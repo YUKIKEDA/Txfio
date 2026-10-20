@@ -19,6 +19,7 @@ internal sealed partial class Transaction
         string external = WorkPath.ResolveOutsideWorkFolder(_workFolder, externalPath);
         string target = WorkPath.ResolveInWorkFolder(_workFolder, targetPath);
         StagingRules.EnsureNotMetadataFolder(_workFolder, target);
+        ThrowIfImportSourceHasStagingName(WorkPath.ToLongPath(external));
         if (Directory.Exists(external))
         {
             await ImportDirectoryAsync(external, target, progress, cancellationToken).ConfigureAwait(false);
@@ -167,7 +168,7 @@ internal sealed partial class Transaction
         List<PlannedTreeFile> files = new List<PlannedTreeFile>();
         if (!WorkPath.IsReparsePoint(external))
         {
-            PlanCopiedTree(external, external, target, directories, files, cancellationToken);
+            PlanCopiedTree(external, external, target, rejectStagingNames: true, directories, files, cancellationToken);
         }
 
         await ApplyCopiedTreeAsync(directories, files, progress, cancellationToken)

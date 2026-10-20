@@ -28,6 +28,9 @@ Breaking changes:
 - BeginAsync no longer throws RecoveryRequiredException. Staging methods and CommitAsync throw it only for paths that recovering a crashed transaction may change; RecoveryRequiredException.Path is the overlapping path (the work folder when the journal cannot be read).
 - RecoverAsync holds the work folder as shared and recovers each crashed journal while holding the locks on its paths, so it runs while other transactions are alive. It no longer throws LockContentionException because a transaction is alive. The new RecoverResult.Contended reports journals whose paths another transaction still holds.
 - CreateDirectoryAsync reserves its directory until the transaction ends: other transactions get LockContentionException when they stage under it.
+- Staging entry names ({name}.{txid}.txnew, {name}.{txid}.txnew.prev, {name}.{txid}.txold) are now a contract and reserved. A path with such a segment throws InvalidOperationException in every API, and ImportAsync rejects a source with such a name. Extract and archive entry names are rejected only when a segment is a staging name; a name that merely ends in .txnew is now allowed. The new Txfio.IsStagingName recognizes these names.
+- GetEntriesAsync, a directory CopyAsync, ExportAsync, and the input of CreateArchiveAsync skip the staging entries of every transaction, not only their own.
+- When a directory DeleteAsync fails at staging because of an unscheduled direct child, ExternalConflictException.Path is that child (the first one in order of the upper-cased paths), not the directory.
 - Do not let a 0.1.0 client share a work folder with this version; the two lock the work folder in incompatible ways. A share-lost.lock left by 0.1.0 is neither used nor deleted.
 
 Details: https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.md

@@ -114,7 +114,7 @@ public sealed class CreateArchiveEntryListTests
     [InlineData("/abs.txt")]
     [InlineData("con.txt")]
     [InlineData("a:b.txt")]
-    [InlineData("x.txnew")]
+    [InlineData("x.3f2504e0-4f89-11d3-9a0c-0305e82c3301.txnew")]
     [InlineData("")]
     [InlineData("dir/")]
     public async Task CreateArchiveAsync_InvalidEntryNameThrowsArgumentException(string entryName)

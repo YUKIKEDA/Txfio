@@ -18,15 +18,26 @@ internal sealed partial class Transaction
                 .Replace(System.IO.Path.DirectorySeparatorChar, '/');
     }
 
+    // Walks inside the work folder skip reparse points and the staging entries of every transaction (a directory .txold with everything under it).
     // Use the attributes from enumeration, instead of asking the disk for each entry.
-    private bool SkipIntakeEntry(FileSystemInfo entry)
+    private static bool SkipIntakeEntry(FileSystemInfo entry)
     {
         return (entry.Attributes & FileAttributes.ReparsePoint) != 0
-            || WorkPath.IsThisTransactionStagingFile(entry.FullName, _transactionId);
+            || StagingNames.IsMatch(entry.Name);
     }
 
-    private void ForEachTreeChild(
+    // An Import source is outside the work folder, so a staging name there is rejected instead of skipped.
+    private static void ThrowIfImportSourceHasStagingName(string path)
+    {
+        if (StagingNames.IsMatch(System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(path))))
+        {
+            throw new InvalidOperationException("An import source with a staging name cannot be used: " + path);
+        }
+    }
+
+    private static void ForEachTreeChild(
         string current,
+        bool rejectStagingNames,
         CancellationToken cancellationToken,
         Action<string> onDirectory,
         Action<string> onFile)
@@ -34,6 +45,11 @@ internal sealed partial class Transaction
         foreach (FileSystemInfo entry in new DirectoryInfo(current).EnumerateFileSystemInfos())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (rejectStagingNames)
+            {
+                ThrowIfImportSourceHasStagingName(entry.FullName);
+            }
+
             if (SkipIntakeEntry(entry))
             {
                 continue;
@@ -49,26 +65,28 @@ internal sealed partial class Transaction
         }
     }
 
-    private void PlanCopiedTree(
+    private static void PlanCopiedTree(
         string sourceRoot,
         string current,
         string destinationRoot,
+        bool rejectStagingNames,
         List<string> directories,
         List<PlannedTreeFile> files,
         CancellationToken cancellationToken)
     {
         ForEachTreeChild(
             current,
+            rejectStagingNames,
             cancellationToken,
             entry =>
             {
                 directories.Add(MapTreeDestination(sourceRoot, destinationRoot, entry));
-                PlanCopiedTree(sourceRoot, entry, destinationRoot, directories, files, cancellationToken);
+                PlanCopiedTree(sourceRoot, entry, destinationRoot, rejectStagingNames, directories, files, cancellationToken);
             },
             entry => files.Add(new PlannedTreeFile(entry, MapTreeDestination(sourceRoot, destinationRoot, entry))));
     }
 
-    private bool PlanArchivedTree(
+    private static bool PlanArchivedTree(
         string sourceRoot,
         string current,
         string prefix,
@@ -78,6 +96,7 @@ internal sealed partial class Transaction
         bool plannedAny = false;
         ForEachTreeChild(
             current,
+            rejectStagingNames: false,
             cancellationToken,
             entry =>
             {

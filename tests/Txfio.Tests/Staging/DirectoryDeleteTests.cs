@@ -32,7 +32,7 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>Given: a file directly under the directory.</para>
     /// <para>When: DeleteAsync is called on the parent.</para>
-    /// <para>Then: ExternalConflictException, and Path is the parent directory.</para>
+    /// <para>Then: ExternalConflictException, and Path is the child file.</para>
     /// </remarks>
     [Fact]
     public async Task DeleteAsync_UntrackedChildFileThrowsExternalConflictException()
@@ -43,7 +43,7 @@ public sealed class DirectoryDeleteTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "a.txt"), "keep");
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
-        Assert.Equal(dir, ex.Path);
+        Assert.Equal(System.IO.Path.Combine(dir, "a.txt"), ex.Path);
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ public sealed class DirectoryDeleteTests
     /// <remarks>
     /// <para>Given: an empty child directory directly under the directory.</para>
     /// <para>When: DeleteAsync is called on the parent.</para>
-    /// <para>Then: ExternalConflictException, and Path is the parent directory.</para>
+    /// <para>Then: ExternalConflictException, and Path is the child directory.</para>
     /// </remarks>
     [Fact]
     public async Task DeleteAsync_UntrackedChildDirectoryThrowsExternalConflictException()
@@ -62,7 +62,7 @@ public sealed class DirectoryDeleteTests
         Directory.CreateDirectory(System.IO.Path.Combine(dir, "nested"));
         await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
-        Assert.Equal(dir, ex.Path);
+        Assert.Equal(System.IO.Path.Combine(dir, "nested"), ex.Path);
     }
 
     /// <summary>

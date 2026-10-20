@@ -205,7 +205,7 @@ public sealed class DirectoryMoveTests
     /// <remarks>
     /// <para>Given: sub with a.txt is moved to other.</para>
     /// <para>When: other is deleted.</para>
-    /// <para>Then: ExternalConflictException, and the pending change stays the Move.</para>
+    /// <para>Then: ExternalConflictException with Path on sub/a.txt (the child on disk), and the pending change stays the Move.</para>
     /// </remarks>
     [Fact]
     public async Task DeleteAsync_AfterDirectoryMoveWithContentsThrowsExternalConflictException()
@@ -219,7 +219,7 @@ public sealed class DirectoryMoveTests
 
         ExternalConflictException conflict = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("other"));
 
-        Assert.Equal(source, conflict.Path);
+        Assert.Equal(System.IO.Path.Combine(source, "a.txt"), conflict.Path);
         Assert.Equal(PendingChangeKind.Move, Assert.Single(tx.GetPendingChanges()).Kind);
     }
 

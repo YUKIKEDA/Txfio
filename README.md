@@ -109,6 +109,20 @@ D:\share\work\
 
 Explorer shows the `.txnew`. `File.ReadAllText` reads the real `old`. `ReadAllTextAsync` in the same transaction reads `new`.
 
+Staging entries have fixed names: `{name}.{txid}.txnew` (the new content), `{name}.{txid}.txnew.prev` (a backup while the same `.txnew` is written again), and `{name}.{txid}.txold` (the old destination while a directory is swapped). `{txid}` is the transaction ID in `Guid.ToString("D")` form. These names are reserved. A path with a segment that is a staging name is not a target of any API (`InvalidOperationException`, also through an 8.3 short name or a trailing dot). `GetEntriesAsync`, a directory copy, `ExportAsync`, and the input of `CreateArchiveAsync` skip the staging entries of every transaction. When you list the folder with the plain file API, skip them with `Txfio.IsStagingName`:
+
+```csharp
+foreach (string entry in Directory.EnumerateFileSystemEntries(@"D:\share\work"))
+{
+    if (Txfio.IsStagingName(Path.GetFileName(entry)))
+    {
+        continue;
+    }
+
+    // entry is user data (the .txfio folder is also listed here).
+}
+```
+
 ```csharp
 await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
 await tx.WriteAllTextAsync("a.txt", "new");
@@ -264,7 +278,7 @@ flowchart TD
 
 `DeleteAsync` only schedules the delete; the disk changes at commit. For a file it deletes that file, and for a directory it deletes only the direct children. An empty directory can be scheduled in one call. Discard does not delete the scheduled target. Without the marker, the disk does not change; after the marker, it is deleted if still there, applied if already gone, and `ConflictDetected` if it was swapped for a file.
 
-For a file, it holds the whole work folder as shared and locks that file. For a directory, it holds the whole work folder as shared, locks that directory, and holds its intent lock exclusively until the end. Child paths are not locked. If another transaction stages under it, that transaction gets `LockContentionException` with `Path` set to that directory. When a direct child is not scheduled, the message is "The directory has a child that is not scheduled". To delete the following tree by direct children only, schedule from the deepest part.
+For a file, it holds the whole work folder as shared and locks that file. For a directory, it holds the whole work folder as shared, locks that directory, and holds its intent lock exclusively until the end. Child paths are not locked. If another transaction stages under it, that transaction gets `LockContentionException` with `Path` set to that directory. When a direct child is not scheduled, the message is "The directory has a child that is not scheduled", and `Path` is the first such child in order of the upper-cased paths. It may be a staging entry of another transaction, which `GetEntriesAsync` does not show. To delete the following tree by direct children only, schedule from the deepest part.
 
 ```text
 tree/
@@ -372,7 +386,7 @@ flowchart TD
 
 ## CopyAsync
 
-`CopyAsync` copies a file or directory inside the work folder to another place inside the work folder. The source stays. Bytes are copied even on the same volume; it is never a rename or a hard link. A file leaves the destination's `.txnew` as an Add; a directory turns each file on disk into an Add and creates empty subdirectories too. Uncommitted Adds are not on disk under their real names, so they are not included. Junctions and symbolic links are not followed.
+`CopyAsync` copies a file or directory inside the work folder to another place inside the work folder. The source stays. Bytes are copied even on the same volume; it is never a rename or a hard link. A file leaves the destination's `.txnew` as an Add; a directory turns each file on disk into an Add and creates empty subdirectories too. Uncommitted Adds are not on disk under their real names, so they are not included. Staging entries of every transaction are not copied. Junctions and symbolic links are not followed.
 
 After commit, the destination remains, and so does the source. On failure, cancellation, or discard without commit, the half-written `.txnew` and the directories this operation created are deleted. If a named path is a reparse point, it throws `InvalidOperationException` with the message "A reparse point cannot be used". For a file, it holds the whole work folder as shared and locks the source and destination. For a directory too, it holds the whole work folder as shared. It locks the source and destination, not the children. The destination's intent lock is exclusive until the end. The source's intent lock is exclusive only during the call, and closed when it ends. It reports every 81920 bytes. A directory's total size is not measured, so `TotalBytes` is null.
 
@@ -391,7 +405,7 @@ flowchart TD
 
 ## ImportAsync
 
-`ImportAsync` copies a file or directory outside the work folder into `.txnew` files inside, and keeps them as Adds. The source is not deleted. This operation creates the destination directory itself and its empty subdirectories. On failure, cancellation, or discard, the half-written `.txnew` and the directories this operation created are deleted.
+`ImportAsync` copies a file or directory outside the work folder into `.txnew` files inside, and keeps them as Adds. The source is not deleted. This operation creates the destination directory itself and its empty subdirectories. On failure, cancellation, or discard, the half-written `.txnew` and the directories this operation created are deleted. When the source, or a file or directory under it, has a staging name, it throws `InvalidOperationException` before anything is staged.
 
 Junctions and symbolic links are not followed. For a file, it holds the whole work folder as shared and locks only the destination. For a directory too, it holds the whole work folder as shared. It locks only the destination, and holds its intent lock exclusively until the end. It reports every 81920 bytes. For a directory, `TotalBytes` is null.
 
@@ -412,7 +426,7 @@ flowchart TD
 
 ## ExportAsync
 
-`ExportAsync` copies the same bytes as a read to outside the work folder: one file, or each file under a directory. Nothing goes into the journal, no file in the work folder changes, and nothing is locked. Uncommitted Adds are not included. Exporting a file that has an Update gives the new content of the `.txnew`, while the real file on disk stays old.
+`ExportAsync` copies the same bytes as a read to outside the work folder: one file, or each file under a directory. Nothing goes into the journal, no file in the work folder changes, and nothing is locked. Uncommitted Adds and staging entries are not included. Exporting a file that has an Update gives the new content of the `.txnew`, while the real file on disk stays old.
 
 Junctions and symbolic links are not followed. A destination that succeeded stays even after discard. On failure or cancellation, what was partly created outside is deleted. The commit does not change anything outside, and recovery does not cover it either. It reports every 81920 bytes. For a directory, `TotalBytes` is null.
 
@@ -440,7 +454,7 @@ ZIPs are read and written with `System.IO.Compression`, and join the same transa
 | `ExtractArchiveAsync` | A ZIP inside, with the same bytes as a read. Uncommitted OK | A new directory, with an Add per file                        | The whole work folder as shared. The destination is locked, and its intent lock is exclusive until the end              |
 | `ImportArchiveAsync`  | A ZIP outside                                               | Same as above                                                | Same as above                                                                                                           |
 
-When creating, you can choose the `CompressionLevel` (default `Optimal`) and whether to include the directory name as the root of the entries (default: not included). Empty subdirectories become directory entries, and the entry time is the last write time of the source file. Entry names are written in UTF-8. Progress is bytes before compression, and `TotalBytes` is null.
+When creating, you can choose the `CompressionLevel` (default `Optimal`) and whether to include the directory name as the root of the entries (default: not included). Empty subdirectories become directory entries, and the entry time is the last write time of the source file. Staging entries of every transaction are not included. Entry names are written in UTF-8. Progress is bytes before compression, and `TotalBytes` is null.
 
 To choose what goes in and under which name, pass a sequence of `ArchiveEntrySource`. Both Create and Export accept it. Without a name, it is the path relative to the work folder; an empty string for a directory puts its contents at the root of the ZIP. A directory adds everything under it recursively. Entries in the ZIP follow the order of the list. The same file may be added twice under different names. An empty list gives an empty ZIP. Names are checked by the same rules as extract (the paragraph below), and a match throws `ArgumentException`. The whole work folder stays shared, and directory elements are held with an exclusive intent lock only during the call. What is under the input is not reserved.
 
@@ -466,7 +480,7 @@ Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 await tx.ImportArchiveAsync(@"D:\incoming\drop.zip", "incoming", Encoding.GetEncoding(932), maxExtractedBytes: 1L << 30);
 ```
 
-Extract checks every entry name before it starts writing. If even one matches the following, nothing is staged, the destination is not created, and it throws `InvalidDataException`: names that leave the destination (`..`, a leading `/`, a drive letter), names not valid in a Windows path (`<>:"|?*`, a trailing `.` or space, reserved names such as `CON` and `NUL`), names ending in `.txnew`, duplicates that differ only in case, and a file and a directory with the same name. A corrupt ZIP also throws `InvalidDataException`.
+Extract checks every entry name before it starts writing. If even one matches the following, nothing is staged, the destination is not created, and it throws `InvalidDataException`: names that leave the destination (`..`, a leading `/`, a drive letter), names not valid in a Windows path (`<>:"|?*`, a trailing `.` or space, reserved names such as `CON` and `NUL`), names with a segment that is a staging name (a name that only ends in `.txnew`, such as `notes.txnew`, is fine), duplicates that differ only in case, and a file and a directory with the same name. A corrupt ZIP also throws `InvalidDataException`.
 
 When you pass `maxExtractedBytes`, a ZIP whose declared total extracted size exceeds the limit throws `InvalidDataException` without staging anything. An uncompressed entry can yield more bytes than declared, so the same exception is thrown when the bytes actually read exceed the limit, and the partial output is deleted. Pass a limit for ZIPs received from outside, so that a ZIP with a high compression ratio does not fill the shared disk. When omitted, there is no limit.
 
@@ -510,7 +524,7 @@ Commit success or failure is not an exception. Check `CommitReport.Result`. Reje
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------- |
 | The target is missing, already exists, has no parent, a directory has an unexpected direct child, or the copy destination is occupied | `ExternalConflictException`     |
 | Reading a directory, `DeleteTreeAsync` on a file, a Move across volumes                                     | `UnsupportedOperationException` |
-| Already staged by another operation, Move or Copy under itself, a reparse point inside                     | `InvalidOperationException`     |
+| Already staged by another operation, Move or Copy under itself, a reparse point inside, a staging name in the path | `InvalidOperationException`     |
 | The path is outside the work folder, the Import source is inside, the Export destination is inside         | `ArgumentException`             |
 | Another Txfio holds the path or the work folder                                                             | `LockContentionException`       |
 | The path overlaps what a crashed journal may change (call `RecoverAsync` first)                             | `RecoveryRequiredException`     |

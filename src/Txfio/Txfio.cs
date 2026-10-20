@@ -113,6 +113,29 @@ public static class Txfio
     }
 
     /// <summary>
+    /// Returns whether a single file or directory name is the name of a staging entry (<c>{name}.{txid}.txnew</c>, <c>{name}.{txid}.txnew.prev</c>, or <c>{name}.{txid}.txold</c>) of any transaction.
+    /// </summary>
+    /// <remarks>
+    /// <para>Trailing dots and spaces are trimmed before matching, as Windows does when it opens a name. The transaction ID is matched ignoring case.</para>
+    /// <para>It does not touch the disk. To skip staging entries in a plain enumeration of the work folder, test the last segment of each entry.</para>
+    /// <para>A path inside the work folder with a segment that is a staging name is not a target of any API (<see cref="InvalidOperationException"/>).</para>
+    /// </remarks>
+    /// <param name="name">One file or directory name (not a path).</param>
+    /// <returns><see langword="true"/> if the name is a staging name; <see langword="false"/> otherwise, including for <c>""</c>, <c>"."</c>, and <c>".."</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="name"/> contains a directory separator (<c>\</c> or <c>/</c>).</exception>
+    public static bool IsStagingName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (name.IndexOfAny(new[] { '\\', '/' }) >= 0)
+        {
+            throw new ArgumentException("The name must be a single name without a directory separator", nameof(name));
+        }
+
+        return StagingNames.IsMatch(name);
+    }
+
+    /// <summary>
     /// Begins a transaction on a work folder (with no lock wait). <paramref name="faults"/> handles failures and partial stops.
     /// </summary>
     /// <param name="path">An existing work folder.</param>
