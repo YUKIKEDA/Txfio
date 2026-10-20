@@ -71,6 +71,8 @@ Use these words. The left column is the design or Japanese concept; the right is
 | 読めないジャーナル | unreadable journal |
 | ステージングファイル、サイドカー (`.txnew`) | staging file (`.txnew`); "sidecar" only in the design's write model |
 | 再ステージの退避 (`.prev`) | restage backup (`.prev`) |
+| ステージング項目 (`.txnew`, `.txnew.prev`, `.txold`) | staging entry |
+| ステージングの名前 (the name pattern of a staging entry) | staging name |
 | 入れ替えの退避 (`.txold`) | swap backup (`.txold`) |
 | 作成ディレクトリ (`createdDirectories`) | created directories |
 | コミット後の姿 | post-commit view |
