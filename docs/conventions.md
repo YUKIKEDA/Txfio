@@ -6,12 +6,12 @@ Repository conventions, so that the same points are not repeated in code review.
 
 - The library is in `src/Txfio/`, unit tests in `tests/Txfio.Tests/`, stress tests in `tests/Txfio.Stress/`, and the temporary directory and `WindowsFact` that both use in `tests/Txfio.TestSupport/`
 - Each `.csproj` is at the root of its project. Do not put projects directly at the repository root
-- `.cs` files go in feature folders. Directly under a project there are only the entry point (static `WorkFolder`), the root of the implementation, and the `.csproj`. A new feature gets a new folder; do not scatter files directly under the project
+- `.cs` files go in feature folders. Directly under a project there are only the entry point (static `TxFileIO`), the root of the implementation, and the `.csproj`. A new feature gets a new folder; do not scatter files directly under the project
 - Tests create the same `<Area>/` under `tests/Txfio.Tests/` as `src/Txfio/<Area>/`. File names go `Foo.cs` → `FooTests.cs`
 - Namespaces do not follow folders. The library is `Txfio`, unit tests and stress tests are `Txfio.Tests`, and shared helpers are `Txfio.Tests.Support`
 - **Commit `Txfio.slnx`**. Do not add a `.sln`
 
-The public surface is only the contracts (`WorkFolder`, `ITransaction`, result types, exceptions, progress). Implementation types are `internal`. The test assemblies get `InternalsVisibleTo`.
+The public surface is only the contracts (`TxFileIO`, `ITransaction`, result types, exceptions, progress). Implementation types are `internal`. The test assemblies get `InternalsVisibleTo`.
 
 ## Feature folders
 
