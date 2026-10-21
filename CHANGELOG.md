@@ -5,7 +5,7 @@ All notable changes to Txfio are listed here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). A 0.x minor
 version may break the public API.
 
-## [0.2.0]
+## [0.2.0] - 2026-10-21
 
 A crashed transaction no longer blocks the whole work folder, and the names
 of staging entries are now part of the contract.
