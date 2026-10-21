@@ -23,7 +23,7 @@ public sealed class CreateArchiveTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(tree, "a.txt"), "alpha");
         await File.WriteAllTextAsync(System.IO.Path.Combine(tree, "sub", "b.txt"), "beta");
         string archive = System.IO.Path.Combine(work.Path, "out.zip");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateArchiveAsync("tree", "out.zip");
 
@@ -52,7 +52,7 @@ public sealed class CreateArchiveTests
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "blank"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "tree", "a.txt"), "alpha");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateArchiveAsync("tree", "tree.zip", includeBaseDirectory: true);
         await tx.CreateArchiveAsync("blank", "blank.zip", includeBaseDirectory: true);
@@ -81,7 +81,7 @@ public sealed class CreateArchiveTests
         DateTime written = new DateTime(2020, 5, 6, 7, 8, 10, DateTimeKind.Local);
         File.SetLastWriteTime(file, written);
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateArchiveAsync("a.txt", "a.zip", CompressionLevel.Fastest, includeBaseDirectory: true, progress);
 
@@ -107,7 +107,7 @@ public sealed class CreateArchiveTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "blank"));
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateArchiveAsync("blank", "blank.zip", progress: progress);
 
@@ -132,7 +132,7 @@ public sealed class CreateArchiveTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "tree", "a.txt"), "alpha");
         string existing = System.IO.Path.Combine(work.Path, "exists.zip");
         await File.WriteAllTextAsync(existing, "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CreateArchiveAsync("tree", System.IO.Path.Combine("tree", "in.zip")));
@@ -163,7 +163,7 @@ public sealed class CreateArchiveTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "other"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using (MemoryStream content = new MemoryStream("new"u8.ToArray()))
         {
             await tx.AddAsync(System.IO.Path.Combine("tree", "new.txt"), content);
@@ -194,7 +194,7 @@ public sealed class CreateArchiveTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "tree", "a.txt"), "alpha");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             using CancellationTokenSource source = new CancellationTokenSource();
             CancelOnReport progress = new CancelOnReport(source);
@@ -223,7 +223,7 @@ public sealed class CreateArchiveTests
         await using TempDirectory outside = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "tree", "a.txt"), "disk");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using (MemoryStream content = new MemoryStream("updated"u8.ToArray()))
         {
             await tx.UpdateAsync(System.IO.Path.Combine("tree", "a.txt"), content);
@@ -267,7 +267,7 @@ public sealed class CreateArchiveTests
         string directory = System.IO.Path.Combine(outside.Path, "sub");
         Directory.CreateDirectory(directory);
         string missingParent = System.IO.Path.Combine(outside.Path, "missing", "a.zip");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException file = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.ExportArchiveAsync("a.txt", existing));
@@ -303,12 +303,12 @@ public sealed class CreateArchiveTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "disk");
         string kept = System.IO.Path.Combine(outside.Path, "kept.zip");
         string cancelled = System.IO.Path.Combine(outside.Path, "cancelled.zip");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.ExportArchiveAsync("a.txt", kept);
         }
 
-        await using ITransaction again = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction again = await TxFileIO.BeginAsync(work.Path);
         using CancellationTokenSource source = new CancellationTokenSource();
         CancelOnReport progress = new CancelOnReport(source);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
@@ -333,7 +333,7 @@ public sealed class CreateArchiveTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "tree", "a.txt"), "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         JournalProbeProgress probe = new JournalProbeProgress(work.Path, "out.zip.");
 
         await tx.CreateArchiveAsync("tree", "out.zip", progress: probe);

@@ -16,7 +16,7 @@ public sealed class CommitApplyTests
     public async Task CommitAsync_AddedContentAppearsAtTarget()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("héllo");
         await tx.AddAsync("a.txt", content);
 
@@ -43,7 +43,7 @@ public sealed class CommitApplyTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("a.txt", content);
 
@@ -65,7 +65,7 @@ public sealed class CommitApplyTests
     public async Task CommitAsync_FailsWhenAddTargetCreatedExternally()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("a.txt", content);
 
@@ -92,7 +92,7 @@ public sealed class CommitApplyTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("a.txt", content);
         File.Delete(target);
@@ -117,7 +117,7 @@ public sealed class CommitApplyTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("a.txt", content);
         await File.WriteAllTextAsync(target, "external");
@@ -140,7 +140,7 @@ public sealed class CommitApplyTests
     public async Task CommitAsync_FailsWhenAddTargetExists()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("a.txt", content);
         string target = System.IO.Path.Combine(work.Path, "a.txt");
@@ -170,7 +170,7 @@ public sealed class CommitApplyTests
         string deleted = System.IO.Path.Combine(work.Path, "gone.txt");
         await File.WriteAllTextAsync(updated, "old");
         await File.WriteAllTextAsync(deleted, "drop");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream updateContent = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("a.txt", updateContent);
         await using MemoryStream addContent = LeftoverAddFiles.Utf8Stream("added");
@@ -199,7 +199,7 @@ public sealed class CommitApplyTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.UpdateAsync("a.txt", content);
         await using FileStream locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -210,7 +210,7 @@ public sealed class CommitApplyTests
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Equal("old", await File.ReadAllTextAsync(target));
 
-        await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction next = await TxFileIO.BeginAsync(work.Path);
         Assert.Empty(next.GetPendingChanges());
     }
 
@@ -231,7 +231,7 @@ public sealed class CommitApplyTests
         DateTime created = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         File.SetCreationTimeUtc(target, created);
         File.SetAttributes(target, FileAttributes.Hidden);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "new");
 
         Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);

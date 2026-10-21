@@ -22,7 +22,7 @@ public sealed class ReparsePathTests
         CreateJunction(link, outside.Path);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("secret");
 
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -58,7 +58,7 @@ public sealed class ReparsePathTests
         CreateJunction(link, real);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("secret");
 
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -91,7 +91,7 @@ public sealed class ReparsePathTests
         CreateJunction(link, outside.Path);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("secret");
 
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -125,7 +125,7 @@ public sealed class ReparsePathTests
         CreateJunction(link, real);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(link);
+            await using ITransaction tx = await TxFileIO.BeginAsync(link);
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("hello");
 
             await tx.AddAsync("a.txt", content);
@@ -153,7 +153,7 @@ public sealed class ReparsePathTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("secret");
         string outsideFile = System.IO.Path.Combine(outside.Path, "a.txt");
 

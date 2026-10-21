@@ -29,7 +29,7 @@ public static class ProcessLockChild
             return 2;
         }
 
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(args[1]);
+        await using ITransaction tx = await TxFileIO.BeginAsync(args[1]);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("held");
         await tx.AddAsync(args[2], content);
         await File.WriteAllTextAsync(args[3], "ready");
@@ -54,7 +54,7 @@ public static class ProcessLockChild
             return 2;
         }
 
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(args[1]);
+        await using ITransaction tx = await TxFileIO.BeginAsync(args[1]);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("held");
         await tx.AddAsync(args[2], content);
         await File.WriteAllTextAsync(args[3], "ready");

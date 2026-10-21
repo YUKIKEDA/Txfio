@@ -22,7 +22,7 @@ public sealed class RecoverDeleteTests
             "a.txt",
             "keep");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.Equal("keep", await File.ReadAllTextAsync(leftover.TargetPath));
@@ -46,7 +46,7 @@ public sealed class RecoverDeleteTests
             "a.txt",
             "gone");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.TargetPath));

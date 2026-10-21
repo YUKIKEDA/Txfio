@@ -22,7 +22,7 @@ public sealed class DirectoryMoveTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "hello");
         await File.WriteAllTextAsync(System.IO.Path.Combine(nested, "b.txt"), "deep");
         string dest = System.IO.Path.Combine(work.Path, "other");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub", "other");
 
         Assert.True(Directory.Exists(source));
@@ -51,7 +51,7 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(source);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.MoveAsync("sub", "other");
         }
@@ -77,7 +77,7 @@ public sealed class DirectoryMoveTests
         await File.WriteAllTextAsync(file, "keep");
         string directory = System.IO.Path.Combine(work.Path, "taken");
         Directory.CreateDirectory(directory);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException fileConflict = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.MoveAsync("sub", "other"));
@@ -104,7 +104,7 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException differentCase = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.MoveAsync("sub", "Sub"));
@@ -133,7 +133,7 @@ public sealed class DirectoryMoveTests
         string source = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "in");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("sub", "sub/inner"));
 
@@ -159,7 +159,7 @@ public sealed class DirectoryMoveTests
         string source = System.IO.Path.Combine(work.Path, "sub");
         string dest = System.IO.Path.Combine(work.Path, "final");
         Directory.CreateDirectory(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub", "mid");
         await tx.MoveAsync("mid", "final");
 
@@ -187,7 +187,7 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub", "other");
         await tx.DeleteAsync("other");
 
@@ -214,7 +214,7 @@ public sealed class DirectoryMoveTests
         string source = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "in");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub", "other");
 
         ExternalConflictException conflict = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("other"));
@@ -236,7 +236,7 @@ public sealed class DirectoryMoveTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub", "other");
         await using MemoryStream content = new MemoryStream("out"u8.ToArray());
         await tx.AddAsync("c.txt", content);
@@ -260,10 +260,10 @@ public sealed class DirectoryMoveTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = new MemoryStream("a"u8.ToArray());
         await holder.AddAsync("a.txt", content);
-        await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction mover = await TxFileIO.BeginAsync(work.Path);
 
         await mover.MoveAsync("sub", "other");
 
@@ -286,7 +286,7 @@ public sealed class DirectoryMoveTests
         Directory.CreateDirectory(sub);
         PathLockSet blocker = new PathLockSet();
         await blocker.AcquireAsync(work.Path, new[] { System.IO.Path.Combine(sub, "a.txt") }, default);
-        await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(3));
+        await using ITransaction mover = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromSeconds(3));
         Task moving = mover.MoveAsync("sub", "other");
         await Task.Delay(200);
         Assert.False(moving.IsCompleted);
@@ -339,7 +339,7 @@ public sealed class DirectoryMoveTests
         Directory.CreateDirectory(build);
         await File.WriteAllTextAsync(System.IO.Path.Combine(site, "old.txt"), "old");
         await File.WriteAllTextAsync(System.IO.Path.Combine(build, "new.txt"), "new");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.MoveAsync("build", "site", overwrite: true);
 
@@ -371,7 +371,7 @@ public sealed class DirectoryMoveTests
         string incoming = System.IO.Path.Combine(outside.Path, "incoming");
         Directory.CreateDirectory(incoming);
         await File.WriteAllTextAsync(System.IO.Path.Combine(incoming, "a.txt"), "alpha");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ImportAsync(incoming, "site.new");
         await tx.MoveAsync("site.new", "site", overwrite: true);
@@ -398,7 +398,7 @@ public sealed class DirectoryMoveTests
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "site"));
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "build"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "site", "old.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.DeleteTreeAsync("site");
         await tx.MoveAsync("build", "site", overwrite: true);
@@ -421,7 +421,7 @@ public sealed class DirectoryMoveTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "site"));
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "build"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("build/a.txt", "a");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("build", "site", overwrite: true));

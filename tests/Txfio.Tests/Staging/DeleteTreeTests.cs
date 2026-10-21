@@ -20,7 +20,7 @@ public sealed class DeleteTreeTests
         string child = System.IO.Path.Combine(dir, "a.txt");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(child, "keep");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.DeleteTreeAsync("tree");
         }
@@ -44,7 +44,7 @@ public sealed class DeleteTreeTests
         string nested = System.IO.Path.Combine(work.Path, "tree", "child");
         Directory.CreateDirectory(nested);
         await File.WriteAllTextAsync(System.IO.Path.Combine(nested, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
 
         PendingChange pending = Assert.Single(tx.GetPendingChanges());
@@ -66,7 +66,7 @@ public sealed class DeleteTreeTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
 
         Assert.Equal(PendingChangeKind.DeleteTree, Assert.Single(tx.GetPendingChanges()).Kind);
@@ -85,7 +85,7 @@ public sealed class DeleteTreeTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "file");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.DeleteTreeAsync("a.txt"));
         Assert.Empty(tx.GetPendingChanges());
     }
@@ -103,7 +103,7 @@ public sealed class DeleteTreeTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string missing = System.IO.Path.Combine(work.Path, "missing");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         ExternalConflictException conflict = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.DeleteTreeAsync("missing"));
         Assert.Equal(missing, conflict.Path);
@@ -124,7 +124,7 @@ public sealed class DeleteTreeTests
         string dir = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("tree/a.txt");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteTreeAsync("tree"));
@@ -145,7 +145,7 @@ public sealed class DeleteTreeTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("no");
 
@@ -169,7 +169,7 @@ public sealed class DeleteTreeTests
         string source = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("tree", "other");
 
         await tx.DeleteTreeAsync("other");
@@ -192,7 +192,7 @@ public sealed class DeleteTreeTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree", "child"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("tree", "other");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteTreeAsync("tree/child"));

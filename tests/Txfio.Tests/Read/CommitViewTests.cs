@@ -17,7 +17,7 @@ public sealed class CommitViewTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "a.bak");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("a.txt", content);
@@ -42,7 +42,7 @@ public sealed class CommitViewTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "log.txt"), "current");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "log.1"), "older");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("log.1", "log.2");
         await tx.MoveAsync("log.txt", "log.1");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("fresh");
@@ -70,7 +70,7 @@ public sealed class CommitViewTests
         string child = System.IO.Path.Combine(dir, "a.txt");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(child, "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("dir");
 
         Assert.False(await tx.ExistsAsync("dir"));
@@ -97,7 +97,7 @@ public sealed class CommitViewTests
         Directory.CreateDirectory(midDir);
         await File.WriteAllTextAsync(System.IO.Path.Combine(oldDir, "a.txt"), "from-old");
         await File.WriteAllTextAsync(System.IO.Path.Combine(midDir, "b.txt"), "from-mid");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("mid", "next");
         await tx.MoveAsync("old", "mid");
 
@@ -123,7 +123,7 @@ public sealed class CommitViewTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         Assert.True(await tx.ExistsAsync("sub"));
         Assert.False(await tx.ExistsAsync("missing.txt"));
@@ -143,7 +143,7 @@ public sealed class CommitViewTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ExistsAsync(".txfio/foo"));
         await Assert.ThrowsAsync<ArgumentException>(() => tx.ExistsAsync(outside.Path));

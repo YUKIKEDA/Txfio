@@ -16,7 +16,7 @@ public sealed class AddUpdateTests
     public async Task AddAsync_OnlyTxnewExistsBeforeCommit()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("hello");
         await tx.AddAsync("a.txt", content);
 
@@ -43,7 +43,7 @@ public sealed class AddUpdateTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("hello");
             await tx.AddAsync("a.txt", content);
@@ -67,7 +67,7 @@ public sealed class AddUpdateTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "existing");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("a.txt", content));
         Assert.Equal(target, ex.Path);
@@ -89,7 +89,7 @@ public sealed class AddUpdateTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "d");
         Directory.CreateDirectory(target);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("d", content));
         Assert.Equal(target, ex.Path);
@@ -112,7 +112,7 @@ public sealed class AddUpdateTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "d");
         Directory.CreateDirectory(target);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.UpdateAsync("d", content));
         Assert.Equal(target, ex.Path);
@@ -132,7 +132,7 @@ public sealed class AddUpdateTests
     public async Task UpdateAsync_MissingFileThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.UpdateAsync("missing.txt", content));
         Assert.Equal(System.IO.Path.Combine(work.Path, "missing.txt"), ex.Path);
@@ -150,7 +150,7 @@ public sealed class AddUpdateTests
     public async Task AddAsync_MissingParentThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AddAsync("sub/a.txt", content));
         Assert.Equal(System.IO.Path.Combine(work.Path, "sub"), ex.Path);
@@ -169,7 +169,7 @@ public sealed class AddUpdateTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory other = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         string outside = System.IO.Path.Combine(other.Path, "a.txt");
         await Assert.ThrowsAsync<ArgumentException>(() => tx.AddAsync(outside, content));
@@ -187,7 +187,7 @@ public sealed class AddUpdateTests
     public async Task AddAsync_RestageOfSamePathOverwritesAndStaysOne()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
         await tx.AddAsync("a.txt", first);
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
@@ -212,7 +212,7 @@ public sealed class AddUpdateTests
     public async Task UpdateAsync_OverwritesUncommittedAddAndStaysAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
         await tx.AddAsync("a.txt", first);
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
@@ -237,7 +237,7 @@ public sealed class AddUpdateTests
     public async Task AddAsync_DoesNotDisposeCallerStream()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         MemoryStream content = LeftoverAddFiles.Utf8Stream("hello");
         await tx.AddAsync("a.txt", content);
         Assert.True(content.CanRead);
@@ -257,7 +257,7 @@ public sealed class AddUpdateTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string workPath = work.Path;
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(workPath))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(workPath))
         {
             await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
             await tx.AddAsync("a.txt", first);
@@ -291,7 +291,7 @@ public sealed class AddUpdateTests
     public async Task UpdateAsync_RestageWriteFailureRestoresTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
         await tx.AddAsync("a.txt", first);
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
@@ -317,7 +317,7 @@ public sealed class AddUpdateTests
     public async Task UpdateAsync_CancelingRestageRestoresTxnew()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
         await tx.AddAsync("a.txt", first);
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
@@ -345,7 +345,7 @@ public sealed class AddUpdateTests
         await using TempDirectory work = TempDirectory.Create();
         byte[] original = new byte[1024 * 1024];
         original.AsSpan().Fill(0xAB);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream first = new MemoryStream(original);
         await tx.AddAsync("a.txt", first);
         string sidecar = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));

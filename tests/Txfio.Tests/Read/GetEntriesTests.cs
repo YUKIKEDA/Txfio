@@ -19,7 +19,7 @@ public sealed class GetEntriesTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "b");
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
         await tx.WriteAllTextAsync("c.txt", "c");
         await tx.MoveAsync("b.txt", "e.txt");
@@ -44,7 +44,7 @@ public sealed class GetEntriesTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "d", "x.txt"), "x");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("d", "e");
 
         IReadOnlyList<DirectoryEntry> entries = await tx.GetEntriesAsync("e");
@@ -68,7 +68,7 @@ public sealed class GetEntriesTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "t"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "t", "x.txt"), "x");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("t");
 
         await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.GetEntriesAsync("a.txt"));

@@ -16,7 +16,7 @@ public sealed class OverlappingCallTests
     public async Task AddAsync_OverlapThrowsInvalidOperationExceptionAndKeepsEarlierOperation()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using HoldStream held = new HoldStream();
         Task first = tx.AddAsync("a.txt", held);
         await held.Entered.WaitAsync(TimeSpan.FromSeconds(5));
@@ -47,7 +47,7 @@ public sealed class OverlappingCallTests
     public async Task GetPendingChanges_InProgressThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         try
         {
             await using HoldStream held = new HoldStream();
@@ -81,7 +81,7 @@ public sealed class OverlappingCallTests
     public async Task AddAsync_OverlapFromProgressThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         SynchronousProgress progress = new SynchronousProgress(_ =>
         {
             tx.AddAsync("b.txt", LeftoverAddFiles.Utf8Stream("other")).GetAwaiter().GetResult();
@@ -107,8 +107,8 @@ public sealed class OverlappingCallTests
     public async Task AddAsync_DifferentTransactionsProceedConcurrently()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction left = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction right = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction left = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction right = await TxFileIO.BeginAsync(work.Path);
         await using HoldStream leftHeld = new HoldStream();
         await using HoldStream rightHeld = new HoldStream();
         Task leftAdd = left.AddAsync("a.txt", leftHeld);

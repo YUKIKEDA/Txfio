@@ -20,7 +20,7 @@ public sealed class RecoverLockTests
         string lockFile = PathLockSet.FilePath(work.Path, target);
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
             await tx.AddAsync("a.txt", content);
@@ -30,12 +30,12 @@ public sealed class RecoverLockTests
         Assert.True(File.Exists(lockFile));
         Assert.False(File.Exists(target));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.False(File.Exists(lockFile));
 
-        await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction next = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream update = LeftoverAddFiles.Utf8Stream("next");
         await next.UpdateAsync("a.txt", update);
         Assert.Single(next.GetPendingChanges());
@@ -56,11 +56,11 @@ public sealed class RecoverLockTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         string held = System.IO.Path.Combine(work.Path, "b.txt");
-        await using (ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction holder = await TxFileIO.BeginAsync(work.Path))
         {
             FaultInjector faults = new FaultInjector();
             faults.Arm(IFaultInjector.AfterCommitting);
-            await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+            await using (ITransaction crashed = await TxFileIO.BeginAsync(work.Path, faults))
             {
                 await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
                 await crashed.AddAsync("a.txt", content);
@@ -70,7 +70,7 @@ public sealed class RecoverLockTests
             await using MemoryStream heldContent = LeftoverAddFiles.Utf8Stream("held");
             await holder.AddAsync("b.txt", heldContent);
 
-            RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+            RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
             Assert.Equal(RecoverResult.RolledForward, result.Result);
             Assert.Equal("staged", await File.ReadAllTextAsync(target));
 
@@ -92,7 +92,7 @@ public sealed class RecoverLockTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.WriteAllTextAsync("sub/a.txt", "a");
             Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
@@ -105,7 +105,7 @@ public sealed class RecoverLockTests
         Assert.True(File.Exists(pathLock));
         Assert.True(File.Exists(intentLock));
 
-        await global::Txfio.Txfio.RecoverAsync(work.Path);
+        await TxFileIO.RecoverAsync(work.Path);
 
         Assert.False(File.Exists(pathLock));
         Assert.False(File.Exists(intentLock));
@@ -126,11 +126,11 @@ public sealed class RecoverLockTests
     public async Task RecoverAsync_KeepsLockFilesWhileTransactionIsAlive()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await holder.WriteAllTextAsync("a.txt", "a");
         string lockFile = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
 
-        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await TxFileIO.RecoverAsync(work.Path)).Result);
 
         Assert.True(File.Exists(lockFile));
     }

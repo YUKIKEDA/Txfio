@@ -2,7 +2,7 @@ using Txfio.Tests.Support;
 
 namespace Txfio.Tests;
 
-public sealed class TxfioTests
+public sealed class TxFileIOTests
 {
     /// <summary>
     /// The library assembly is named Txfio.
@@ -15,7 +15,7 @@ public sealed class TxfioTests
     [Fact]
     public void Assembly_IsNamedTxfio()
     {
-        Assert.Equal("Txfio", typeof(global::Txfio.Txfio).Assembly.GetName().Name);
+        Assert.Equal("Txfio", typeof(TxFileIO).Assembly.GetName().Name);
     }
 
     /// <summary>
@@ -30,7 +30,7 @@ public sealed class TxfioTests
     public async Task BeginAsync_MissingFolderThrowsExternalConflictException()
     {
         string missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-" + Guid.NewGuid().ToString("N"));
-        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => global::Txfio.Txfio.BeginAsync(missing));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => TxFileIO.BeginAsync(missing));
         Assert.Equal(System.IO.Path.GetFullPath(missing), ex.Path);
     }
 
@@ -46,7 +46,7 @@ public sealed class TxfioTests
     public async Task RecoverAsync_MissingFolderThrowsExternalConflictException()
     {
         string missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "txfio-missing-" + Guid.NewGuid().ToString("N"));
-        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => global::Txfio.Txfio.RecoverAsync(missing));
+        ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => TxFileIO.RecoverAsync(missing));
         Assert.Equal(System.IO.Path.GetFullPath(missing), ex.Path);
     }
 
@@ -63,7 +63,7 @@ public sealed class TxfioTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string journal;
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             string[] files = Directory.GetFiles(
                 System.IO.Path.Combine(work.Path, ".txfio"),
@@ -89,7 +89,7 @@ public sealed class TxfioTests
     public async Task CommitAsync_EmptyTransactionSucceedsAndDeletesJournal()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         CommitReport result = await tx.CommitAsync();
         Assert.Equal(CommitResult.Succeeded, result.Result);
 
@@ -109,7 +109,7 @@ public sealed class TxfioTests
     public async Task RecoverAsync_NoJournalReturnsNoPendingTransactions()
     {
         await using TempDirectory work = TempDirectory.Create();
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.NoPendingTransactions, result.Result);
     }
 
@@ -127,7 +127,7 @@ public sealed class TxfioTests
         await using TempDirectory work = TempDirectory.Create();
         string journal = await WriteLeftoverJournalAsync(work.Path, committing: false);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(journal));
     }
@@ -146,7 +146,7 @@ public sealed class TxfioTests
         await using TempDirectory work = TempDirectory.Create();
         string journal = await WriteLeftoverJournalAsync(work.Path, committing: true);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(journal));
     }

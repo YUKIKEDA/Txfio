@@ -21,7 +21,7 @@ public sealed class RecoveryRequiredTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(tree, "old.txt"), "old");
         await CrashDeleteTreeAsync(work.Path, "d");
 
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream inside = LeftoverAddFiles.Utf8Stream("inside");
             RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
@@ -36,7 +36,7 @@ public sealed class RecoveryRequiredTests
 
         Assert.Equal("outside", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "other.txt")));
         Assert.True(Directory.Exists(tree));
-        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledForward, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.False(Directory.Exists(tree));
     }
 
@@ -55,10 +55,10 @@ public sealed class RecoveryRequiredTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction tx2 = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(5)))
+        await using (ITransaction tx2 = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromSeconds(5)))
         {
             Task adding;
-            await using (ITransaction tx1 = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+            await using (ITransaction tx1 = await TxFileIO.BeginAsync(work.Path, faults))
             {
                 await tx1.WriteAllTextAsync("a.txt", "first");
                 adding = tx2.WriteAllTextAsync("a.txt", "second");
@@ -74,7 +74,7 @@ public sealed class RecoveryRequiredTests
             Assert.False(File.Exists(target));
         }
 
-        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledForward, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Equal("first", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -95,7 +95,7 @@ public sealed class RecoveryRequiredTests
         Directory.CreateDirectory(tree);
         await LeftoverAddFiles.WriteAddAsync(work.Path, committing: true, System.IO.Path.Combine("d", "a.txt"), "staged");
 
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream same = LeftoverAddFiles.Utf8Stream("same");
         RecoveryRequiredException onPath = await Assert.ThrowsAsync<RecoveryRequiredException>(
             () => tx.AddAsync("d/a.txt", same));
@@ -124,14 +124,14 @@ public sealed class RecoveryRequiredTests
         await using TempDirectory work = TempDirectory.Create();
         LeftoverAddFiles leftover = await LeftoverAddFiles.WriteAddAsync(work.Path, committing: false, "a.txt", "staged");
 
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
             await tx.AddAsync("a.txt", content);
             Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
         }
 
-        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledBack, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.Equal("new", await File.ReadAllTextAsync(leftover.TargetPath));
     }
@@ -149,13 +149,13 @@ public sealed class RecoveryRequiredTests
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
-        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction crashed = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await crashed.CreateDirectoryAsync("d");
             faults.SuppressRollback();
         }
 
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream inside = LeftoverAddFiles.Utf8Stream("inside");
         RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
             () => tx.AddAsync("d/a.txt", inside));
@@ -180,11 +180,11 @@ public sealed class RecoveryRequiredTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
         await LeftoverAddFiles.WriteAddAsync(work.Path, committing: true, System.IO.Path.Combine("d", "a.txt"), "staged");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("first");
         await Assert.ThrowsAsync<RecoveryRequiredException>(() => tx.AddAsync("d/a.txt", first));
-        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledForward, (await TxFileIO.RecoverAsync(work.Path)).Result);
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("second");
         await tx.UpdateAsync("d/a.txt", second);
 
@@ -204,7 +204,7 @@ public sealed class RecoveryRequiredTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         Guid transactionId = Guid.NewGuid();
         await JournalStore.WriteNewAsync(
             MetadataNames.JournalPath(work.Path, transactionId),
@@ -219,7 +219,7 @@ public sealed class RecoveryRequiredTests
     {
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using ITransaction crashed = await global::Txfio.Txfio.BeginAsync(workFolder, faults);
+        await using ITransaction crashed = await TxFileIO.BeginAsync(workFolder, faults);
         await crashed.DeleteTreeAsync(path);
         await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
     }

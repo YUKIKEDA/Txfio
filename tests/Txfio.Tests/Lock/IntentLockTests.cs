@@ -18,8 +18,8 @@ public sealed class IntentLockTests
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(tree);
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction deleter = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction deleter = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
         await holder.AddAsync("tree/a.txt", content);
 
@@ -44,8 +44,8 @@ public sealed class IntentLockTests
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(tree);
-        await using ITransaction deleter = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction child = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction deleter = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction child = await TxFileIO.BeginAsync(work.Path);
         await deleter.DeleteTreeAsync("tree");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
 
@@ -70,9 +70,9 @@ public sealed class IntentLockTests
         await using TempDirectory work = TempDirectory.Create();
         string tree = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(tree);
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction deleter = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction child = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction deleter = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction child = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("a.txt", held);
 
@@ -99,8 +99,8 @@ public sealed class IntentLockTests
         await using TempDirectory work = TempDirectory.Create();
         string dest = System.IO.Path.Combine(work.Path, "other");
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction child = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction mover = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction child = await TxFileIO.BeginAsync(work.Path);
         await mover.MoveAsync("sub", "other");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
 
@@ -144,10 +144,10 @@ public sealed class IntentLockTests
     public async Task CreateDirectoryAsync_CreatesWhileAnotherTransactionStaged()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("a.txt", held);
-        await using ITransaction creator = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction creator = await TxFileIO.BeginAsync(work.Path);
 
         await creator.CreateDirectoryAsync("d");
 
@@ -170,10 +170,10 @@ public sealed class IntentLockTests
         string source = System.IO.Path.Combine(work.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "a");
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("src/b.txt", held);
-        await using ITransaction copier = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction copier = await TxFileIO.BeginAsync(work.Path);
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
             () => copier.CopyAsync("src", "dest"));
@@ -198,9 +198,9 @@ public sealed class IntentLockTests
         string source = System.IO.Path.Combine(work.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "a");
-        await using ITransaction copier = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction copier = await TxFileIO.BeginAsync(work.Path);
         await copier.CopyAsync("src", "dest");
-        await using ITransaction other = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction other = await TxFileIO.BeginAsync(work.Path);
 
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("b");
         await other.AddAsync("src/b.txt", first);

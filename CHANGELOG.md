@@ -12,11 +12,24 @@ of staging entries are now part of the contract.
 
 ### Breaking
 
+- **The static entry class `Txfio` is now `TxFileIO`.** The class had
+  the same name as its namespace, so after `using Txfio;` the documented
+  call `Txfio.BeginAsync(path)` did not compile (CS0234) and needed
+  `Txfio.Txfio.BeginAsync(path)`. Replace `Txfio.BeginAsync`,
+  `Txfio.RecoverAsync`, and `Txfio.Txfio.…` with `TxFileIO.BeginAsync`
+  and `TxFileIO.RecoverAsync`. The parameters and results are the same.
+
+  ```csharp
+  using Txfio;
+
+  await TxFileIO.RecoverAsync(@"D:\share\work");
+  await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
+  ```
+
 - **Do not share a work folder between 0.1.0 and 0.2.0 clients.** The two
   lock the work folder in incompatible ways. Upgrade every process that
   opens the folder together. A `share-lost.lock` left by 0.1.0 is neither
-  used nor deleted; you may delete it while no Txfio process uses the
-  folder.
+  used nor deleted.
 - **`BeginAsync` no longer throws `RecoveryRequiredException`.** Staging
   methods and `CommitAsync` throw it only for paths that recovering a
   crashed transaction may change. Its `Path` is the overlapping path (the
@@ -52,7 +65,7 @@ of staging entries are now part of the contract.
 
 ### Added
 
-- `Txfio.IsStagingName(string name)` returns whether a single file or
+- `TxFileIO.IsStagingName(string name)` returns whether a single file or
   directory name is a staging name. Use it to skip staging entries when you
   list the work folder with the plain file API.
 

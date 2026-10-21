@@ -23,8 +23,8 @@ public sealed class ShortNameLockTests
         string? shortDirectory = QueryShortPath(longDirectory);
         Assert.NotNull(shortDirectory);
         string longFile = System.IO.Path.Combine(longDirectory, "a.txt");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(parent.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(parent.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(parent.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(parent.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await first.AddAsync(longFile, content);
 
@@ -52,7 +52,7 @@ public sealed class ShortNameLockTests
         string? shortDirectory = QueryShortPath(longDirectory);
         Assert.NotNull(shortDirectory);
         string longFile = System.IO.Path.Combine(longDirectory, "a.txt");
-        await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(parent.Path);
+        await using ITransaction transaction = await TxFileIO.BeginAsync(parent.Path);
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("one");
         await transaction.AddAsync(System.IO.Path.Combine(shortDirectory, "a.txt"), first);
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("two");
@@ -79,7 +79,7 @@ public sealed class ShortNameLockTests
         Directory.CreateDirectory(longDirectory);
         string? shortDirectory = QueryShortPath(longDirectory);
         Assert.NotNull(shortDirectory);
-        await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(parent.Path);
+        await using ITransaction transaction = await TxFileIO.BeginAsync(parent.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
 
         ExternalConflictException error = await Assert.ThrowsAsync<ExternalConflictException>(
@@ -107,8 +107,8 @@ public sealed class ShortNameLockTests
         Directory.CreateDirectory(longWork);
         string? shortWork = QueryShortPath(longWork);
         Assert.NotNull(shortWork);
-        await using ITransaction viaShort = await global::Txfio.Txfio.BeginAsync(shortWork);
-        await using ITransaction viaLong = await global::Txfio.Txfio.BeginAsync(longWork);
+        await using ITransaction viaShort = await TxFileIO.BeginAsync(shortWork);
+        await using ITransaction viaLong = await TxFileIO.BeginAsync(longWork);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await viaShort.AddAsync("a.txt", content);
 
@@ -138,7 +138,7 @@ public sealed class ShortNameLockTests
         string? shortDirectory = QueryShortPath(longDirectory);
         Assert.NotNull(shortDirectory);
         Assert.NotEqual(longDirectory, shortDirectory, StringComparer.OrdinalIgnoreCase);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ExistsAsync(shortDirectory));
         await Assert.ThrowsAsync<InvalidOperationException>(

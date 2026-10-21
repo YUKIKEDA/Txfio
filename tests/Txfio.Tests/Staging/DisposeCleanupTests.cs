@@ -22,7 +22,7 @@ public sealed class DisposeCleanupTests
         {
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             {
-                await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path);
+                await using ITransaction transaction = await TxFileIO.BeginAsync(work.Path);
                 await using MemoryStream first = LeftoverAddFiles.Utf8Stream("a");
                 await transaction.AddAsync("a.txt", first);
                 await transaction.CreateDirectoryAsync("empty");
@@ -43,7 +43,7 @@ public sealed class DisposeCleanupTests
                 path => System.IO.Path.GetFileName(path).StartsWith("b.txt.", StringComparison.OrdinalIgnoreCase));
             Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, "empty")));
             Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
-            await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction next = await TxFileIO.BeginAsync(work.Path);
             Assert.Empty(next.GetPendingChanges());
         }
         finally
@@ -54,7 +54,7 @@ public sealed class DisposeCleanupTests
             }
         }
 
-        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledBack, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Empty(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
@@ -73,7 +73,7 @@ public sealed class DisposeCleanupTests
         await using TempDirectory work = TempDirectory.Create();
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction transaction = await TxFileIO.BeginAsync(work.Path);
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("a");
             await transaction.AddAsync("a.txt", content);
             throw new InvalidOperationException("original failure");
@@ -101,7 +101,7 @@ public sealed class DisposeCleanupTests
         Directory.CreateDirectory(other);
         string backup;
         string unrelated;
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
             await tx.AddAsync("a.txt", content);

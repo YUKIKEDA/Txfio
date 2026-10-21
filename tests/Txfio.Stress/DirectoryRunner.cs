@@ -86,7 +86,7 @@ internal static class DirectoryRunner
         DirectoryTree model,
         StringBuilder trace)
     {
-        ITransaction tx = await global::Txfio.Txfio.BeginAsync(workFolder);
+        ITransaction tx = await TxFileIO.BeginAsync(workFolder);
         try
         {
             List<DirectoryOperation> applied = new List<DirectoryOperation>();

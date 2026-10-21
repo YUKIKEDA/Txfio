@@ -18,7 +18,7 @@ public sealed class JournalPathsTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
 
         await tx.AddAsync("sub/a.txt", content);
@@ -48,7 +48,7 @@ public sealed class JournalPathsTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(before, "a.txt"), "old");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(before, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(before, faults))
         {
             await tx.WriteAllTextAsync("a.txt", "new");
             await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
@@ -56,7 +56,7 @@ public sealed class JournalPathsTests
 
         Directory.Move(before, after);
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(after);
+        RecoverReport report = await TxFileIO.RecoverAsync(after);
 
         Assert.Equal(RecoverResult.RolledForward, report.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(System.IO.Path.Combine(after, "a.txt")));
@@ -88,7 +88,7 @@ public sealed class JournalPathsTests
         Assert.Contains(staging, json, StringComparison.Ordinal);
         await File.WriteAllTextAsync(leftover.JournalPath, json.Replace(staging, JsonSerializer.Serialize(victim), StringComparison.Ordinal));
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, report.Result);
         Assert.True(File.Exists(leftover.JournalPath));

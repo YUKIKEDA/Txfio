@@ -20,7 +20,7 @@ public sealed class ImportExportTests
         string external = System.IO.Path.Combine(outside.Path, "src.txt");
         await File.WriteAllTextAsync(external, "hello");
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ImportAsync(external, "a.txt", progress);
 
@@ -46,7 +46,7 @@ public sealed class ImportExportTests
         await using TempDirectory work = TempDirectory.Create();
         string inside = System.IO.Path.Combine(work.Path, "in.txt");
         await File.WriteAllTextAsync(inside, "in");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ArgumentException>(() => tx.ImportAsync(inside, "a.txt"));
     }
@@ -68,7 +68,7 @@ public sealed class ImportExportTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(external, "new");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException conflict = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.ImportAsync(external, "a.txt"));
@@ -96,9 +96,9 @@ public sealed class ImportExportTests
         await File.WriteAllTextAsync(firstSource, "one");
         await File.WriteAllTextAsync(secondSource, "two");
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
         await first.ImportAsync(firstSource, "a.txt");
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
             () => second.ImportAsync(secondSource, "a.txt"));
@@ -120,7 +120,7 @@ public sealed class ImportExportTests
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "disk");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = new MemoryStream("staged"u8.ToArray());
         await tx.AddAsync("b.txt", content);
         string stagedTarget = System.IO.Path.Combine(work.Path, "b.txt");
@@ -159,7 +159,7 @@ public sealed class ImportExportTests
         string directory = System.IO.Path.Combine(outside.Path, "sub");
         Directory.CreateDirectory(directory);
         string missingParent = System.IO.Path.Combine(outside.Path, "missing", "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException file = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.ExportAsync("a.txt", existing));
@@ -191,12 +191,12 @@ public sealed class ImportExportTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "disk");
         string kept = System.IO.Path.Combine(outside.Path, "kept.txt");
         string cancelled = System.IO.Path.Combine(outside.Path, "cancelled.txt");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.ExportAsync("a.txt", kept);
         }
 
-        await using ITransaction again = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction again = await TxFileIO.BeginAsync(work.Path);
         using CancellationTokenSource source = new CancellationTokenSource();
         CancelOnReport progress = new CancelOnReport(source);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(

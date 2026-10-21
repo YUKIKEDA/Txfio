@@ -20,7 +20,7 @@ public sealed class RecoverContentionTests
         (PathLockSet holder, Guid crashedId) = await HoldOrphanPathAsync(work.Path);
         try
         {
-            RecoverReport first = await global::Txfio.Txfio.RecoverAsync(work.Path);
+            RecoverReport first = await TxFileIO.RecoverAsync(work.Path);
 
             Assert.Equal(RecoverResult.Contended, first.Result);
             Assert.Equal(2, first.Journals.Count);
@@ -33,7 +33,7 @@ public sealed class RecoverContentionTests
             holder.Release();
         }
 
-        RecoverReport second = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport second = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledForward, second.Result);
         Assert.Equal(crashedId, Assert.Single(second.Journals).TransactionId);
@@ -56,7 +56,7 @@ public sealed class RecoverContentionTests
         Task<RecoverReport> recovering;
         try
         {
-            recovering = global::Txfio.Txfio.RecoverAsync(work.Path, TimeSpan.FromSeconds(10));
+            recovering = TxFileIO.RecoverAsync(work.Path, TimeSpan.FromSeconds(10));
             await Task.Delay(300);
             Assert.False(recovering.IsCompleted);
         }
@@ -89,7 +89,7 @@ public sealed class RecoverContentionTests
         {
             using CancellationTokenSource cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
 
-            RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path, Timeout.InfiniteTimeSpan, cancel.Token);
+            RecoverReport report = await TxFileIO.RecoverAsync(work.Path, Timeout.InfiniteTimeSpan, cancel.Token);
 
             Assert.Equal(RecoverResult.Contended, report.Result);
             Assert.Contains(report.Journals, journal => journal.Result == RecoverResult.RolledForward);
@@ -116,14 +116,14 @@ public sealed class RecoverContentionTests
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction crashed = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await crashed.CreateDirectoryAsync("d");
             await crashed.WriteAllTextAsync("d/a.txt", "staged");
             await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
         }
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledForward, report.Result);
         Assert.Equal(RecoverResult.RolledForward, Assert.Single(report.Journals).Result);

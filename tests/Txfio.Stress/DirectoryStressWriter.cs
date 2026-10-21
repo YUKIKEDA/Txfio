@@ -118,7 +118,7 @@ public static class DirectoryStressWriter
         long timestamp = 0;
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(workFolder);
+            await using ITransaction tx = await TxFileIO.BeginAsync(workFolder);
             if (!Directory.Exists(full))
             {
                 await tx.CreateDirectoryAsync(path);

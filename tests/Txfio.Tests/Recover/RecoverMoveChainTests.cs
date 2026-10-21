@@ -23,7 +23,7 @@ public sealed class RecoverMoveChainTests
         await File.WriteAllTextAsync(older, "older");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.MoveAsync("log.1", "log.2");
             await tx.MoveAsync("log.txt", "log.1");
@@ -34,7 +34,7 @@ public sealed class RecoverMoveChainTests
         Assert.False(File.Exists(older));
         Assert.Equal("current", await File.ReadAllTextAsync(current));
 
-        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledForward, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Equal("older", await File.ReadAllTextAsync(oldest));
         Assert.Equal("current", await File.ReadAllTextAsync(older));
         Assert.False(File.Exists(current));
@@ -59,7 +59,7 @@ public sealed class RecoverMoveChainTests
         await File.WriteAllTextAsync(older, "older");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.MoveAsync("log.1", "log.2");
             await tx.MoveAsync("log.txt", "log.1");
@@ -68,7 +68,7 @@ public sealed class RecoverMoveChainTests
 
         File.Move(current, older);
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, report.Result);
         Assert.Empty(Assert.Single(report.Journals).Operations);
         Assert.Equal("older", await File.ReadAllTextAsync(oldest));
@@ -98,7 +98,7 @@ public sealed class RecoverMoveChainTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(cur, "new.txt"), "new");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.MoveAsync("v1", "v0");
             await tx.MoveAsync("cur", "v1");
@@ -107,7 +107,7 @@ public sealed class RecoverMoveChainTests
 
         Directory.Move(cur, v1);
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, report.Result);
         Assert.Equal("old", await File.ReadAllTextAsync(System.IO.Path.Combine(v0, "old.txt")));
         Assert.Equal("new", await File.ReadAllTextAsync(System.IO.Path.Combine(v1, "new.txt")));
@@ -131,7 +131,7 @@ public sealed class RecoverMoveChainTests
         await File.WriteAllTextAsync(source, "old");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.MoveAsync("a.txt", "b.txt");
             await tx.WriteAllTextAsync("a.txt", "rewritten");
@@ -140,7 +140,7 @@ public sealed class RecoverMoveChainTests
 
         File.Move(Assert.Single(Directory.GetFiles(work.Path, "*.txnew")), source);
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, report.Result);
         Assert.Equal("old", await File.ReadAllTextAsync(dest));
         Assert.Equal("rewritten", await File.ReadAllTextAsync(source));

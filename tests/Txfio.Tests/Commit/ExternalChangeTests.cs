@@ -18,7 +18,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "next");
         await File.WriteAllTextAsync(file, "external");
 
@@ -44,7 +44,7 @@ public sealed class ExternalChangeTests
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
         DateTime stamp = File.GetLastWriteTimeUtc(file);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "next");
         await File.WriteAllTextAsync(file, "external-longer");
 
@@ -80,7 +80,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.Zero, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, TimeSpan.Zero, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "next");
         File.SetLastWriteTimeUtc(file, File.GetLastWriteTimeUtc(file).AddMinutes(5));
 
@@ -106,7 +106,7 @@ public sealed class ExternalChangeTests
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
         DateTime stamp = File.GetLastWriteTimeUtc(file);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "world");
         await File.WriteAllTextAsync(file, "HELLO");
         File.SetLastWriteTimeUtc(file, stamp);
@@ -133,7 +133,7 @@ public sealed class ExternalChangeTests
         string second = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(first, "a");
         await File.WriteAllTextAsync(second, "b");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "A");
         await tx.WriteAllTextAsync("b.txt", "B");
         await File.WriteAllTextAsync(first, "aa");
@@ -162,7 +162,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "next");
         File.Delete(file);
 
@@ -186,7 +186,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "next");
         File.Delete(file);
         Directory.CreateDirectory(file);
@@ -211,7 +211,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await using (Stream stream = await tx.ReadAsync("a.txt"))
         {
         }
@@ -239,7 +239,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await using (Stream first = await tx.ReadAsync("a.txt"))
         {
         }
@@ -271,7 +271,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "next");
         await File.WriteAllTextAsync(file, "external-longer");
         await using (Stream stream = await tx.ReadAsync("a.txt"))
@@ -301,7 +301,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.WriteAllTextAsync("a.txt", "next");
         await File.WriteAllTextAsync(file, "external-longer");
         await tx.WriteAllTextAsync("a.txt", "later");
@@ -327,7 +327,7 @@ public sealed class ExternalChangeTests
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         string dest = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(source, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.MoveAsync("a.txt", "b.txt");
         await tx.WriteAllTextAsync("b.txt", "next");
         await File.WriteAllTextAsync(source, "external-longer");
@@ -356,7 +356,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.DeleteAsync("a.txt");
         await File.WriteAllTextAsync(file, "external change");
 
@@ -383,7 +383,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.MoveAsync("a.txt", "b.txt");
         await File.WriteAllTextAsync(file, "external change");
 
@@ -409,7 +409,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         Assert.Equal("hello", await tx.ReadAllTextAsync("a.txt"));
         await File.WriteAllTextAsync(file, "external change");
         await tx.DeleteAsync("a.txt");
@@ -434,7 +434,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, detectExternalChanges: true);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, detectExternalChanges: true);
         await tx.MoveAsync("a.txt", "b.txt");
         await tx.DeleteAsync("b.txt");
         await File.WriteAllTextAsync(file, "external change");
@@ -460,7 +460,7 @@ public sealed class ExternalChangeTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "hello");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
         await File.WriteAllTextAsync(file, "external change");
 

@@ -17,7 +17,7 @@ public sealed class CommitMoveChainTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "a.bak");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("a.txt", content);
@@ -43,7 +43,7 @@ public sealed class CommitMoveChainTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "log.txt"), "current");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "log.1"), "older");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("log.1", "log.2");
         await tx.MoveAsync("log.txt", "log.1");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("fresh");
@@ -75,7 +75,7 @@ public sealed class CommitMoveChainTests
         Directory.CreateDirectory(midDir);
         await File.WriteAllTextAsync(System.IO.Path.Combine(oldDir, "a.txt"), "from-old");
         await File.WriteAllTextAsync(System.IO.Path.Combine(midDir, "b.txt"), "from-mid");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("mid", "next");
         await tx.MoveAsync("old", "mid");
 
@@ -153,7 +153,7 @@ public sealed class CommitMoveChainTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "a.bak");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("a.txt", content);
@@ -182,7 +182,7 @@ public sealed class CommitMoveChainTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "c.txt"), "c");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
         await tx.MoveAsync("c.txt", "a.txt");
         await tx.DeleteAsync("a.txt");
@@ -208,7 +208,7 @@ public sealed class CommitMoveChainTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
         await using MemoryStream added = LeftoverAddFiles.Utf8Stream("added");
         await tx.AddAsync("a.txt", added);
@@ -239,7 +239,7 @@ public sealed class CommitMoveChainTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
         await using MemoryStream added = LeftoverAddFiles.Utf8Stream("added");
         await tx.AddAsync("a.txt", added);
@@ -268,7 +268,7 @@ public sealed class CommitMoveChainTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "c.txt"), "c");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
         await tx.MoveAsync("c.txt", "a.txt");
         await tx.MoveAsync("a.txt", "d.txt");
@@ -296,7 +296,7 @@ public sealed class CommitMoveChainTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "c.txt"), "c");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
         await tx.MoveAsync("c.txt", "a.txt");
         await using MemoryStream updated = LeftoverAddFiles.Utf8Stream("updated");
@@ -322,7 +322,7 @@ public sealed class CommitMoveChainTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
 
         await Assert.ThrowsAsync<ExternalConflictException>(() => tx.MoveAsync("a.txt", "c.txt"));

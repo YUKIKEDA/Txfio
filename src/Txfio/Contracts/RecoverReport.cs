@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// The result of <see cref="Txfio.RecoverAsync(string, CancellationToken)"/>.
+/// The result of <see cref="TxFileIO.RecoverAsync(string, CancellationToken)"/>.
 /// </summary>
 public sealed class RecoverReport
 {

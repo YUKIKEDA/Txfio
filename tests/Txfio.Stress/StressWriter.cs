@@ -125,7 +125,7 @@ public static class StressWriter
         long timestamp = 0;
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(workFolder);
+            await using ITransaction tx = await TxFileIO.BeginAsync(workFolder);
             foreach (string path in paths)
             {
                 operations.Add(path + "=" + await StageAsync(tx, workFolder, path, token, random));

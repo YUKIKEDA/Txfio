@@ -20,7 +20,7 @@ public sealed class CommitDeleteTreeTests
         string child = System.IO.Path.Combine(dir, "child", "a.txt");
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(child)!);
         await File.WriteAllTextAsync(child, "gone");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
 
         CommitReport result = await tx.CommitAsync();
@@ -43,7 +43,7 @@ public sealed class CommitDeleteTreeTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(dir);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
         string child = System.IO.Path.Combine(dir, "later.txt");
         await File.WriteAllTextAsync(child, "later");
@@ -68,7 +68,7 @@ public sealed class CommitDeleteTreeTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(dir);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
         Directory.Delete(dir);
         await File.WriteAllTextAsync(dir, "file");

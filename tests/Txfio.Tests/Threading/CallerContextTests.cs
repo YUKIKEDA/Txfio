@@ -23,7 +23,7 @@ public sealed class CallerContextTests
         (int caller, int resumed) = await context.RunAsync(async () =>
         {
             int callerThread = Environment.CurrentManagedThreadId;
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults);
             await using MemoryStream content = new MemoryStream(new byte[] { 1, 2, 3 });
             await tx.AddAsync("a.bin", content);
             return (callerThread, Environment.CurrentManagedThreadId);
