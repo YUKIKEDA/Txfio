@@ -16,7 +16,7 @@ nuget.org から Txfio を入れる人には、日本語を読まない人もい
 | --- | --- |
 | コード: 識別子、XML ドキュメント、インラインコメント、例外メッセージ | 英語 |
 | テスト: メソッド名、Given / When / Then の remarks、コメント、アサーションと Skip のメッセージ | 英語 |
-| `docs/`、`AGENTS.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md` | 英語 |
+| `docs/`、`AGENTS.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`、`CHANGELOG.md` | 英語 |
 | `.cursor/rules/`、`.cursor/skills/`、`.github/`（テンプレート、ワークフロー） | 英語 |
 | コミットメッセージ、PR のタイトルと本文、Issue のタイトルと本文、レビューコメント | 英語 |
 | 日英の 2 言語で持つ文書（下） | 英語の正本と日本語訳 |

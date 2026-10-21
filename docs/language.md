@@ -14,7 +14,7 @@ The always-applied agent rule is [`.cursor/rules/language.mdc`](../.cursor/rules
 | --- | --- |
 | Code: identifiers, XML docs, inline comments, exception messages | English |
 | Tests: method names, Given / When / Then remarks, comments, assertion and skip messages | English |
-| `docs/`, `AGENTS.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` | English |
+| `docs/`, `AGENTS.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md` | English |
 | `.cursor/rules/`, `.cursor/skills/`, `.github/` (templates, workflows) | English |
 | Commit messages, PR titles and bodies, Issue titles and bodies, review comments | English |
 | Bilingual documents (below) | English source + Japanese translation |

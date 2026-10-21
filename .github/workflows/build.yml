@@ -2,7 +2,9 @@
 # Windows runs ./build.ps1 (all unit tests, including WindowsFact).
 # Linux runs the same steps directly; WindowsFact tests are skipped there.
 # Stress tests (tests/Txfio.Stress) are not run here.
-# release.yml calls this workflow to run the same gate on the commit it publishes.
+# release.yml calls this workflow to run the same gate on the commit it publishes,
+# and dispatches it on the release branch, whose pull request GITHUB_TOKEN opens
+# without starting workflows.
 
 name: build
 
@@ -12,6 +14,7 @@ on:
   pull_request:
     branches: [main]
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read

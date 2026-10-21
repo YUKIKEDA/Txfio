@@ -21,7 +21,7 @@ One packable project: `src/Txfio/Txfio.csproj`. `tests/Txfio.Tests`, `tests/Txfi
 - License is `PackageLicenseExpression` `MIT`. Never `LicenseUrl`
 - `PackageReadmeFile` is `README.md` only (`docs/language.md`). Update `README.ja.md` in the same change; it is not packed
 - `PackageTags` in the project file are semicolon-separated
-- When `VersionPrefix` changes, update `PackageReleaseNotes` in the same change. State breaking changes, features, and fixes, or link to the place that does
+- When `VersionPrefix` changes, update `PackageReleaseNotes` and `CHANGELOG.md` in the same change. `CHANGELOG.md` has the full notes in one undated `## [{version}]` section (breaking changes first, each with how to move) and its link reference. `PackageReleaseNotes` is a short summary for the nuget.org page that starts with the version and links to `CHANGELOG.md`
 - The publish-ready README installs with `dotnet add package Txfio`. Do not tell readers to clone the repo instead, and do not say the package is already listed on nuget.org until a push of that version has succeeded
 - A version is published only by the `Release` workflow ([Publish](#publish)). Agents do not run it, and do not tag, create a Release, or push to nuget.org by hand
 
@@ -47,12 +47,13 @@ One packable project: `src/Txfio/Txfio.csproj`. `tests/Txfio.Tests`, `tests/Txfi
 
 The `Release` workflow (`.github/workflows/release.yml`) is the only way a version reaches nuget.org. `CONTRIBUTING.md` "Releasing" has the steps and the one-time setup. In short, a human runs it from the Actions tab on `main` with the version, and it:
 
-- checks the version, the release notes, and that neither the tag nor the nuget.org version exists (`.github/scripts/release-check.sh`)
-- runs both jobs of `build.yml` on that commit
-- packs with `ContinuousIntegrationBuild` and checks the package (`.github/scripts/release-check-package.sh`)
-- pushes the tag `v{version}`, then pushes the nupkg (with its snupkg) using a short-lived key from nuget.org Trusted Publishing, then creates the GitHub Release
+- checks the version, the release notes, the undated changelog section, and that neither the tag, the release branch, nor the nuget.org version exists (`.github/scripts/release-check.sh`)
+- runs both jobs of `build.yml` on that commit, and a dry-run pack with its checks
+- dates the changelog heading on a release commit (branch `release/v{version}`), tags it, packs and checks it (`.github/scripts/release-check-package.sh`), and pushes the branch and the tag
+- pushes the nupkg (with its snupkg) using a short-lived key from nuget.org Trusted Publishing
+- creates the GitHub Release from the changelog section (`.github/scripts/release-notes.sh`), and opens a pull request that brings the dated heading to `main`
 
-No API key is stored anywhere. Ready to publish means a merged pull request has set `VersionPrefix` and `PackageReleaseNotes`, and running `Release` is the only step left.
+No API key is stored anywhere. Ready to publish means a merged pull request has set `VersionPrefix`, `PackageReleaseNotes`, and the undated `CHANGELOG.md` section, and running `Release` is the only step left.
 
 nuget.org does not overwrite or delete a version. Unlisting hides that version from search. An exact version restore still works. See [Deleting packages](https://learn.microsoft.com/nuget/nuget-org/policies/deleting-packages).
 

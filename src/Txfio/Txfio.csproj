@@ -22,18 +22,15 @@
     <PackageTags>filesystem;transaction;windows;ntfs;smb</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes>
-0.2.0 has breaking changes. A crashed transaction no longer blocks the whole work folder.
+0.2.0 has breaking changes. A crashed transaction no longer blocks the whole work folder, and the names of staging entries are reserved.
 
-Breaking changes:
-- BeginAsync no longer throws RecoveryRequiredException. Staging methods and CommitAsync throw it only for paths that recovering a crashed transaction may change; RecoveryRequiredException.Path is the overlapping path (the work folder when the journal cannot be read).
-- RecoverAsync holds the work folder as shared and recovers each crashed journal while holding the locks on its paths, so it runs while other transactions are alive. It no longer throws LockContentionException because a transaction is alive. The new RecoverResult.Contended reports journals whose paths another transaction still holds.
-- CreateDirectoryAsync reserves its directory until the transaction ends: other transactions get LockContentionException when they stage under it.
-- Staging entry names ({name}.{txid}.txnew, {name}.{txid}.txnew.prev, {name}.{txid}.txold) are now a contract and reserved. A path with such a segment throws InvalidOperationException in every API, and ImportAsync rejects a source with such a name. Extract and archive entry names are rejected only when a segment is a staging name; a name that merely ends in .txnew is now allowed. The new Txfio.IsStagingName recognizes these names.
-- GetEntriesAsync, a directory CopyAsync, ExportAsync, and the input of CreateArchiveAsync skip the staging entries of every transaction, not only their own.
-- When a directory DeleteAsync fails at staging because of an unscheduled direct child, ExternalConflictException.Path is that child (the first one in order of the upper-cased paths), not the directory.
-- Do not let a 0.1.0 client share a work folder with this version; the two lock the work folder in incompatible ways. A share-lost.lock left by 0.1.0 is neither used nor deleted.
+- Do not share a work folder between 0.1.0 and 0.2.0 clients.
+- RecoveryRequiredException comes from staging and CommitAsync for overlapping paths only, not from BeginAsync. RecoverAsync runs while other transactions are alive and reports RecoverResult.Contended.
+- CreateDirectoryAsync reserves its directory until the transaction ends.
+- Paths with a staging name ({name}.{txid}.txnew, .txnew.prev, .txold) throw InvalidOperationException. Listings and copies skip every transaction's staging entries. New: Txfio.IsStagingName.
+- A directory DeleteAsync conflict names the blocking child in ExternalConflictException.Path.
 
-Details: https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.md
+Full notes and how to move: https://github.com/YUKIKEDA/Txfio/blob/main/CHANGELOG.md
     </PackageReleaseNotes>
   </PropertyGroup>
 

@@ -579,6 +579,7 @@ TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`�
 | [`docs/language.md`](docs/language.md)       | 言語ポリシーと翻訳   |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md)         | 進め方               |
 | [`SECURITY.md`](SECURITY.md)                 | 脆弱性の報告         |
+| [`CHANGELOG.md`](CHANGELOG.md)               | 版ごとの変更と移行のしかた（英語） |
 
 日本語訳: [`docs/design.ja.md`](docs/design.ja.md)、[`docs/roadmap.ja.md`](docs/roadmap.ja.md)、[`docs/conventions.ja.md`](docs/conventions.ja.md)、[`docs/language.ja.md`](docs/language.ja.md)、[`CONTRIBUTING.ja.md`](CONTRIBUTING.ja.md)。英語版が正本です。
 
