@@ -87,7 +87,28 @@ docs/language.md
 
 ## Versions
 
-SemVer. `0.x` may have breaking changes. The source of truth for the version is the git tag (`v0.1.0` and so on). Pushing to nuget.org happens after the GitHub repository is public (after Phase 3 is done).
+SemVer. `0.x` may have breaking changes. The source of truth for the version is the git tag (`v0.1.0` and so on).
+
+### Releasing
+
+A release is published by the `Release` workflow (`.github/workflows/release.yml`). Do not create the tag, the GitHub Release, or the nuget.org version by hand.
+
+Before running it, a merged pull request on `main` sets `VersionPrefix` in `src/Txfio/Txfio.csproj` to the new version, and `PackageReleaseNotes` to notes that start with that version (breaking changes first).
+
+A maintainer runs `Release` from the Actions tab on `main`, with the version (`0.2.0`, without `v`). It runs on the `main` commit of that moment and stops at the first failure:
+
+1. `verify`: `.github/scripts/release-check.sh` checks the version format, the project version, the start of the release notes, that no tag `v{version}` exists, and that nuget.org has no such version.
+2. `test`: both jobs of `build.yml` (the merge gate) on that commit.
+3. `pack`: `dotnet pack -c Release -p:ContinuousIntegrationBuild=true`, then `.github/scripts/release-check-package.sh` checks the `.nuspec` (version, commit, readme, release notes) and that the DLL and the PDB have deterministic paths and Source Link for that commit.
+4. `publish` (environment `release`): creates the annotated tag `v{version}` on that commit and pushes it, gets a short-lived API key through nuget.org Trusted Publishing, pushes the nupkg (the snupkg goes with it), and creates the GitHub Release with the release notes and both packages attached.
+
+The tag is pushed before the package: a tag can be deleted, a nuget.org version cannot. If the push to nuget.org fails, delete the tag, fix the cause, and run the workflow again.
+
+One-time setup, by the repository owner:
+
+- nuget.org › your profile › Trusted Publishing: a policy with owner `YUKIKEDA`, repository `Txfio`, workflow file `release.yml`, environment `release`. A new policy may be active for 7 days only until the first publish through it.
+- GitHub › Settings › Environments: an environment named `release`. A required reviewer there makes each run wait for approval before `publish`.
+- If a ruleset restricts tag creation, allow GitHub Actions to create `v*` tags.
 
 ## Verification
 
