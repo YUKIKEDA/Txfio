@@ -17,6 +17,7 @@ alwaysApply: true
 ## Changing the design
 
 - **Contract / public API / semantics / phase boundaries / exception policy:** open a Design Issue and a design-only PR updating `docs/design.md` first; merge before implementation issues
+- **Public API names** (a type, member, or namespace that consumers write): present the candidates with their trade-offs and get the maintainer's explicit choice before the design PR. An agent does not pick the name. Before the design PR merges, compile the documented call in a project outside the `Txfio` namespace, after `using Txfio;` (`docs/conventions.md` › "Call the public API as a consumer does")
 - **Docs-only clarifications** (typos, wording, examples): may ship in the same PR as code
 - Do not implement first and "update the design later"
 
