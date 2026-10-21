@@ -32,6 +32,10 @@ if grep -qF "<iconUrl>" "$nuspec"; then
     fail "the nuspec has an iconUrl"
 fi
 [[ -f "$work/pkg/README.md" ]] || fail "README.md is not in the package"
+# nuget.org renders a relative link as an empty href, so the packed README
+# links only to absolute URLs and anchors.
+relative="$(grep -oE '\]\([^)]*\)' "$work/pkg/README.md" | grep -vE '^\]\((https?://|#)' || true)"
+[[ -z "$relative" ]] || fail "the packed README has relative links: $relative"
 
 dll="$work/pkg/lib/net8.0/Txfio.dll"
 pdb="$work/sym/lib/net8.0/Txfio.pdb"

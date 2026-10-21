@@ -21,6 +21,7 @@ Before changing package metadata, packing, or publishing, read [`.cursor/skills/
 - One package, `Txfio`. The packed readme is English `README.md` only
 - The publish-ready install line is `dotnet add package Txfio`. Do not say the package is already listed on nuget.org until that push has succeeded
 - A version is published only by the `Release` workflow (`.github/workflows/release.yml`, `CONTRIBUTING.md` "Releasing"). It tags the commit, pushes to nuget.org through Trusted Publishing, and creates the GitHub Release. Agents do not run it, and do not create the tag, the Release, or a nuget.org push by hand. Ready means a human runs `Release` and no other step is left
+- Before calling a release ready, the documentation review in `CONTRIBUTING.md` "Releasing" is done and recorded on the release preparation pull request. Checking only the workflow and the repository settings is not "ready". When telling the user about a release, first say what was checked and what was not
 - A local pack for checking passes `ContinuousIntegrationBuild`, as the workflow does. A pack without it leaves the local source path in the DLL and the PDB. Outputs are `src/Txfio/bin/Release/Txfio.<version>.nupkg` and `.snupkg`; `.github/scripts/release-check-package.sh` checks them:
 
 ```text

@@ -1,12 +1,12 @@
 # Txfio
 
-English | [日本語](README.ja.md)
+English | [日本語](https://github.com/YUKIKEDA/Txfio/blob/main/README.ja.md)
 
 A file IO library for Windows shared folders (NTFS / SMB) that leaves the real files unchanged until you commit, and can recover after a crash.
 
 Install it with `dotnet add package Txfio`. The TFM is `net8.0`. When the SMB server's own cache reaches the disk is not guaranteed.
 
-The source of truth for the contract is [`docs/design.md`](docs/design.md). How to use it is in this README.
+The source of truth for the contract is [`docs/design.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.md). How to use it is in this README. The flowcharts render as diagrams [on GitHub](https://github.com/YUKIKEDA/Txfio#readme); on nuget.org they show as Mermaid source.
 
 ## Getting started
 
@@ -164,6 +164,7 @@ flowchart TD
   call["RecoverAsync"] --> has{"Is there a journal?"}
   has -->|No| none["NoPendingTransactions"]
   has -->|Not readable as JSON| unreadable["JournalUnreadable"]
+  has -->|A live transaction keeps holding its paths| contended["Contended"]
   has -->|No apply-started marker| back["RolledBack"]
   has -->|Marker present| match{"Matches Before / After?"}
   match -->|Applied, or re-run succeeded| forward["RolledForward"]
@@ -244,10 +245,10 @@ await tx.WriteAllLinesAsync("lines.txt", new[] { "a", "b" });
 JSON writes are the same Add and Update. Without options, `System.Text.Json` defaults apply, so property names stay as they are. Broken JSON stays `JsonException`.
 
 ```csharp
-sealed record Note(string Title);
-
 await tx.WriteAsJsonAsync("note.json", new Note("hello"));
 Note? note = await tx.ReadFromJsonAsync<Note>("note.json");
+
+sealed record Note(string Title);
 ```
 
 ```mermaid
@@ -573,15 +574,15 @@ The TxFileManager features are based on its public README and `DeleteDirectoryOp
 
 | Document                                     | Role                                 |
 | -------------------------------------------- | ------------------------------------ |
-| [`docs/design.md`](docs/design.md)           | Source of truth for the design       |
-| [`docs/roadmap.md`](docs/roadmap.md)         | Implementation order (phases are provisional) |
-| [`docs/conventions.md`](docs/conventions.md) | Coding conventions                   |
-| [`docs/language.md`](docs/language.md)       | Language policy and translations     |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md)         | How to contribute                    |
-| [`SECURITY.md`](SECURITY.md)                 | Reporting vulnerabilities            |
-| [`CHANGELOG.md`](CHANGELOG.md)               | Changes in each version, and how to move |
+| [`docs/design.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.md)           | Source of truth for the design       |
+| [`docs/roadmap.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/roadmap.md)         | Implementation order (phases are provisional) |
+| [`docs/conventions.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/conventions.md) | Coding conventions                   |
+| [`docs/language.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/language.md)       | Language policy and translations     |
+| [`CONTRIBUTING.md`](https://github.com/YUKIKEDA/Txfio/blob/main/CONTRIBUTING.md)         | How to contribute                    |
+| [`SECURITY.md`](https://github.com/YUKIKEDA/Txfio/blob/main/SECURITY.md)                 | Reporting vulnerabilities            |
+| [`CHANGELOG.md`](https://github.com/YUKIKEDA/Txfio/blob/main/CHANGELOG.md)               | Changes in each version, and how to move |
 
-Japanese translations: [`README.ja.md`](README.ja.md), [`docs/design.ja.md`](docs/design.ja.md).
+Japanese translations: [`README.ja.md`](https://github.com/YUKIKEDA/Txfio/blob/main/README.ja.md), [`docs/design.ja.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.ja.md).
 
 ## Verification
 
@@ -593,4 +594,4 @@ The merge gate is green CI on Windows and Linux (`.github/workflows/build.yml`).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/YUKIKEDA/Txfio/blob/main/LICENSE)

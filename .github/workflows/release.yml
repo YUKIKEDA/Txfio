@@ -45,6 +45,7 @@ jobs:
             10.0.x
             8.0.x
       - run: .github/scripts/release-check.sh "$VERSION"
+      - run: .github/scripts/readme-samples-check.sh
 
   test:
     name: test
