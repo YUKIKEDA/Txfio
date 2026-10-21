@@ -20,7 +20,7 @@ public sealed class CopyTests
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         string destination = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(source, "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CopyAsync("a.txt", "b.txt");
 
@@ -47,7 +47,7 @@ public sealed class CopyTests
         string destination = System.IO.Path.Combine(work.Path, "dest");
         Directory.CreateDirectory(System.IO.Path.Combine(source, "empty"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CopyAsync("src", "dest");
 
@@ -75,7 +75,7 @@ public sealed class CopyTests
         string destination = System.IO.Path.Combine(work.Path, "dest");
         Directory.CreateDirectory(System.IO.Path.Combine(source, "empty"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "keep");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.CopyAsync("src", "dest");
         }
@@ -100,7 +100,7 @@ public sealed class CopyTests
         string source = System.IO.Path.Combine(work.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "real");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("outside");
         await tx.AddAsync("outside.txt", content);
         string journal = Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
@@ -137,7 +137,7 @@ public sealed class CopyTests
         CreateJunction(link, other);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
             await tx.CopyAsync("src", "dest");
 
@@ -171,7 +171,7 @@ public sealed class CopyTests
         CreateJunction(link, target);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
             InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => tx.CopyAsync("link", "dest"));
@@ -203,7 +203,7 @@ public sealed class CopyTests
         string link = System.IO.Path.Combine(work.Path, "link.txt");
         await File.WriteAllTextAsync(target, "secret");
         File.CreateSymbolicLink(link, target);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CopyAsync("link.txt", "copy.txt"));
@@ -229,7 +229,7 @@ public sealed class CopyTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
         string destination = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(destination, "dest");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException conflict = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.CopyAsync("a.txt", "b.txt"));
@@ -252,7 +252,7 @@ public sealed class CopyTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         string parent = System.IO.Path.Combine(work.Path, "missing");
 
         ExternalConflictException conflict = await Assert.ThrowsAsync<ExternalConflictException>(
@@ -276,7 +276,7 @@ public sealed class CopyTests
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(source, "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CopyAsync("a.txt", "a.txt"));
@@ -299,7 +299,7 @@ public sealed class CopyTests
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "src");
         Directory.CreateDirectory(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.CopyAsync("src", "src/nested"));
@@ -321,7 +321,7 @@ public sealed class CopyTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("a.txt", content);
 
@@ -344,7 +344,7 @@ public sealed class CopyTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "src"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("src/a.txt", content);
 
@@ -369,7 +369,7 @@ public sealed class CopyTests
         string tree = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(tree);
         await File.WriteAllTextAsync(System.IO.Path.Combine(tree, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CopyAsync("tree/a.txt", "b.txt"));
@@ -393,7 +393,7 @@ public sealed class CopyTests
         string source = System.IO.Path.Combine(work.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         using CancellationTokenSource cancellation = new CancellationTokenSource();
         CancelOnReport progress = new CancelOnReport(cancellation);
 
@@ -420,7 +420,7 @@ public sealed class CopyTests
         byte[] bytes = new byte[81921];
         bytes[81920] = 1;
         await File.WriteAllBytesAsync(System.IO.Path.Combine(work.Path, "a.txt"), bytes);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         RecordingProgress progress = new RecordingProgress();
 
         await tx.CopyAsync("a.txt", "b.txt", progress);
@@ -443,7 +443,7 @@ public sealed class CopyTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "src"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         RecordingProgress progress = new RecordingProgress();
 
         await tx.CopyAsync("src", "dest", progress);
@@ -469,7 +469,7 @@ public sealed class CopyTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "ab");
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "b.txt"), "cd");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         RecordingProgress progress = new RecordingProgress();
 
         await tx.CopyAsync("src", "dest", progress);

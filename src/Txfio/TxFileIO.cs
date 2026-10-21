@@ -3,7 +3,7 @@ namespace Txfio;
 /// <summary>
 /// The entry point of transactional file IO.
 /// </summary>
-public static class Txfio
+public static class TxFileIO
 {
     /// <summary>
     /// Begins a transaction on a work folder (with no lock wait).

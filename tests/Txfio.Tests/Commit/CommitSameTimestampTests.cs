@@ -18,7 +18,7 @@ public sealed class CommitSameTimestampTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction transaction = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await transaction.UpdateAsync("a.txt", content);
         string staging = Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
@@ -47,7 +47,7 @@ public sealed class CommitSameTimestampTests
         await File.WriteAllTextAsync(target, "old");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction transaction = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
             await transaction.UpdateAsync("a.txt", content);
@@ -59,7 +59,7 @@ public sealed class CommitSameTimestampTests
         Assert.Equal("old", await File.ReadAllTextAsync(target));
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
 
-        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledForward, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }

@@ -219,7 +219,7 @@ public sealed class DirectoryMultiProcessStressTests
         string? mismatch = await CompareAsync(work, expected);
         Assert.True(mismatch is null, "The final state differs (" + summary + ") " + mismatch);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work, ".txfio"), "tx-*.journal"));
-        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work)).Result);
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await TxFileIO.RecoverAsync(work)).Result);
     }
 
     private sealed record DirectoryStressRecord(

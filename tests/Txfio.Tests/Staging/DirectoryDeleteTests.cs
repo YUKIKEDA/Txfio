@@ -18,7 +18,7 @@ public sealed class DirectoryDeleteTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.DeleteAsync("sub");
         }
@@ -41,7 +41,7 @@ public sealed class DirectoryDeleteTests
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
         Assert.Equal(System.IO.Path.Combine(dir, "a.txt"), ex.Path);
     }
@@ -60,7 +60,7 @@ public sealed class DirectoryDeleteTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(System.IO.Path.Combine(dir, "nested"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
         Assert.Equal(System.IO.Path.Combine(dir, "nested"), ex.Path);
     }
@@ -81,7 +81,7 @@ public sealed class DirectoryDeleteTests
         Directory.CreateDirectory(dir);
         string child = System.IO.Path.Combine(dir, "a.txt");
         await File.WriteAllTextAsync(child, "gone");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("sub/a.txt");
         await tx.DeleteAsync("sub");
 
@@ -105,7 +105,7 @@ public sealed class DirectoryDeleteTests
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub/a.txt", "b.txt");
         await tx.DeleteAsync("sub");
 
@@ -126,7 +126,7 @@ public sealed class DirectoryDeleteTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("sub");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AddAsync("sub/a.txt", content));
@@ -146,7 +146,7 @@ public sealed class DirectoryDeleteTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("sub");
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", "sub/a.txt"));
     }
@@ -163,7 +163,7 @@ public sealed class DirectoryDeleteTests
     public async Task DeleteAsync_MetadataFolderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteAsync(".txfio"));
     }
 
@@ -179,7 +179,7 @@ public sealed class DirectoryDeleteTests
     public async Task AddAsync_UnderMetadataFolderThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AddAsync(".txfio/foo", content));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "*.txnew"));
@@ -201,7 +201,7 @@ public sealed class DirectoryDeleteTests
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
         string inside = System.IO.Path.Combine(work.Path, ".txfio", "foo");
         await File.WriteAllTextAsync(inside, "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.UpdateAsync(".txfio/foo", content));
         Assert.Equal("keep", await File.ReadAllTextAsync(inside));
@@ -221,7 +221,7 @@ public sealed class DirectoryDeleteTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.MoveAsync("a.txt", ".txfio/a.txt"));
         Assert.True(File.Exists(System.IO.Path.Combine(work.Path, "a.txt")));
         Assert.Empty(tx.GetPendingChanges());
@@ -241,7 +241,7 @@ public sealed class DirectoryDeleteTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, ".txfio"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, ".txfio", "foo"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteAsync(".txfio/foo"));
     }
 
@@ -259,7 +259,7 @@ public sealed class DirectoryDeleteTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.AddAsync("sub/a.txt", content);
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));

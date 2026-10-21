@@ -22,7 +22,7 @@ public sealed class ProcessLockTests
         await using LockProcess child = LockProcess.StartHoldUntilStop(work.Path, "a.txt", ready, stop);
         await child.WaitUntilReadyAsync(ready);
 
-        await using ITransaction parent = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction parent = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("other");
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => parent.AddAsync("a.txt", content));
         Assert.Equal(target, contention.Path);
@@ -44,7 +44,7 @@ public sealed class ProcessLockTests
         string ready = System.IO.Path.Combine(work.Path, "ready.signal");
         string stop = System.IO.Path.Combine(work.Path, "stop.signal");
         await using LockProcess child = LockProcess.StartHoldUntilStop(work.Path, "b.txt", ready, stop);
-        await using ITransaction parent = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction parent = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("a");
         await parent.AddAsync("a.txt", content);
         await child.WaitUntilReadyAsync(ready);
@@ -76,7 +76,7 @@ public sealed class ProcessLockTests
         Assert.True(File.Exists(lockFile));
         await child.KillAsync();
 
-        await using (ITransaction parent = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction parent = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");
             await parent.AddAsync("a.txt", content);
@@ -84,6 +84,6 @@ public sealed class ProcessLockTests
             Assert.Single(parent.GetPendingChanges());
         }
 
-        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledBack, (await TxFileIO.RecoverAsync(work.Path)).Result);
     }
 }

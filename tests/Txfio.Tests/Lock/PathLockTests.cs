@@ -18,8 +18,8 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         string lower = System.IO.Path.Combine(work.Path, "a.txt");
         string upper = System.IO.Path.Combine(work.Path, "A.txt");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await first.AddAsync("a.txt", content);
 
@@ -44,8 +44,8 @@ public sealed class PathLockTests
     public async Task AddAsync_DifferentPathsStageConcurrently()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream left = LeftoverAddFiles.Utf8Stream("a");
         await using MemoryStream right = LeftoverAddFiles.Utf8Stream("b");
         await first.AddAsync("a.txt", left);
@@ -72,7 +72,7 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("one");
         await using MemoryStream second = LeftoverAddFiles.Utf8Stream("two");
         await tx.UpdateAsync("a.txt", first);
@@ -96,7 +96,7 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         string lockFile = PathLockSet.FilePath(work.Path, target);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
             await tx.AddAsync("a.txt", content);
@@ -104,7 +104,7 @@ public sealed class PathLockTests
         }
 
         Assert.True(File.Exists(lockFile));
-        await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction next = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream update = LeftoverAddFiles.Utf8Stream("next");
         await next.UpdateAsync("a.txt", update);
         Assert.Single(next.GetPendingChanges());
@@ -124,13 +124,13 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         string lockFile = PathLockSet.FilePath(work.Path, target);
-        ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        ITransaction first = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await first.AddAsync("a.txt", content);
         await first.DisposeAsync();
 
         Assert.True(File.Exists(lockFile));
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream again = LeftoverAddFiles.Utf8Stream("other");
         await second.AddAsync("a.txt", again);
         Assert.Single(second.GetPendingChanges());
@@ -148,7 +148,7 @@ public sealed class PathLockTests
     public async Task DisposeAsync_ClosesLocksWhenJournalDeleteFails()
     {
         await using TempDirectory work = TempDirectory.Create();
-        ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        ITransaction first = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await first.AddAsync("a.txt", content);
         string journal = Assert.Single(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
@@ -159,13 +159,13 @@ public sealed class PathLockTests
             Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
 
             Assert.True(File.Exists(journal));
-            await using ITransaction during = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction during = await TxFileIO.BeginAsync(work.Path);
             Assert.Empty(during.GetPendingChanges());
         }
 
-        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledBack, (await TxFileIO.RecoverAsync(work.Path)).Result);
 
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream again = LeftoverAddFiles.Utf8Stream("other");
         await second.AddAsync("a.txt", again);
         Assert.Single(second.GetPendingChanges());
@@ -184,8 +184,8 @@ public sealed class PathLockTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "missing", "a.txt");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await Assert.ThrowsAsync<ExternalConflictException>(() => first.AddAsync("missing/a.txt", content));
 
@@ -209,8 +209,8 @@ public sealed class PathLockTests
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         string dest = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(source, "src");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.MoveAsync("a.txt", "b.txt");
 
         LockContentionException sourceLock = await Assert.ThrowsAsync<LockContentionException>(() => second.DeleteAsync("a.txt"));
@@ -236,9 +236,9 @@ public sealed class PathLockTests
         string dest = System.IO.Path.Combine(work.Path, "held.txt");
         await File.WriteAllTextAsync(source, "src");
         await File.WriteAllTextAsync(dest, "held");
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction mover = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction other = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction mover = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction other = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await holder.UpdateAsync("held.txt", content);
 
@@ -262,8 +262,8 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         string sub = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(sub);
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.DeleteAsync("sub");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
 
@@ -288,8 +288,8 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         string sub = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(sub);
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.MoveAsync("sub", "other");
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(() => second.DeleteAsync("sub"));
@@ -313,8 +313,8 @@ public sealed class PathLockTests
         string tree = System.IO.Path.Combine(work.Path, "tree");
         Directory.CreateDirectory(tree);
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.DeleteTreeAsync("tree");
 
         await second.DeleteAsync("a.txt");
@@ -341,8 +341,8 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         string drop = System.IO.Path.Combine(work.Path, "drop");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.CreateDirectoryAsync("drop");
 
         await second.DeleteAsync("a.txt");
@@ -369,9 +369,9 @@ public sealed class PathLockTests
     public async Task CreateDirectoryAsync_OtherTransactionStagesUnderItAfterOwnerEnds()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
         await first.CreateDirectoryAsync("drop");
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(3));
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromSeconds(3));
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("child");
 
         Task adding = second.AddAsync("drop/a.txt", content);
@@ -396,8 +396,8 @@ public sealed class PathLockTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "src");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         Task forward = first.MoveAsync("a.txt", "b.txt");
         Task backward = second.MoveAsync("b.txt", "a.txt");
         Task both = Task.WhenAll(forward, backward);
@@ -431,8 +431,8 @@ public sealed class PathLockTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.CopyAsync("a.txt", "b.txt");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("other");
 
@@ -458,8 +458,8 @@ public sealed class PathLockTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.CopyAsync("src", "dest");
 
         await second.DeleteAsync("a.txt");
@@ -490,8 +490,8 @@ public sealed class PathLockTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.CreateArchiveAsync("src", "src.zip");
 
         await second.DeleteAsync("a.txt");
@@ -518,8 +518,8 @@ public sealed class PathLockTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         System.IO.Compression.ZipFile.CreateFromDirectory(source, System.IO.Path.Combine(work.Path, "src.zip"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.ExtractArchiveAsync("src.zip", "dest");
 
         await second.DeleteAsync("a.txt");
@@ -546,8 +546,8 @@ public sealed class PathLockTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.CreateArchiveAsync(new[] { new ArchiveEntrySource("a.txt") }, "a.zip");
 
         await second.DeleteAsync("b.txt");
@@ -573,8 +573,8 @@ public sealed class PathLockTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "b.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.CreateArchiveAsync(new[] { new ArchiveEntrySource("a.txt"), new ArchiveEntrySource("src") }, "all.zip");
 
         await second.DeleteAsync("b.txt");

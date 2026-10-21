@@ -17,7 +17,7 @@ public sealed class CreateDirectoryTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateDirectoryAsync("drop");
 
@@ -42,7 +42,7 @@ public sealed class CreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
         string child = System.IO.Path.Combine(dir, "a.txt");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.CreateDirectoryAsync("drop");
             await File.WriteAllTextAsync(child, "from-outside");
@@ -65,7 +65,7 @@ public sealed class CreateDirectoryTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "drop"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.CreateDirectoryAsync("drop"));
@@ -86,7 +86,7 @@ public sealed class CreateDirectoryTests
     public async Task CreateDirectoryAsync_MissingParentThrowsExternalConflictException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.CreateDirectoryAsync("missing/drop"));
@@ -107,7 +107,7 @@ public sealed class CreateDirectoryTests
     public async Task CreateDirectoryAsync_CreatesNestedDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
 
         await tx.CreateDirectoryAsync("drop/child");
@@ -129,7 +129,7 @@ public sealed class CreateDirectoryTests
     public async Task CreateDirectoryAsync_CreatesSiblingsInSequence()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateDirectoryAsync("drop");
         await tx.CreateDirectoryAsync("other");
@@ -151,7 +151,7 @@ public sealed class CreateDirectoryTests
     public async Task AddAsync_UnderDirectoryIsVisibleAsScheduled()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("yes");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "drop", "raw.txt"), "raw");
@@ -182,7 +182,7 @@ public sealed class CreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         string drop = System.IO.Path.Combine(work.Path, "drop");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "src.txt"), "src");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
 
         InvalidOperationException delete = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -212,7 +212,7 @@ public sealed class CreateDirectoryTests
     public async Task CopyAsync_CanCopyWhenNoOperationUnderDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "drop", "a.txt"), "raw");
 
@@ -237,7 +237,7 @@ public sealed class CreateDirectoryTests
     public async Task CopyAsync_OperationUnderDirectoryThrowsInvalidOperationException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("drop/a.txt", content);
@@ -263,7 +263,7 @@ public sealed class CreateDirectoryTests
         string source = System.IO.Path.Combine(outside.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "in");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
 
         await tx.ImportAsync(source, "drop/in");
@@ -290,7 +290,7 @@ public sealed class CreateDirectoryTests
         string moved = System.IO.Path.Combine(work.Path, "drop", "keep.txt");
         string added = System.IO.Path.Combine(work.Path, "drop", "new.txt");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "keep.txt"), "old");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.CreateDirectoryAsync("drop");
             File.Move(System.IO.Path.Combine(work.Path, "keep.txt"), moved);
@@ -316,7 +316,7 @@ public sealed class CreateDirectoryTests
     public async Task AddAsync_ContinuesOutsideTree()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("yes");
 
@@ -338,7 +338,7 @@ public sealed class CreateDirectoryTests
     public async Task ReadAllTextAsync_ReadsFileUnderDirectory()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "drop", "a.txt"), "outside");
 
@@ -361,7 +361,7 @@ public sealed class CreateDirectoryTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory outside = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "drop", "a.txt"), "outside");
         string destination = System.IO.Path.Combine(outside.Path, "a.txt");
@@ -385,7 +385,7 @@ public sealed class CreateDirectoryTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "parent"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("parent/drop");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.DeleteTreeAsync("parent"));

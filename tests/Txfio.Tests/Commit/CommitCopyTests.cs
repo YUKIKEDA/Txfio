@@ -19,7 +19,7 @@ public sealed class CommitCopyTests
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         string destination = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(source, "copied");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CopyAsync("a.txt", "b.txt");
 
         CommitReport result = await tx.CommitAsync();
@@ -45,7 +45,7 @@ public sealed class CommitCopyTests
         string destination = System.IO.Path.Combine(work.Path, "dest");
         Directory.CreateDirectory(System.IO.Path.Combine(source, "empty"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "copied");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CopyAsync("src", "dest");
 
         CommitReport result = await tx.CommitAsync();

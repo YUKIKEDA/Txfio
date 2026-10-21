@@ -33,7 +33,7 @@ public sealed class RecoverBeforeAfterTests
             ",\"before\":" + SnapshotJson.Absent + ",\"after\":" + after + "}]}";
         await File.WriteAllTextAsync(journal, json);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(journal));
         Assert.False(File.Exists(staging));

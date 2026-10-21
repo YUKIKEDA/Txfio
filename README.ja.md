@@ -15,9 +15,9 @@ Windows の共有フォルダ（NTFS / SMB）で、コミットするまで本�
 ```csharp
 using Txfio;
 
-await Txfio.RecoverAsync(@"D:\share\work");
+await TxFileIO.RecoverAsync(@"D:\share\work");
 
-await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
+await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
 await tx.WriteAllTextAsync("a.txt", "hello");
 CommitReport report = await tx.CommitAsync();
 ```
@@ -109,12 +109,12 @@ D:\share\work\
 
 エクスプローラーには `.txnew` が見えます。`File.ReadAllText` は本物の `old` を読みます。同じトランザクションの `ReadAllTextAsync` は `new` を読みます。
 
-ステージングのエントリの名前は決まっています。`{name}.{txid}.txnew`（新しい内容）、`{name}.{txid}.txnew.prev`（同じ `.txnew` を書き直す間のバックアップ）、`{name}.{txid}.txold`（ディレクトリを入れ替える間の古い先）です。`{txid}` は `Guid.ToString("D")` 形式のトランザクション ID です。これらの名前は予約されています。ステージング名のセグメントを含むパスは、どの API の対象にもなりません（`InvalidOperationException`。8.3 の短い名前や末尾のドットを通しても同じです）。`GetEntriesAsync`、ディレクトリのコピー、`ExportAsync`、`CreateArchiveAsync` の入力は、すべてのトランザクションのステージングのエントリを飛ばします。普通のファイル API でフォルダを列挙するときは、`Txfio.IsStagingName` で飛ばします。
+ステージングのエントリの名前は決まっています。`{name}.{txid}.txnew`（新しい内容）、`{name}.{txid}.txnew.prev`（同じ `.txnew` を書き直す間のバックアップ）、`{name}.{txid}.txold`（ディレクトリを入れ替える間の古い先）です。`{txid}` は `Guid.ToString("D")` 形式のトランザクション ID です。これらの名前は予約されています。ステージング名のセグメントを含むパスは、どの API の対象にもなりません（`InvalidOperationException`。8.3 の短い名前や末尾のドットを通しても同じです）。`GetEntriesAsync`、ディレクトリのコピー、`ExportAsync`、`CreateArchiveAsync` の入力は、すべてのトランザクションのステージングのエントリを飛ばします。普通のファイル API でフォルダを列挙するときは、`TxFileIO.IsStagingName` で飛ばします。
 
 ```csharp
 foreach (string entry in Directory.EnumerateFileSystemEntries(@"D:\share\work"))
 {
-    if (Txfio.IsStagingName(Path.GetFileName(entry)))
+    if (TxFileIO.IsStagingName(Path.GetFileName(entry)))
     {
         continue;
     }
@@ -124,7 +124,7 @@ foreach (string entry in Directory.EnumerateFileSystemEntries(@"D:\share\work"))
 ```
 
 ```csharp
-await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
+await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
 await tx.WriteAllTextAsync("a.txt", "new");
 string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 ```
@@ -363,7 +363,7 @@ flowchart TD
 ワークフォルダ全体は共有で押さえ、そのディレクトリをロックします。トランザクションが終わるまで配下を予約するので、別のトランザクションは子をステージできません（`LockContentionException` で、`Path` はそのディレクトリ）。素のファイル API には効きません。このトランザクションの配下の操作は、それぞれの操作のロックも取ります。そのパス自身への Delete、DeleteTree、Move、Update、もう一度の `CreateDirectoryAsync` は畳みません。配下にこのトランザクションの操作が無いときだけ、そのディレクトリをコピー元にできます。
 
 ```csharp
-await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
+await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
 await tx.CreateDirectoryAsync("drop");
 await File.WriteAllTextAsync(@"D:\share\work\drop\a.txt", "from-api");
 await tx.WriteAllTextAsync(@"drop\b.txt", "from-txfio");

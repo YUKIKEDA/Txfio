@@ -24,7 +24,7 @@ public sealed class RecoverReportTests
         await File.WriteAllTextAsync(leftover.TargetPath, "external");
         Assert.True(MetadataNames.TryGetTransactionId(leftover.JournalPath, out Guid transactionId));
 
-        RecoverReport first = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport first = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.ConflictDetected, first.Result);
         JournalReport journal = Assert.Single(first.Journals);
@@ -36,7 +36,7 @@ public sealed class RecoverReportTests
         Assert.Equal(PendingChangeKind.Add, operation.Kind);
         Assert.EndsWith("a.txt", operation.Path, StringComparison.OrdinalIgnoreCase);
 
-        RecoverReport second = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport second = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.NoPendingTransactions, second.Result);
         Assert.Empty(second.Journals);
@@ -68,7 +68,7 @@ public sealed class RecoverReportTests
         Assert.True(MetadataNames.TryGetTransactionId(broken.JournalPath, out Guid brokenId));
         Assert.True(MetadataNames.TryGetTransactionId(pending.JournalPath, out Guid pendingId));
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, report.Result);
         Assert.Equal(2, report.Journals.Count);
@@ -93,18 +93,18 @@ public sealed class RecoverReportTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
-        await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction live = await TxFileIO.BeginAsync(work.Path);
         string liveJournal = Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.True(MetadataNames.TryGetTransactionId(liveJournal, out Guid liveId));
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction crashed = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await crashed.WriteAllTextAsync("a.txt", "crashed");
             await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
         }
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledForward, report.Result);
         JournalReport journal = Assert.Single(report.Journals);
@@ -126,7 +126,7 @@ public sealed class RecoverReportTests
     public async Task RecoverAsync_ListsSeveralJournalsInLexicalOrderIgnoringCase()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction live = await TxFileIO.BeginAsync(work.Path);
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
         string liveJournal = Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         Assert.True(MetadataNames.TryGetTransactionId(liveJournal, out Guid liveId));
@@ -135,7 +135,7 @@ public sealed class RecoverReportTests
         await LeftoverAddFiles.WriteAddAsync(work.Path, committing: false, "z.txt", "z", later);
         await LeftoverAddFiles.WriteAddAsync(work.Path, committing: false, "a.txt", "a", earlier);
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledBack, report.Result);
         Assert.Equal(2, report.Journals.Count);
@@ -166,7 +166,7 @@ public sealed class RecoverReportTests
         string journal = System.IO.Path.Combine(metadata, "tx-not-a-guid.journal");
         await File.WriteAllTextAsync(journal, "{\"version\":1,\"transac");
 
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, report.Result);
         Assert.Empty(report.Journals);

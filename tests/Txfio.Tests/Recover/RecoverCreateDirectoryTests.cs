@@ -19,7 +19,7 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteCreateDirectoryAsync(work.Path, committing: false, createDirectory: true);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(Directory.Exists(target));
@@ -40,7 +40,7 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         await WriteCreateDirectoryAsync(work.Path, committing: false, createDirectory: false);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
@@ -60,7 +60,7 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteCreateDirectoryAsync(work.Path, committing: true, createDirectory: true);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("keep", await File.ReadAllTextAsync(System.IO.Path.Combine(target, "a.txt")));
@@ -81,7 +81,7 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         await WriteCreateDirectoryAsync(work.Path, committing: true, createDirectory: false);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
@@ -103,7 +103,7 @@ public sealed class RecoverCreateDirectoryTests
         Directory.Delete(target, recursive: true);
         await File.WriteAllTextAsync(target, "file");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.Equal("file", await File.ReadAllTextAsync(target));
@@ -124,7 +124,7 @@ public sealed class RecoverCreateDirectoryTests
         await using TempDirectory work = TempDirectory.Create();
         string target = await WriteCreateDirectoryAsync(work.Path, committing: false, createDirectory: true, directoryCreated: false);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.Equal("keep", await File.ReadAllTextAsync(System.IO.Path.Combine(target, "a.txt")));
@@ -146,7 +146,7 @@ public sealed class RecoverCreateDirectoryTests
         string target = await WriteCreateDirectoryAsync(work.Path, committing: false, createDirectory: false);
         Directory.CreateDirectory(target);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(Directory.Exists(target));
@@ -165,7 +165,7 @@ public sealed class RecoverCreateDirectoryTests
     public async Task CreateDirectoryAsync_RecordsCreatedAfterCreating()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateDirectoryAsync("drop");
 

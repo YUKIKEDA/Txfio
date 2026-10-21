@@ -16,7 +16,7 @@ public sealed class JournalAppendTests
     public async Task AddAsync_AppendsToJournalWhenOnlyAddingToEnd()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", "a");
         await tx.WriteAllTextAsync("b.txt", "b");
@@ -41,7 +41,7 @@ public sealed class JournalAppendTests
     public async Task DeleteAsync_RewritesJournalWhenMiddleChanges()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "a");
         await tx.WriteAllTextAsync("b.txt", "b");
 
@@ -64,7 +64,7 @@ public sealed class JournalAppendTests
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.WriteAllTextAsync("a.txt", "a");
             await tx.WriteAllTextAsync("b.txt", "b");
@@ -74,7 +74,7 @@ public sealed class JournalAppendTests
 
         Assert.Equal(3, Directory.GetFiles(work.Path, "*.txnew").Length);
 
-        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledBack, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Empty(Directory.GetFiles(System.IO.Path.Combine(work.Path, ".txfio"), "tx-*.journal"));
     }
@@ -92,7 +92,7 @@ public sealed class JournalAppendTests
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.WriteAllTextAsync("a.txt", "a");
             faults.SuppressRollback();
@@ -100,7 +100,7 @@ public sealed class JournalAppendTests
 
         await File.AppendAllTextAsync(JournalOf(work.Path), "{\"append\":[{\"kind\":\"Add\",\"pa");
 
-        Assert.Equal(RecoverResult.RolledBack, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledBack, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
     }
 
@@ -117,7 +117,7 @@ public sealed class JournalAppendTests
     {
         await using TempDirectory work = TempDirectory.Create();
         FaultInjector faults = new FaultInjector();
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.WriteAllTextAsync("a.txt", "a");
             faults.SuppressRollback();
@@ -126,7 +126,7 @@ public sealed class JournalAppendTests
         string journal = JournalOf(work.Path);
         await File.AppendAllTextAsync(journal, "{broken\n");
 
-        Assert.Equal(RecoverResult.JournalUnreadable, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.JournalUnreadable, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.True(File.Exists(journal));
     }
 

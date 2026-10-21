@@ -29,14 +29,14 @@ public sealed class RecoverUnreadableJournalTests
             "other." + Guid.NewGuid().ToString("D") + ".txnew");
         await File.WriteAllTextAsync(other, "keep");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
         Assert.True(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.True(Directory.Exists(directory));
         Assert.True(File.Exists(other));
-        await using ITransaction next = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction next = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("x");
         RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
             () => next.AddAsync("x.txt", content));
@@ -69,7 +69,7 @@ public sealed class RecoverUnreadableJournalTests
             "left");
         await File.WriteAllTextAsync(broken.JournalPath, "{\"version\":1,\"transac");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(committed.TargetPath));
@@ -103,7 +103,7 @@ public sealed class RecoverUnreadableJournalTests
             FileShare.None);
         Assert.True(hold.CanRead);
 
-        await Assert.ThrowsAsync<IOException>(() => global::Txfio.Txfio.RecoverAsync(work.Path));
+        await Assert.ThrowsAsync<IOException>(() => TxFileIO.RecoverAsync(work.Path));
 
         Assert.True(File.Exists(leftover.JournalPath));
         Assert.True(File.Exists(leftover.StagingPath));
@@ -129,7 +129,7 @@ public sealed class RecoverUnreadableJournalTests
         string tempPath = leftover.JournalPath + ".tmp";
         await File.WriteAllTextAsync(tempPath, "partial");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(tempPath));
@@ -149,7 +149,7 @@ public sealed class RecoverUnreadableJournalTests
     public async Task AddAsync_LeavesNoTempFileAfterJournalOverwrite()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction transaction = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction transaction = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("hello");
         await transaction.AddAsync("a.txt", content);
 
@@ -187,7 +187,7 @@ public sealed class RecoverUnreadableJournalTests
         await File.WriteAllTextAsync(outsideStaging, "outside");
         Directory.CreateSymbolicLink(System.IO.Path.Combine(work.Path, "link"), outside.Path);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
         Assert.False(File.Exists(leftover.StagingPath));
@@ -207,7 +207,7 @@ public sealed class RecoverUnreadableJournalTests
     public async Task BeginAsync_LeavesNoJournalTempFile()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
@@ -233,12 +233,12 @@ public sealed class RecoverUnreadableJournalTests
             "tx-" + Guid.NewGuid().ToString("D") + ".journal.tmp");
         await File.WriteAllTextAsync(temp, "{\"version\":1,\"transac");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.NoPendingTransactions, result.Result);
         Assert.Empty(result.Journals);
         Assert.False(File.Exists(temp));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
     }
 
     /// <summary>
@@ -260,7 +260,7 @@ public sealed class RecoverUnreadableJournalTests
         await File.WriteAllTextAsync(temp, "{}");
         using FileStream liveness = LivenessLock.Create(MetadataNames.LivenessLockPath(journal));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.NoPendingTransactions, result.Result);
         Assert.True(File.Exists(temp));
@@ -287,7 +287,7 @@ public sealed class RecoverUnreadableJournalTests
         Assert.Contains("\"version\":1", json, StringComparison.Ordinal);
         await File.WriteAllTextAsync(leftover.JournalPath, json.Replace("\"version\":1", "\"version\":2", StringComparison.Ordinal));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
         Assert.True(File.Exists(leftover.JournalPath));
@@ -320,7 +320,7 @@ public sealed class RecoverUnreadableJournalTests
             .Replace("\"kind\":\"Add\"", "\"kind\":\"NotAKind\"", StringComparison.Ordinal);
         await File.WriteAllTextAsync(leftover.JournalPath, rewritten);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
         Assert.True(File.Exists(leftover.JournalPath));
@@ -349,7 +349,7 @@ public sealed class RecoverUnreadableJournalTests
         Assert.Contains("\"kind\":\"Add\"", json, StringComparison.Ordinal);
         await File.WriteAllTextAsync(leftover.JournalPath, json.Replace("\"kind\":\"Add\"", "\"kind\":99", StringComparison.Ordinal));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
         Assert.True(File.Exists(leftover.JournalPath));
@@ -379,7 +379,7 @@ public sealed class RecoverUnreadableJournalTests
         Assert.Contains("\"path\":" + target, json, StringComparison.Ordinal);
         await File.WriteAllTextAsync(leftover.JournalPath, json.Replace("\"path\":" + target, "\"path\":\"\"", StringComparison.Ordinal));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.JournalUnreadable, result.Result);
         Assert.True(File.Exists(leftover.JournalPath));

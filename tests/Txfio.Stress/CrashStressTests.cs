@@ -39,7 +39,7 @@ public sealed class CrashStressTests
             await child.DisposeAsync();
         }
 
-        await global::Txfio.Txfio.RecoverAsync(work);
+        await TxFileIO.RecoverAsync(work);
         string metadata = System.IO.Path.Combine(work, ".txfio");
         if (Directory.Exists(metadata))
         {
@@ -110,7 +110,7 @@ public sealed class CrashStressTests
         Directory.CreateDirectory(replayWork);
         foreach (int index in indexes)
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(replayWork);
+            await using ITransaction tx = await TxFileIO.BeginAsync(replayWork);
             await CrashStressWriter.ApplyAsync(tx, replayWork, index, maxBytes);
             CommitReport report = await tx.CommitAsync();
             if (report.Result != CommitResult.Succeeded)

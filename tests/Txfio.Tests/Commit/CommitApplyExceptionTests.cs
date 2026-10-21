@@ -20,7 +20,7 @@ public sealed class CommitApplyExceptionTests
         string target = System.IO.Path.Combine(tree, "a.txt");
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
         FaultInjector faults = new FaultInjector();
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.CreateDirectoryAsync("d");
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
@@ -34,7 +34,7 @@ public sealed class CommitApplyExceptionTests
         Assert.False(File.Exists(target));
         Assert.Single(Directory.GetFiles(tree, "*.txnew"));
         Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
-        await using (ITransaction other = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction other = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream inside = LeftoverAddFiles.Utf8Stream("inside");
             RecoveryRequiredException required = await Assert.ThrowsAsync<RecoveryRequiredException>(
@@ -42,7 +42,7 @@ public sealed class CommitApplyExceptionTests
             Assert.Equal(System.IO.Path.Combine(tree, "b.txt"), required.Path);
         }
 
-        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledForward, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(tree, "*.txnew"));
         Assert.Empty(Directory.GetFiles(metadata, "tx-*.journal"));

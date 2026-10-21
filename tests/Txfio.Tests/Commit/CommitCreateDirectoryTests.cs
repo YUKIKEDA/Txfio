@@ -17,7 +17,7 @@ public sealed class CommitCreateDirectoryTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string child = System.IO.Path.Combine(work.Path, "drop", "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(child, "keep");
 
@@ -41,7 +41,7 @@ public sealed class CommitCreateDirectoryTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.CreateDirectoryAsync("drop");
             Directory.Delete(dir);
@@ -70,7 +70,7 @@ public sealed class CommitCreateDirectoryTests
         string updated = System.IO.Path.Combine(work.Path, "a.txt");
         string child = System.IO.Path.Combine(work.Path, "drop", "b.txt");
         await File.WriteAllTextAsync(updated, "old");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.CreateDirectoryAsync("drop");
             await File.WriteAllTextAsync(child, "gone");
@@ -100,7 +100,7 @@ public sealed class CommitCreateDirectoryTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string child = System.IO.Path.Combine(work.Path, "drop", "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         await tx.WriteAllTextAsync("drop/a.txt", "staged");
 

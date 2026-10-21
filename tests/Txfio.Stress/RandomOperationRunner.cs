@@ -87,7 +87,7 @@ internal static class RandomOperationRunner
         RandomOperationModel model,
         StringBuilder trace)
     {
-        ITransaction tx = await global::Txfio.Txfio.BeginAsync(workFolder);
+        ITransaction tx = await TxFileIO.BeginAsync(workFolder);
         try
         {
             for (int i = 0; i < scenario.Operations.Count; i++)

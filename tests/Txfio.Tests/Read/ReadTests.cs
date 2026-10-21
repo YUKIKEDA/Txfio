@@ -18,7 +18,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("a.txt", content);
         string lockDirectory = System.IO.Path.GetDirectoryName(PathLockSet.FilePath(work.Path, target))!;
@@ -45,7 +45,7 @@ public sealed class ReadTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("a.txt", content);
 
@@ -66,7 +66,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "disk");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         Assert.Equal("disk", await ReadTextAsync(tx, "a.txt"));
         Assert.False(Directory.Exists(System.IO.Path.Combine(work.Path, ".txfio", "locks")));
@@ -86,7 +86,7 @@ public sealed class ReadTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
 
         ExternalConflictException missing = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.ReadAsync("a.txt"));
@@ -108,7 +108,7 @@ public sealed class ReadTests
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(source, "src");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
 
         Assert.Equal("src", await ReadTextAsync(tx, "b.txt"));
@@ -130,7 +130,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "missing.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException missing = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.ReadAsync("missing.txt"));
         Assert.Equal(target, missing.Path);
@@ -149,7 +149,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.ReadAsync("sub"));
     }
@@ -167,7 +167,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await using TempDirectory other = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ReadAsync(".txfio/foo"));
         string outside = System.IO.Path.Combine(other.Path, "a.txt");
@@ -187,7 +187,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "disk");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ReadAsync("a.txt"));
@@ -206,7 +206,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("a.txt", content);
         await using Stream stream = await tx.ReadAsync("a.txt");
@@ -228,7 +228,7 @@ public sealed class ReadTests
     public async Task ReadAsync_RestageWhileOpenThrowsIOException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("a.txt", content);
         await using Stream stream = await tx.ReadAsync("a.txt");
@@ -251,7 +251,7 @@ public sealed class ReadTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "disk");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         using CancellationTokenSource source = new CancellationTokenSource();
         source.Cancel();
 

@@ -76,7 +76,7 @@ internal static class TransferRunner
         TransferWorld world,
         StringBuilder trace)
     {
-        ITransaction tx = await global::Txfio.Txfio.BeginAsync(workFolder);
+        ITransaction tx = await TxFileIO.BeginAsync(workFolder);
         try
         {
             for (int i = 0; i < scenario.Operations.Count; i++)
@@ -162,7 +162,7 @@ internal static class TransferRunner
                 return "The export differs from the outside at copy time: " + exported;
             }
 
-            await global::Txfio.Txfio.RecoverAsync(workFolder);
+            await TxFileIO.RecoverAsync(workFolder);
             string? afterRecover = await CompareDiskAsync(outsideRoot, world.ExpectedOutside());
             if (afterRecover is not null)
             {

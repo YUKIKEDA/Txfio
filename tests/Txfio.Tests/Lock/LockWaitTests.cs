@@ -16,10 +16,10 @@ public sealed class LockWaitTests
     public async Task AddAsync_FailsImmediatelyOnPathInUseWithZeroWait()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("a.txt", held);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.Zero);
+        await using ITransaction waiter = await TxFileIO.BeginAsync(work.Path, TimeSpan.Zero);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");
 
         long started = Environment.TickCount64;
@@ -43,12 +43,12 @@ public sealed class LockWaitTests
     public async Task AddAsync_SucceedsWhenOtherDisposesDuringWait()
     {
         await using TempDirectory work = TempDirectory.Create();
-        ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using (holder)
         {
             await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
             await holder.AddAsync("a.txt", held);
-            await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(2));
+            await using ITransaction waiter = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromSeconds(2));
             Task release = Task.Run(async () =>
             {
                 await Task.Delay(200);
@@ -75,10 +75,10 @@ public sealed class LockWaitTests
     public async Task AddAsync_CallAfterTimeoutCanWaitAgain()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("a.txt", held);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromMilliseconds(300));
+        await using ITransaction waiter = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromMilliseconds(300));
         await using MemoryStream first = LeftoverAddFiles.Utf8Stream("one");
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
@@ -103,10 +103,10 @@ public sealed class LockWaitTests
     public async Task AddAsync_CancelingWaitThrowsOperationCanceledException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("a.txt", held);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, Timeout.InfiniteTimeSpan);
+        await using ITransaction waiter = await TxFileIO.BeginAsync(work.Path, Timeout.InfiniteTimeSpan);
         using CancellationTokenSource cancel = new CancellationTokenSource();
         Task cancelLater = Task.Run(async () =>
         {
@@ -120,7 +120,7 @@ public sealed class LockWaitTests
         await cancelLater;
 
         Assert.Empty(waiter.GetPendingChanges());
-        await using ITransaction third = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction third = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream again = LeftoverAddFiles.Utf8Stream("again");
         LockContentionException stillHeld = await Assert.ThrowsAsync<LockContentionException>(
             () => third.AddAsync("a.txt", again));
@@ -140,17 +140,17 @@ public sealed class LockWaitTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("m.txt", held);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromMilliseconds(300));
+        await using ITransaction waiter = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromMilliseconds(300));
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
             () => waiter.MoveAsync("a.txt", "m.txt"));
 
         Assert.Equal(System.IO.Path.Combine(work.Path, "m.txt"), contention.Path);
         Assert.Empty(waiter.GetPendingChanges());
-        await using ITransaction third = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction third = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream again = LeftoverAddFiles.Utf8Stream("again");
         await Assert.ThrowsAsync<LockContentionException>(() => third.AddAsync("a.txt", again));
     }
@@ -168,11 +168,11 @@ public sealed class LockWaitTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
         await holder.AddAsync("a.txt", held);
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(5));
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(5));
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromSeconds(5));
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromSeconds(5));
         Task firstWait = Task.Run(async () => await first.DeleteTreeAsync("sub"));
         await Task.Delay(200);
         Task secondWait = Task.Run(async () => await second.DeleteTreeAsync("sub"));
@@ -208,13 +208,13 @@ public sealed class LockWaitTests
         Directory.CreateDirectory(MetadataNames.FolderPath(work.Path));
         string leftover = System.IO.Path.Combine(MetadataNames.FolderPath(work.Path), "share-lost.lock");
         await using FileStream held = new FileStream(leftover, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.CreateDirectoryAsync("sub");
             Assert.True(Directory.Exists(System.IO.Path.Combine(work.Path, "sub")));
         }
 
-        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.True(File.Exists(leftover));
         _ = held;
     }
@@ -234,7 +234,7 @@ public sealed class LockWaitTests
         string foreign = PathLockSet.FilePath(work.Path, System.IO.Path.Combine(work.Path, "a.txt"));
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(foreign)!);
         await using FileStream held = new FileStream(foreign, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction waiter = await TxFileIO.BeginAsync(work.Path);
 
         await waiter.CreateDirectoryAsync("sub");
 
@@ -259,11 +259,11 @@ public sealed class LockWaitTests
         await holder.AcquireExclusiveAsync(work.Path, LockAttempt.Start(TimeSpan.Zero, CancellationToken.None));
 
         LockContentionException contention = await Assert.ThrowsAsync<LockContentionException>(
-            () => global::Txfio.Txfio.RecoverAsync(work.Path, TimeSpan.FromMilliseconds(300)));
+            () => TxFileIO.RecoverAsync(work.Path, TimeSpan.FromMilliseconds(300)));
 
         Assert.Equal(System.IO.Path.GetFullPath(work.Path), contention.Path);
         holder.Release();
-        RecoverReport report = await global::Txfio.Txfio.RecoverAsync(work.Path, TimeSpan.FromSeconds(2));
+        RecoverReport report = await TxFileIO.RecoverAsync(work.Path, TimeSpan.FromSeconds(2));
         Assert.Equal(RecoverResult.NoPendingTransactions, report.Result);
     }
 
@@ -281,10 +281,10 @@ public sealed class LockWaitTests
         await using TempDirectory work = TempDirectory.Create();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromMilliseconds(-2)));
+            () => TxFileIO.BeginAsync(work.Path, TimeSpan.FromMilliseconds(-2)));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => global::Txfio.Txfio.RecoverAsync(work.Path, TimeSpan.FromMilliseconds(-2)));
-        await using ITransaction started = await global::Txfio.Txfio.BeginAsync(work.Path, Timeout.InfiniteTimeSpan);
+            () => TxFileIO.RecoverAsync(work.Path, TimeSpan.FromMilliseconds(-2)));
+        await using ITransaction started = await TxFileIO.BeginAsync(work.Path, Timeout.InfiniteTimeSpan);
 
         Assert.NotNull(started);
     }
@@ -301,12 +301,12 @@ public sealed class LockWaitTests
     public async Task AddAsync_DoesNotBlockCallingThreadWhileWaiting()
     {
         await using TempDirectory work = TempDirectory.Create();
-        ITransaction holder = await global::Txfio.Txfio.BeginAsync(work.Path);
+        ITransaction holder = await TxFileIO.BeginAsync(work.Path);
         await using (holder)
         {
             await using MemoryStream held = LeftoverAddFiles.Utf8Stream("held");
             await holder.AddAsync("a.txt", held);
-            await using ITransaction waiter = await global::Txfio.Txfio.BeginAsync(work.Path, TimeSpan.FromSeconds(5));
+            await using ITransaction waiter = await TxFileIO.BeginAsync(work.Path, TimeSpan.FromSeconds(5));
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("next");
 
             long started = Environment.TickCount64;

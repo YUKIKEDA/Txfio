@@ -15,9 +15,9 @@ The work folder is an existing directory. When the application opens the folder,
 ```csharp
 using Txfio;
 
-await Txfio.RecoverAsync(@"D:\share\work");
+await TxFileIO.RecoverAsync(@"D:\share\work");
 
-await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
+await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
 await tx.WriteAllTextAsync("a.txt", "hello");
 CommitReport report = await tx.CommitAsync();
 ```
@@ -109,12 +109,12 @@ D:\share\work\
 
 Explorer shows the `.txnew`. `File.ReadAllText` reads the real `old`. `ReadAllTextAsync` in the same transaction reads `new`.
 
-Staging entries have fixed names: `{name}.{txid}.txnew` (the new content), `{name}.{txid}.txnew.prev` (a backup while the same `.txnew` is written again), and `{name}.{txid}.txold` (the old destination while a directory is swapped). `{txid}` is the transaction ID in `Guid.ToString("D")` form. These names are reserved. A path with a segment that is a staging name is not a target of any API (`InvalidOperationException`, also through an 8.3 short name or a trailing dot). `GetEntriesAsync`, a directory copy, `ExportAsync`, and the input of `CreateArchiveAsync` skip the staging entries of every transaction. When you list the folder with the plain file API, skip them with `Txfio.IsStagingName`:
+Staging entries have fixed names: `{name}.{txid}.txnew` (the new content), `{name}.{txid}.txnew.prev` (a backup while the same `.txnew` is written again), and `{name}.{txid}.txold` (the old destination while a directory is swapped). `{txid}` is the transaction ID in `Guid.ToString("D")` form. These names are reserved. A path with a segment that is a staging name is not a target of any API (`InvalidOperationException`, also through an 8.3 short name or a trailing dot). `GetEntriesAsync`, a directory copy, `ExportAsync`, and the input of `CreateArchiveAsync` skip the staging entries of every transaction. When you list the folder with the plain file API, skip them with `TxFileIO.IsStagingName`:
 
 ```csharp
 foreach (string entry in Directory.EnumerateFileSystemEntries(@"D:\share\work"))
 {
-    if (Txfio.IsStagingName(Path.GetFileName(entry)))
+    if (TxFileIO.IsStagingName(Path.GetFileName(entry)))
     {
         continue;
     }
@@ -124,7 +124,7 @@ foreach (string entry in Directory.EnumerateFileSystemEntries(@"D:\share\work"))
 ```
 
 ```csharp
-await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
+await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
 await tx.WriteAllTextAsync("a.txt", "new");
 string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 ```
@@ -363,7 +363,7 @@ When the commit is `Succeeded`, the directory stays in place and is not renamed.
 It holds the whole work folder as shared and locks the directory. It reserves what is under it until the transaction ends, so other transactions cannot stage children (`LockContentionException`, with `Path` set to the directory); the plain file API is not affected. Operations of this transaction under it also take their own locks. Delete, DeleteTree, Move, Update, or a second `CreateDirectoryAsync` on the path itself are not folded. The directory can be a copy source only when this transaction has no operation under it.
 
 ```csharp
-await using ITransaction tx = await Txfio.BeginAsync(@"D:\share\work");
+await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
 await tx.CreateDirectoryAsync("drop");
 await File.WriteAllTextAsync(@"D:\share\work\drop\a.txt", "from-api");
 await tx.WriteAllTextAsync(@"drop\b.txt", "from-txfio");

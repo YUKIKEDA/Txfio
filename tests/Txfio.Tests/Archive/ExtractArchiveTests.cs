@@ -42,7 +42,7 @@ public sealed class ExtractArchiveTests
             ("sub/b.txt", "beta"),
             ("empty/", null));
         string output = System.IO.Path.Combine(work.Path, "out");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ExtractArchiveAsync("in.zip", "out");
 
@@ -71,7 +71,7 @@ public sealed class ExtractArchiveTests
         DateTime written = new DateTime(2021, 2, 3, 4, 5, 6, DateTimeKind.Local);
         await CreateZipAsync(System.IO.Path.Combine(work.Path, "in.zip"), written, ("a.txt", "hello"), ("b.txt", "world!"));
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ExtractArchiveAsync("in.zip", "out", progress: progress);
 
@@ -95,7 +95,7 @@ public sealed class ExtractArchiveTests
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "tree", "a.txt"), "alpha");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateArchiveAsync("tree", "tree.zip");
 
         await tx.ExtractArchiveAsync("tree.zip", "copy");
@@ -120,7 +120,7 @@ public sealed class ExtractArchiveTests
         await using TempDirectory work = TempDirectory.Create();
         string archive = System.IO.Path.Combine(work.Path, "in.zip");
         await CreateZipAsync(archive, names.Select(name => (name, (string?)"x")).ToArray());
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => tx.ExtractArchiveAsync("in.zip", "out"));
 
@@ -154,7 +154,7 @@ public sealed class ExtractArchiveTests
             await writer.WriteAsync("naiyou");
         }
 
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ImportArchiveAsync(archive, "out", shiftJis);
 
@@ -180,7 +180,7 @@ public sealed class ExtractArchiveTests
         await CreateZipAsync(inside, ("a.txt", "alpha"));
         string directory = System.IO.Path.Combine(outside.Path, "sub");
         Directory.CreateDirectory(directory);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ArgumentException>(() => tx.ImportArchiveAsync(inside, "out"));
         await Assert.ThrowsAsync<ExternalConflictException>(
@@ -207,7 +207,7 @@ public sealed class ExtractArchiveTests
         await CreateZipAsync(System.IO.Path.Combine(work.Path, "in.zip"), ("a.txt", "alpha"));
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "exists"));
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "busy"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using (MemoryStream content = new MemoryStream("new"u8.ToArray()))
         {
             await tx.AddAsync(System.IO.Path.Combine("busy", "new.txt"), content);
@@ -237,7 +237,7 @@ public sealed class ExtractArchiveTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await CreateZipAsync(System.IO.Path.Combine(work.Path, "in.zip"), ("sub/a.txt", "alpha"), ("b.txt", "beta"));
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             using CancellationTokenSource source = new CancellationTokenSource();
             CancelOnReport progress = new CancelOnReport(source);
@@ -269,7 +269,7 @@ public sealed class ExtractArchiveTests
             System.IO.Path.Combine(work.Path, "in.zip"),
             ("a.txt", "alpha"),
             ("b.txt", "beta"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidDataException>(
             () => tx.ExtractArchiveAsync("in.zip", "out", maxExtractedBytes: 8));
@@ -297,7 +297,7 @@ public sealed class ExtractArchiveTests
         await using TempDirectory outside = TempDirectory.Create();
         string archive = System.IO.Path.Combine(outside.Path, "in.zip");
         await CreateZipAsync(archive, ("a.txt", "alpha"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => tx.ImportArchiveAsync(archive, "out", maxExtractedBytes: -1));
@@ -319,7 +319,7 @@ public sealed class ExtractArchiveTests
         await using TempDirectory work = TempDirectory.Create();
         string archive = System.IO.Path.Combine(work.Path, "in.zip");
         await CreateStoredZipWithLiedLengthAsync(archive, actualLength: 100, declaredLength: 10);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidDataException>(
             () => tx.ExtractArchiveAsync("in.zip", "out", maxExtractedBytes: 50));

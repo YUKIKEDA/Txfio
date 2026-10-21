@@ -18,7 +18,7 @@ public sealed class CommitDirectoryDeleteTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("sub");
 
         CommitReport result = await tx.CommitAsync();
@@ -43,7 +43,7 @@ public sealed class CommitDirectoryDeleteTests
         Directory.CreateDirectory(dir);
         string child = System.IO.Path.Combine(dir, "a.txt");
         await File.WriteAllTextAsync(child, "gone");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("sub/a.txt");
         await tx.DeleteAsync("sub");
 
@@ -68,7 +68,7 @@ public sealed class CommitDirectoryDeleteTests
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "a.txt"), "moved");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub/a.txt", "b.txt");
         await tx.DeleteAsync("sub");
 
@@ -92,7 +92,7 @@ public sealed class CommitDirectoryDeleteTests
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "sub");
         Directory.CreateDirectory(dir);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("sub");
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "external.txt"), "no");
 

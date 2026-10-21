@@ -21,7 +21,7 @@ public sealed class DirectoryImportExportTests
         string source = System.IO.Path.Combine(outside.Path, "src");
         Directory.CreateDirectory(System.IO.Path.Combine(source, "empty"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "imported");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ImportAsync(source, "dest");
 
@@ -52,7 +52,7 @@ public sealed class DirectoryImportExportTests
         string source = System.IO.Path.Combine(outside.Path, "src");
         Directory.CreateDirectory(System.IO.Path.Combine(source, "empty"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "keep");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.ImportAsync(source, "dest");
         }
@@ -79,8 +79,8 @@ public sealed class DirectoryImportExportTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "child.txt"), "keep");
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "keep");
-        await using ITransaction first = await global::Txfio.Txfio.BeginAsync(work.Path);
-        await using ITransaction second = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction first = await TxFileIO.BeginAsync(work.Path);
+        await using ITransaction second = await TxFileIO.BeginAsync(work.Path);
         await first.ImportAsync(source, "dest");
 
         await second.DeleteAsync("a.txt");
@@ -106,7 +106,7 @@ public sealed class DirectoryImportExportTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string parent = System.IO.Path.GetDirectoryName(work.Path)!;
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.ImportAsync(parent, "nested"));
@@ -134,7 +134,7 @@ public sealed class DirectoryImportExportTests
         string existing = System.IO.Path.Combine(work.Path, "dest");
         Directory.CreateDirectory(existing);
         string parent = System.IO.Path.Combine(work.Path, "missing");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException occupied = await Assert.ThrowsAsync<ExternalConflictException>(
             () => tx.ImportAsync(source, "dest"));
@@ -163,7 +163,7 @@ public sealed class DirectoryImportExportTests
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "tree"));
         string source = System.IO.Path.Combine(outside.Path, "src");
         Directory.CreateDirectory(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteTreeAsync("tree");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ImportAsync(source, "tree/imported"));
@@ -195,7 +195,7 @@ public sealed class DirectoryImportExportTests
         CreateJunction(link, other);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
             await tx.ImportAsync(source, "dest");
 
             string destination = System.IO.Path.Combine(work.Path, "dest");
@@ -225,7 +225,7 @@ public sealed class DirectoryImportExportTests
         string link = System.IO.Path.Combine(outside.Path, "link.txt");
         await File.WriteAllTextAsync(target, "secret");
         File.CreateSymbolicLink(link, target);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.ImportAsync(link, "a.txt"));
@@ -250,7 +250,7 @@ public sealed class DirectoryImportExportTests
         await using TempDirectory outside = TempDirectory.Create();
         string source = System.IO.Path.Combine(outside.Path, "src");
         Directory.CreateDirectory(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         RecordingProgress progress = new RecordingProgress();
 
         await tx.ImportAsync(source, "dest", progress);
@@ -276,7 +276,7 @@ public sealed class DirectoryImportExportTests
         string source = System.IO.Path.Combine(outside.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "keep");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         using CancellationTokenSource cancellation = new CancellationTokenSource();
         CancelOnReport progress = new CancelOnReport(cancellation);
 
@@ -305,7 +305,7 @@ public sealed class DirectoryImportExportTests
         Directory.CreateDirectory(System.IO.Path.Combine(source, "empty"));
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "disk");
         string destination = System.IO.Path.Combine(outside.Path, "dest");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ExportAsync("src", destination);
 
@@ -332,7 +332,7 @@ public sealed class DirectoryImportExportTests
         string source = System.IO.Path.Combine(work.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
         await tx.UpdateAsync("src/a.txt", content);
 
@@ -359,7 +359,7 @@ public sealed class DirectoryImportExportTests
         string source = System.IO.Path.Combine(work.Path, "src");
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "real");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("src/b.txt", content);
 
@@ -389,7 +389,7 @@ public sealed class DirectoryImportExportTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "disk");
         string destination = System.IO.Path.Combine(outside.Path, "dest");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await tx.ExportAsync("src", destination);
         }
@@ -414,7 +414,7 @@ public sealed class DirectoryImportExportTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "disk");
         string destination = System.IO.Path.Combine(outside.Path, "dest");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         using CancellationTokenSource cancellation = new CancellationTokenSource();
         CancelOnReport progress = new CancelOnReport(cancellation);
 
@@ -448,7 +448,7 @@ public sealed class DirectoryImportExportTests
         CreateJunction(link, other);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
             string destination = System.IO.Path.Combine(outside.Path, "dest");
             await tx.ExportAsync("src", destination);
 
@@ -477,7 +477,7 @@ public sealed class DirectoryImportExportTests
         await using TempDirectory outside = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "src"));
         string destination = System.IO.Path.Combine(outside.Path, "dest");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         RecordingProgress progress = new RecordingProgress();
 
         await tx.ExportAsync("src", destination, progress);

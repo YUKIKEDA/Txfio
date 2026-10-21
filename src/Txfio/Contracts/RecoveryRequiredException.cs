@@ -1,7 +1,7 @@
 namespace Txfio;
 
 /// <summary>
-/// A path overlaps the footprint of an orphaned journal (the paths that recovering it may change); calling <see cref="Txfio.RecoverAsync(string, CancellationToken)"/> resolves it.
+/// A path overlaps the footprint of an orphaned journal (the paths that recovering it may change); calling <see cref="TxFileIO.RecoverAsync(string, CancellationToken)"/> resolves it.
 /// </summary>
 public sealed class RecoveryRequiredException : TxfioException
 {

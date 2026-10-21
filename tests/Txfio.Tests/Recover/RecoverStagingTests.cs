@@ -22,7 +22,7 @@ public sealed class RecoverStagingTests
             "a.txt",
             "staged");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.StagingPath));
@@ -47,7 +47,7 @@ public sealed class RecoverStagingTests
             "a.txt",
             "staged");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.StagingPath));
@@ -73,11 +73,11 @@ public sealed class RecoverStagingTests
             "staged");
         await File.WriteAllTextAsync(leftover.TargetPath, "external");
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.ConflictDetected, result.Result);
         Assert.False(File.Exists(leftover.JournalPath));
         Assert.False(File.Exists(leftover.StagingPath));
         Assert.Equal("external", await File.ReadAllTextAsync(leftover.TargetPath));
-        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await TxFileIO.RecoverAsync(work.Path)).Result);
     }
 }

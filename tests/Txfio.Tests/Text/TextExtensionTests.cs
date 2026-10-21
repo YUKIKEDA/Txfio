@@ -19,7 +19,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", "hello");
 
@@ -42,7 +42,7 @@ public sealed class TextExtensionTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", "new");
 
@@ -65,7 +65,7 @@ public sealed class TextExtensionTests
     public async Task WriteAllTextAsync_RewriteOfNewFileStaysAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", "one");
         await tx.WriteAllTextAsync("a.txt", "two");
@@ -87,7 +87,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
 
         await tx.WriteAllTextAsync("a.txt", "new");
@@ -109,7 +109,7 @@ public sealed class TextExtensionTests
     public async Task WriteAllTextAsync_WritesNullAsEmptyString()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", null);
 
@@ -130,7 +130,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", "hello");
         Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);
@@ -154,7 +154,7 @@ public sealed class TextExtensionTests
         await using TempDirectory work = TempDirectory.Create();
         byte[] payload = new byte[] { 0xEF, 0xBB, 0xBF, (byte)'h', (byte)'e', (byte)'l', (byte)'l', (byte)'o' };
         await File.WriteAllBytesAsync(System.IO.Path.Combine(work.Path, "a.txt"), payload);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         string text = await tx.ReadAllTextAsync("a.txt");
 
@@ -174,7 +174,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllTextAsync("a.txt", "hello", Encoding.Unicode);
 
@@ -198,7 +198,7 @@ public sealed class TextExtensionTests
     public async Task WriteAllLinesAsync_SeparatesLinesWithNewlines()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAllLinesAsync("a.txt", new[] { "a", "b" });
 
@@ -218,7 +218,7 @@ public sealed class TextExtensionTests
     public async Task WriteAllLinesAsync_NullThrowsArgumentNullException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => tx.WriteAllLinesAsync("a.txt", null!));
 
@@ -237,7 +237,7 @@ public sealed class TextExtensionTests
     public async Task WriteAllTextAsync_NullEncodingThrowsArgumentNullException()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => tx.WriteAllTextAsync("a.txt", "x", null!));
 
@@ -257,7 +257,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "dir"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ExternalConflictException>(() => tx.ReadAllTextAsync("missing.txt"));
         await Assert.ThrowsAsync<UnsupportedOperationException>(() => tx.ReadAllTextAsync("dir"));
@@ -277,7 +277,7 @@ public sealed class TextExtensionTests
         await using TempDirectory work = TempDirectory.Create();
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(source, "x");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
 
         await tx.WriteAllTextAsync("b.txt", "y");
@@ -305,7 +305,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "x");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
 
         await tx.WriteAllLinesAsync("b.txt", new[] { "y" });
@@ -329,7 +329,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "sub"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("sub", "other");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.WriteAllTextAsync("other", "y"));
@@ -351,7 +351,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "a.bak");
 
         await tx.WriteAllTextAsync("a.txt", "new");
@@ -378,7 +378,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await Assert.ThrowsAsync<ExternalConflictException>(() => tx.WriteAllTextAsync("d", "text"));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Empty(tx.GetPendingChanges());
@@ -398,7 +398,7 @@ public sealed class TextExtensionTests
         await using TempDirectory work = TempDirectory.Create();
         string file = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(file, "one");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.AppendAllTextAsync("a.txt", "two");
         await tx.AppendAllTextAsync("a.txt", "two");
@@ -420,7 +420,7 @@ public sealed class TextExtensionTests
     public async Task AppendAllLinesAsync_MissingFileBecomesAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.AppendAllLinesAsync("a.txt", new[] { "x", "y" });
 
@@ -441,7 +441,7 @@ public sealed class TextExtensionTests
     public async Task AppendAllTextAsync_AddsBomOnlyForNewFile()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.AppendAllTextAsync("a.txt", "ab", Encoding.UTF8);
         await tx.AppendAllTextAsync("a.txt", "cd", Encoding.UTF8);
@@ -464,7 +464,7 @@ public sealed class TextExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<ExternalConflictException>(() => tx.AppendAllTextAsync("d", "text"));
 

@@ -17,7 +17,7 @@ public sealed class JsonExtensionTests
     public async Task WriteAsJsonAsync_MissingFileRoundTripsAsAdd()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAsJsonAsync("note.json", new Note { Title = "hello" });
 
@@ -41,7 +41,7 @@ public sealed class JsonExtensionTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "note.json");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAsJsonAsync("note.json", new Note { Title = "new" });
 
@@ -63,7 +63,7 @@ public sealed class JsonExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "note.json"), "not-json");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<JsonException>(() => tx.ReadFromJsonAsync<Note>("note.json"));
     }
@@ -84,7 +84,7 @@ public sealed class JsonExtensionTests
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         };
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.WriteAsJsonAsync("note.json", new Note { Title = "hello" }, options);
 
@@ -105,7 +105,7 @@ public sealed class JsonExtensionTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.json"), "{}");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.json", "b.json");
 
         await tx.WriteAsJsonAsync("b.json", new Note { Title = "y" });

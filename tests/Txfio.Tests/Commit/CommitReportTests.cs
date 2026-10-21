@@ -16,7 +16,7 @@ public sealed class CommitReportTests
     public async Task CommitAsync_SuccessHasEmptyOperations()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "hello");
 
         CommitReport report = await tx.CommitAsync();
@@ -37,7 +37,7 @@ public sealed class CommitReportTests
     public async Task CommitAsync_SameTransactionCommitsAfterFixingFailedCheck()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "a");
         await tx.WriteAllTextAsync("b.txt", "b");
         string first = System.IO.Path.Combine(work.Path, "a.txt");
@@ -82,7 +82,7 @@ public sealed class CommitReportTests
         string source = System.IO.Path.Combine(work.Path, "a.txt");
         string dest = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(source, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.MoveAsync("a.txt", "b.txt");
         await File.WriteAllTextAsync(dest, "external");
 
@@ -110,7 +110,7 @@ public sealed class CommitReportTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string dir = System.IO.Path.Combine(work.Path, "drop");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.CreateDirectoryAsync("drop");
         Directory.Delete(dir);
         await File.WriteAllTextAsync(dir, "file");
@@ -141,7 +141,7 @@ public sealed class CommitReportTests
         await File.WriteAllTextAsync(updated, "old");
         await File.WriteAllTextAsync(deleted, "old");
         await File.WriteAllTextAsync(moved, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "new");
         await tx.DeleteAsync("b.txt");
         await tx.MoveAsync("c.txt", "d.txt");
@@ -184,7 +184,7 @@ public sealed class CommitReportTests
         string dir = System.IO.Path.Combine(work.Path, "sub");
         await File.WriteAllTextAsync(file, "old");
         Directory.CreateDirectory(dir);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "new");
         await tx.DeleteAsync("sub");
         File.Delete(file);
@@ -217,7 +217,7 @@ public sealed class CommitReportTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
         await using FileStream locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
 
@@ -246,7 +246,7 @@ public sealed class CommitReportTests
         await using TempDirectory work = TempDirectory.Create();
         string updated = System.IO.Path.Combine(work.Path, "b.txt");
         await File.WriteAllTextAsync(updated, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "added");
         await tx.WriteAllTextAsync("b.txt", "updated");
         foreach (string staging in Directory.GetFiles(work.Path, "*.txnew"))
@@ -285,7 +285,7 @@ public sealed class CommitReportTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.WriteAllTextAsync("a.txt", "new");
         File.SetAttributes(target, FileAttributes.ReadOnly);
         try
@@ -322,7 +322,7 @@ public sealed class CommitReportTests
         await using TempDirectory work = TempDirectory.Create();
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         await File.WriteAllTextAsync(target, "old");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await tx.DeleteAsync("a.txt");
         File.SetAttributes(target, FileAttributes.ReadOnly);
         try
@@ -357,7 +357,7 @@ public sealed class CommitReportTests
         File.SetAttributes(source, FileAttributes.ReadOnly);
         try
         {
-            await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+            await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
             await tx.MoveAsync("a.txt", "b.txt");
 
             Assert.Equal(CommitResult.Succeeded, (await tx.CommitAsync()).Result);

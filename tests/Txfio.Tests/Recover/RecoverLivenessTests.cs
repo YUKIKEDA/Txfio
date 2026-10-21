@@ -19,13 +19,13 @@ public sealed class RecoverLivenessTests
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
         string drop = System.IO.Path.Combine(work.Path, "drop");
         string raw = System.IO.Path.Combine(drop, "raw.txt");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
         await tx.AddAsync("a.txt", content);
         await tx.CreateDirectoryAsync("drop");
         await File.WriteAllTextAsync(raw, "raw");
 
-        RecoverReport skipped = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport skipped = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.NoPendingTransactions, skipped.Result);
         Assert.Empty(skipped.Journals);
@@ -54,7 +54,7 @@ public sealed class RecoverLivenessTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         string journal = Assert.Single(Directory.GetFiles(metadata, "tx-*.journal"));
         string liveness = Assert.Single(Directory.GetFiles(metadata, "tx-*.lock"));
@@ -78,14 +78,14 @@ public sealed class RecoverLivenessTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
             await tx.AddAsync("a.txt", content);
         }
 
         Assert.Empty(Directory.GetFiles(metadata, "tx-*.lock"));
-        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await TxFileIO.RecoverAsync(work.Path)).Result);
     }
 
     /// <summary>
@@ -103,7 +103,7 @@ public sealed class RecoverLivenessTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults);
+        ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults);
         await using (MemoryStream content = LeftoverAddFiles.Utf8Stream("staged"))
         {
             await tx.AddAsync("a.txt", content);
@@ -111,12 +111,12 @@ public sealed class RecoverLivenessTests
 
         await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
 
-        Assert.Equal(RecoverResult.NoPendingTransactions, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.NoPendingTransactions, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.False(File.Exists(target));
 
         await tx.DisposeAsync();
 
-        Assert.Equal(RecoverResult.RolledForward, (await global::Txfio.Txfio.RecoverAsync(work.Path)).Result);
+        Assert.Equal(RecoverResult.RolledForward, (await TxFileIO.RecoverAsync(work.Path)).Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
     }
 
@@ -133,17 +133,17 @@ public sealed class RecoverLivenessTests
     {
         await using TempDirectory work = TempDirectory.Create();
         string metadata = System.IO.Path.Combine(work.Path, ".txfio");
-        await using ITransaction live = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction live = await TxFileIO.BeginAsync(work.Path);
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction crashed = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction crashed = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("crashed");
             await crashed.AddAsync("a.txt", content);
             await Assert.ThrowsAsync<CrashInjectionException>(() => crashed.CommitAsync());
         }
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("crashed", await File.ReadAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt")));
@@ -175,7 +175,7 @@ public sealed class RecoverLivenessTests
             transactionId,
             CancellationToken.None);
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
 
         Assert.Equal(RecoverResult.RolledBack, result.Result);
         Assert.Empty(Directory.GetFiles(metadata, "tx-*.journal"));

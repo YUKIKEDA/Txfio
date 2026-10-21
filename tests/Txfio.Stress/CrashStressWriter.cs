@@ -49,7 +49,7 @@ public static class CrashStressWriter
             for (int index = 0; index < transactions; index++)
             {
                 await File.WriteAllTextAsync(intentFile, index.ToString(CultureInfo.InvariantCulture));
-                await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(workFolder);
+                await using ITransaction tx = await TxFileIO.BeginAsync(workFolder);
                 await ApplyAsync(tx, workFolder, index, maxBytes);
                 await tx.CommitAsync();
                 await log.WriteLineAsync(index.ToString(CultureInfo.InvariantCulture));

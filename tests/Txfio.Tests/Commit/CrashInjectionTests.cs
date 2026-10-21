@@ -19,7 +19,7 @@ public sealed class CrashInjectionTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterCommitting);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
             await tx.AddAsync("a.txt", content);
@@ -30,7 +30,7 @@ public sealed class CrashInjectionTests
         Assert.Single(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Single(Journals(work.Path));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
@@ -52,7 +52,7 @@ public sealed class CrashInjectionTests
         string target = System.IO.Path.Combine(work.Path, "a.txt");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("staged");
             await tx.AddAsync("a.txt", content);
@@ -63,7 +63,7 @@ public sealed class CrashInjectionTests
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Single(Journals(work.Path));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("staged", await File.ReadAllTextAsync(target));
         Assert.Empty(Journals(work.Path));
@@ -85,7 +85,7 @@ public sealed class CrashInjectionTests
         await File.WriteAllTextAsync(target, "old");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("new");
             await tx.UpdateAsync("a.txt", content);
@@ -96,7 +96,7 @@ public sealed class CrashInjectionTests
         Assert.Empty(Directory.GetFiles(work.Path, "*.txnew"));
         Assert.Single(Journals(work.Path));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("new", await File.ReadAllTextAsync(target));
         Assert.Empty(Journals(work.Path));
@@ -118,7 +118,7 @@ public sealed class CrashInjectionTests
         await File.WriteAllTextAsync(target, "gone");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.DeleteAsync("a.txt");
             await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
@@ -127,7 +127,7 @@ public sealed class CrashInjectionTests
         Assert.False(File.Exists(target));
         Assert.Single(Journals(work.Path));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(target));
         Assert.Empty(Journals(work.Path));
@@ -150,7 +150,7 @@ public sealed class CrashInjectionTests
         await File.WriteAllTextAsync(source, "moved");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await tx.MoveAsync("a.txt", "b.txt");
             await Assert.ThrowsAsync<CrashInjectionException>(() => tx.CommitAsync());
@@ -160,7 +160,7 @@ public sealed class CrashInjectionTests
         Assert.Equal("moved", await File.ReadAllTextAsync(dest));
         Assert.Single(Journals(work.Path));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.False(File.Exists(source));
         Assert.Equal("moved", await File.ReadAllTextAsync(dest));
@@ -184,7 +184,7 @@ public sealed class CrashInjectionTests
         await File.WriteAllTextAsync(deleted, "keep");
         FaultInjector faults = new FaultInjector();
         faults.Arm(IFaultInjector.AfterApply);
-        await using (ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path, faults))
+        await using (ITransaction tx = await TxFileIO.BeginAsync(work.Path, faults))
         {
             await using MemoryStream content = LeftoverAddFiles.Utf8Stream("added");
             await tx.AddAsync("a.txt", content);
@@ -196,7 +196,7 @@ public sealed class CrashInjectionTests
         Assert.Equal("keep", await File.ReadAllTextAsync(deleted));
         Assert.Single(Journals(work.Path));
 
-        RecoverReport result = await global::Txfio.Txfio.RecoverAsync(work.Path);
+        RecoverReport result = await TxFileIO.RecoverAsync(work.Path);
         Assert.Equal(RecoverResult.RolledForward, result.Result);
         Assert.Equal("added", await File.ReadAllTextAsync(added));
         Assert.False(File.Exists(deleted));

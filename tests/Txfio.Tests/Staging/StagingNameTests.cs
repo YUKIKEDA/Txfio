@@ -26,7 +26,7 @@ public sealed class StagingNameTests
     [InlineData(".a." + OtherId + ".txnew")]
     public void IsStagingName_MatchesStagingNames(string name)
     {
-        Assert.True(global::Txfio.Txfio.IsStagingName(name));
+        Assert.True(TxFileIO.IsStagingName(name));
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ public sealed class StagingNameTests
     [InlineData("a.3f2504e0-4f89-11d3-9a0c-0305e82c330.txnew")]
     public void IsStagingName_DoesNotMatchOtherNames(string name)
     {
-        Assert.False(global::Txfio.Txfio.IsStagingName(name));
+        Assert.False(TxFileIO.IsStagingName(name));
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ public sealed class StagingNameTests
     [InlineData("d\\a.txt")]
     public void IsStagingName_NameWithSeparatorThrowsArgumentException(string name)
     {
-        Assert.Throws<ArgumentException>(() => global::Txfio.Txfio.IsStagingName(name));
+        Assert.Throws<ArgumentException>(() => TxFileIO.IsStagingName(name));
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ public sealed class StagingNameTests
     [Fact]
     public void IsStagingName_NullThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => global::Txfio.Txfio.IsStagingName(null!));
+        Assert.Throws<ArgumentNullException>(() => TxFileIO.IsStagingName(null!));
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public sealed class StagingNameTests
     public async Task AddAsync_StagingNameThrowsInvalidOperationException(string path)
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream content = LeftoverAddFiles.Utf8Stream("x");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AddAsync(path, content));
@@ -126,7 +126,7 @@ public sealed class StagingNameTests
     {
         await using TempDirectory work = TempDirectory.Create();
         Directory.CreateDirectory(System.IO.Path.Combine(work.Path, "d." + OtherId + ".txold"));
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => tx.WriteAllTextAsync("d." + OtherId + ".txold/a.txt", "x"));
@@ -148,7 +148,7 @@ public sealed class StagingNameTests
         await using TempDirectory work = TempDirectory.Create();
         string staging = "a.txt." + OtherId + ".txnew";
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, staging), "uncommitted");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ReadAsync(staging));
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ExistsAsync(staging));
@@ -169,7 +169,7 @@ public sealed class StagingNameTests
         await using TempDirectory outside = TempDirectory.Create();
         string source = System.IO.Path.Combine(outside.Path, "x." + OtherId + ".txnew");
         await File.WriteAllTextAsync(source, "x");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ImportAsync(source, "x.txt"));
 
@@ -196,7 +196,7 @@ public sealed class StagingNameTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "a");
         string reserved = System.IO.Path.Combine(source, "sub", "b.txt." + OtherId + ".txold");
         await File.WriteAllTextAsync(reserved, "b");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.ImportAsync(source, "dst"));
 
@@ -220,7 +220,7 @@ public sealed class StagingNameTests
         await using TempDirectory work = TempDirectory.Create();
         await File.WriteAllTextAsync(System.IO.Path.Combine(work.Path, "a.txt"), "a");
         await WriteStagingEntriesAsync(work.Path);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         IReadOnlyList<DirectoryEntry> entries = await tx.GetEntriesAsync(".");
 
@@ -243,7 +243,7 @@ public sealed class StagingNameTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "a");
         await WriteStagingEntriesAsync(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CopyAsync("src", "dst");
         await tx.CommitAsync();
@@ -269,7 +269,7 @@ public sealed class StagingNameTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "a");
         await WriteStagingEntriesAsync(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         string destination = System.IO.Path.Combine(outside.Path, "out");
 
         await tx.ExportAsync("src", destination);
@@ -293,7 +293,7 @@ public sealed class StagingNameTests
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(System.IO.Path.Combine(source, "a.txt"), "a");
         await WriteStagingEntriesAsync(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.CreateArchiveAsync("src", "a.zip");
         await tx.CommitAsync();
@@ -322,7 +322,7 @@ public sealed class StagingNameTests
             await writer.WriteAsync("notes");
         }
 
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.ExtractArchiveAsync("in.zip", "out");
         await tx.CommitAsync();
@@ -347,7 +347,7 @@ public sealed class StagingNameTests
         string staging = System.IO.Path.Combine(dir, "b.txt." + OtherId + ".txnew");
         await File.WriteAllTextAsync(staging, "uncommitted");
         await File.WriteAllTextAsync(System.IO.Path.Combine(dir, "z.txt"), "z");
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         ExternalConflictException ex = await Assert.ThrowsAsync<ExternalConflictException>(() => tx.DeleteAsync("sub"));
 

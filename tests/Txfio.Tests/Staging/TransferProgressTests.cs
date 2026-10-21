@@ -21,7 +21,7 @@ public sealed class TransferProgressTests
         data[81920] = 1;
         await using MemoryStream content = new MemoryStream(data);
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.AddAsync("a.txt", content, progress);
 
@@ -49,7 +49,7 @@ public sealed class TransferProgressTests
         await using MemoryStream content = new MemoryStream(Encoding.UTF8.GetBytes("xxhello"));
         content.Position = 2;
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.UpdateAsync("a.txt", content, progress);
 
@@ -73,7 +73,7 @@ public sealed class TransferProgressTests
         await using TempDirectory work = TempDirectory.Create();
         await using MemoryStream content = new MemoryStream();
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.AddAsync("a.txt", content, progress);
 
@@ -92,7 +92,7 @@ public sealed class TransferProgressTests
     public async Task AddAsync_NonSeekableHasNullTotalBytes()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         ProgressList filled = new ProgressList();
         await using ForwardOnlyStream content = new ForwardOnlyStream(new byte[] { 1, 2, 3, 4 });
         await tx.AddAsync("a.txt", content, filled);
@@ -119,7 +119,7 @@ public sealed class TransferProgressTests
         await using TempDirectory work = TempDirectory.Create();
         await using ShrinkingLengthStream content = new ShrinkingLengthStream(new byte[] { 1, 2, 3 });
         ProgressList progress = new ProgressList();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await tx.AddAsync("a.txt", content, progress);
 
@@ -138,7 +138,7 @@ public sealed class TransferProgressTests
     public async Task UpdateAsync_RestageReportsOnlyNewContent()
     {
         await using TempDirectory work = TempDirectory.Create();
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
         await using MemoryStream first = new MemoryStream(Encoding.UTF8.GetBytes("old"));
         await tx.AddAsync("a.txt", first);
         await using MemoryStream newer = new MemoryStream(Encoding.UTF8.GetBytes("newer"));
@@ -162,7 +162,7 @@ public sealed class TransferProgressTests
     {
         await using TempDirectory work = TempDirectory.Create();
         await using MemoryStream content = new MemoryStream(new byte[] { 1, 2, 3 });
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.AddAsync("a.txt", content, new ThrowingProgress()));
 
@@ -185,7 +185,7 @@ public sealed class TransferProgressTests
         await using MemoryStream content = new MemoryStream(new byte[] { 1, 2, 3 });
         using CancellationTokenSource source = new CancellationTokenSource();
         CancelOnReport progress = new CancelOnReport(source);
-        await using ITransaction tx = await global::Txfio.Txfio.BeginAsync(work.Path);
+        await using ITransaction tx = await TxFileIO.BeginAsync(work.Path);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tx.AddAsync("a.txt", content, progress, source.Token));
 
