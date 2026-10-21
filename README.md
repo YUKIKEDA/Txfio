@@ -422,7 +422,9 @@ flowchart TD
   blocked -->|Yes| ext["ExternalConflictException"]
   blocked -->|No| bad{"Symbolic link, same path, or under itself?"}
   bad -->|Yes| inv["InvalidOperationException"]
-  bad -->|No| add["Add each file. The source stays"]
+  bad -->|No| staging{"A staging name in the source?"}
+  staging -->|Yes| inv
+  staging -->|No| add["Add each file. The source stays"]
 ```
 
 ## ExportAsync
