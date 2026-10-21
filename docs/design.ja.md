@@ -2,7 +2,7 @@
 
 [English](design.md) | 日本語
 
-英語版 [`design.md`](design.md) が正本である。食い違うときは英語版に合わせてこのファイルを直す（[言語ポリシー](language.ja.md)）。
+英語版 [`design.md`](design.md) が正本である。食い違うときは英語版に合わせてこのファイルを直す（[言語ポリシー](language.md)）。
 
 2026-09-26
 

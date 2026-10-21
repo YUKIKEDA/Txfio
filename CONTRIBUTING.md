@@ -1,14 +1,12 @@
 # Contributing to Txfio
 
-English | [日本語](CONTRIBUTING.ja.md)
-
 This document is the **human-readable source** of the development rules. The agent entry point is [`AGENTS.md`](AGENTS.md), and the enforced rules are in `.cursor/rules/`. Coding conventions are in [`docs/conventions.md`](docs/conventions.md). The source of truth for the design is [`docs/design.md`](docs/design.md), and the implementation order is [`docs/roadmap.md`](docs/roadmap.md). Which language to write in is [`docs/language.md`](docs/language.md).
 
 `.dev/` is for drafts only. Do not leave decisions in `.dev/`.
 
 ## Language
 
-The repository language is **English**: code, comments, tests, docs, commit messages, Issues, and PRs. `README`, `CONTRIBUTING`, and the main docs in `docs/` also have a Japanese translation (`*.ja.md`). When you change one of them, change its translation in the same PR. The details are in [`docs/language.md`](docs/language.md).
+The repository language is **English**: code, comments, tests, docs, commit messages, Issues, and PRs. `README.md` and `docs/design.md` also have a Japanese translation. When you change one of them, change its translation in the same PR. The details are in [`docs/language.md`](docs/language.md).
 
 ## Required workflow
 

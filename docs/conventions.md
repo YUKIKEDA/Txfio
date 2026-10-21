@@ -1,7 +1,5 @@
 # Conventions
 
-English | [日本語](conventions.ja.md)
-
 Repository conventions, so that the same points are not repeated in code review. This is the detailed human-readable source. The summary is [`CONTRIBUTING.md`](../CONTRIBUTING.md), and enforcement is `.cursor/rules/`.
 
 ## Repository layout
