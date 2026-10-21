@@ -33,6 +33,12 @@ jobs:
       - name: Gate script
         shell: pwsh
         run: ./build.ps1
+      - name: Pack
+        run: dotnet pack src/Txfio/Txfio.csproj -c Release
+      # The packed nupkg, used from a consumer project outside the Txfio namespace (#337).
+      - name: Package smoke test
+        shell: bash
+        run: .github/scripts/package-smoke-test.sh "$(dotnet msbuild src/Txfio/Txfio.csproj -getProperty:Version | tr -d '\r')" src/Txfio/bin/Release
 
   linux:
     runs-on: ubuntu-latest
@@ -54,3 +60,7 @@ jobs:
         run: dotnet test tests/Txfio.Tests/Txfio.Tests.csproj --no-build -c Release
       - name: README samples
         run: .github/scripts/readme-samples-check.sh
+      - name: Pack
+        run: dotnet pack src/Txfio/Txfio.csproj --no-build -c Release
+      - name: Package smoke test
+        run: .github/scripts/package-smoke-test.sh "$(dotnet msbuild src/Txfio/Txfio.csproj -getProperty:Version)" src/Txfio/bin/Release

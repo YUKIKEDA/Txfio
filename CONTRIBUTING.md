@@ -103,6 +103,7 @@ The release preparation pull request also records the documentation review below
 
 - `README.md` and `README.ja.md` describe the behavior of the version being released, not an earlier one. Read both through once, and check each changed behavior in `CHANGELOG.md` against them.
 - Every C# block in `README.md`, `README.ja.md`, and `CHANGELOG.md` compiles: `.github/scripts/readme-samples-check.sh` (CI and `verify` run it too).
+- The program in `.github/scripts/package-smoke-test.sh` still matches the README Getting started code, and the script passes on a pack of the release commit (CI and the `Release` workflow run it too).
 - Exception messages quoted in the README match the strings in `src/Txfio`.
 - Each breaking change in `CHANGELOG.md` has how to move, and the code does what that says.
 - Links in `README.md` and `README.ja.md` are absolute (`https://github.com/YUKIKEDA/Txfio/blob/main/...`); nuget.org renders a relative link as a dead link. `.github/scripts/release-check-package.sh` checks the packed README.
@@ -120,9 +121,10 @@ A maintainer runs `Release` from the Actions tab on `main`, with the version (`0
 3. `pack`: a dry run on that commit. It runs `dotnet pack -c Release -p:ContinuousIntegrationBuild=true`, then `.github/scripts/release-check-package.sh` checks the following.
    - The `.nuspec`: version, commit, readme, and release notes.
    - That the DLL and the PDB have deterministic paths and Source Link for that commit.
+   - Then `.github/scripts/package-smoke-test.sh` installs the nupkg into a new console project outside the `Txfio` namespace and runs the README Getting started flow, so a public API that a consumer cannot call stops the release (#337).
 4. `publish` (environment `release`):
    - Dates the changelog heading with the day it runs (`## [{version}] - YYYY-MM-DD`) on a release commit. That commit is on the branch `release/v{version}`, a child of the `main` commit.
-   - Creates the annotated tag `v{version}` on it, packs and checks it, and pushes the branch and the tag.
+   - Creates the annotated tag `v{version}` on it, packs it, runs the package check and the smoke test on that exact package, and pushes the branch and the tag.
    - Gets a short-lived API key through nuget.org Trusted Publishing, and pushes the nupkg (the snupkg goes with it).
    - Creates the GitHub Release with the changelog section as its notes and both packages attached.
    - Dispatches `build.yml` on the release branch, and opens a pull request that brings the dated heading to `main`. A maintainer merges that pull request.

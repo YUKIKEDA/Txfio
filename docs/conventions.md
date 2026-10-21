@@ -30,7 +30,7 @@ tests/Txfio.TestSupport/
   TempDirectory.cs         temporary directory. No Facts here
   WindowsFactAttribute.cs
 tests/Txfio.Tests/
-  TxfioTests.cs
+  TxFileIOTests.cs
   Support/                 unit test fixtures. No Facts here
   Contracts/
   Journal/
@@ -51,6 +51,7 @@ Only the transaction implementation type may use partial files that match featur
 
 - Do not use type aliases such as `using IoFile = System.IO.File;` to shorten code
 - When a name collides with the BCL `File` / `Directory`, fully qualify it as `System.IO.File` / `System.IO.Directory`
+- This applies to names from other libraries only. A public Txfio type that cannot be called by its simple name after `using Txfio;` is a defect in the public API, not a collision to qualify away ("Tests" › "Call the public API as a consumer does")
 
 ## Async and ownership
 
@@ -122,6 +123,19 @@ Each API has its own section, with these headings in this order. A heading that 
   - The `dotnet test` of the gate (CI, `./build.ps1`, and the Linux pre-PR check) runs only `tests/Txfio.Tests/Txfio.Tests.csproj`. Run stress tests explicitly with `dotnet test tests/Txfio.Stress/Txfio.Stress.csproj`. By default they are sized to finish quickly in that run. To run longer or larger, change the environment variables `TXFIO_STRESS_SEED`, `TXFIO_STRESS_ITERATIONS`, `TXFIO_STRESS_PROCESSES`, `TXFIO_STRESS_FILES`, `TXFIO_STRESS_MAX_BYTES`. Passing the seed from a failure message reproduces the same sequence
   - Multi-process stress has two versions: a few files competing without waiting (more combinations of contention) and more files retrying on contention (load closer to real use). The result counts are printed in the test output
   - Do not hide bugs found by these tests; open a separate Issue
+
+### Call the public API as a consumer does
+
+0.1.0 shipped a static class `Txfio` in the namespace `Txfio`. After `using Txfio;`, the documented `Txfio.BeginAsync(path)` did not compile (CS0234), so no consumer could call the entry point as documented. The tests did not show it: they live in namespaces under `Txfio`, and from the first commits they called `global::Txfio.Txfio.BeginAsync`, about 600 times. The workaround hid the defect (#337).
+
+- Tests call public members as the README does, by simple name: `TxFileIO.BeginAsync(path)`, not `global::Txfio.…`, an alias, or a fully qualified name
+- If a test cannot call a public member that way, the public API has a defect. Stop and open an Issue; do not work around it in the test
+- A public type must not have the name of a namespace. CA1724 is an error (`.editorconfig`), so the build fails on it
+- The consumer view is also checked outside the tests, because the tests reference the project with `InternalsVisibleTo` from a namespace under `Txfio`:
+  - `.github/scripts/readme-samples-check.sh` compiles every C# block of `README.md`, `README.ja.md`, and `CHANGELOG.md` against `src/Txfio`
+  - `.github/scripts/package-smoke-test.sh` installs the packed nupkg into a new console project in a namespace outside `Txfio`, and runs the README Getting started flow. When a public entry point changes, change its program in the same pull request
+  - CI runs both, and the `Release` workflow runs them on the commit and the package it publishes
+- A design that adds or renames a public type compiles its documented call from a project outside the `Txfio` namespace before the design PR merges
 
 ### Windows-only tests and running on Linux
 

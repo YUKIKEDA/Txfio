@@ -69,6 +69,7 @@ jobs:
             8.0.x
       - run: dotnet pack src/Txfio/Txfio.csproj -c Release -p:ContinuousIntegrationBuild=true
       - run: .github/scripts/release-check-package.sh "$VERSION" "$GITHUB_SHA" src/Txfio/bin/Release
+      - run: .github/scripts/package-smoke-test.sh "$VERSION" src/Txfio/bin/Release
 
   publish:
     name: publish
@@ -103,6 +104,8 @@ jobs:
           git tag -a "v${VERSION}" -m "v${VERSION}"
       - run: dotnet pack src/Txfio/Txfio.csproj -c Release -p:ContinuousIntegrationBuild=true
       - run: .github/scripts/release-check-package.sh "$VERSION" "$(git rev-parse HEAD)" src/Txfio/bin/Release
+      # The exact package that is pushed next, used from a consumer project (#337).
+      - run: .github/scripts/package-smoke-test.sh "$VERSION" src/Txfio/bin/Release
       # Push the tag before the package: a tag can be deleted, a nuget.org
       # version cannot. The tag also keeps the release commit that Source Link
       # points at after the release branch is deleted.

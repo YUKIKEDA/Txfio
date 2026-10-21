@@ -40,11 +40,13 @@ Details: [`docs/conventions.md`](../../docs/conventions.md). Human process: `CON
 - Library `await` uses `ConfigureAwait(false)`. Do not Dispose caller-owned `Stream`s
 - Paths: normalized absolute, compare `OrdinalIgnoreCase`
 - No logging framework in the library
-- No `using X = System.IO.File` aliases; fully qualify when names collide
+- No `using X = System.IO.File` aliases; fully qualify when names from other libraries collide
+- Tests call the public API by simple name after `using Txfio;`, as the README does. If that does not compile, the public API has a defect: open an Issue instead of working around it with `global::`, an alias, or a full name (`docs/conventions.md` › "Call the public API as a consumer does", #337)
+- A public type never has a namespace's name. CA1724 is an error in `.editorconfig`; do not suppress it
 
 ## Verification gate
 
-- Merge gate: green CI (`.github/workflows/build.yml`) on both jobs. `windows` runs `./build.ps1`; `linux` runs the Linux steps below
+- Merge gate: green CI (`.github/workflows/build.yml`) on both jobs. `windows` runs `./build.ps1`; `linux` runs the Linux steps below. Both jobs also pack the library and run `.github/scripts/package-smoke-test.sh` (the packed nupkg used from a consumer project); `linux` also runs `.github/scripts/readme-samples-check.sh`
 - Windows: `./build.ps1` (restore → format verify → build on **`Txfio.slnx`**, then `dotnet test` on **`tests/Txfio.Tests`** only)
 - Linux: do **not** run `./build.ps1`. Run restore / format verify / build on `Txfio.slnx`, then `dotnet test tests/Txfio.Tests/Txfio.Tests.csproj`. Before a PR, all tests in that project must pass except those skipped as `Windows only` (`WindowsFact`). Do not run `tests/Txfio.Stress` as part of this check. The CI Windows job runs the `WindowsFact` tests
 - Tests that depend on Windows-only behavior (junctions, drive letters, open files that cannot be renamed or deleted) use `[WindowsFact("reason")]`

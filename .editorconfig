@@ -33,6 +33,9 @@ dotnet_style_object_initializer = false:none
 dotnet_style_prefer_collection_expression = false:none
 dotnet_style_null_propagation = false:none
 
+# A type named like a namespace cannot be called by its simple name after `using` (CS0234); 0.1.0 shipped a public class Txfio in the namespace Txfio (#337).
+dotnet_diagnostic.CA1724.severity = error
+
 # Namespace stays Txfio (and Txfio.Tests). Folders are not namespaces.
 dotnet_diagnostic.IDE0130.severity = none
 dotnet_diagnostic.IDE0007.severity = none
