@@ -93,22 +93,44 @@ SemVer. `0.x` may have breaking changes. The source of truth for the version is 
 
 A release is published by the `Release` workflow (`.github/workflows/release.yml`). Do not create the tag, the GitHub Release, or the nuget.org version by hand.
 
-Before running it, a merged pull request on `main` sets `VersionPrefix` in `src/Txfio/Txfio.csproj` to the new version, and `PackageReleaseNotes` to notes that start with that version (breaking changes first).
+Changes are recorded in [`CHANGELOG.md`](CHANGELOG.md) (English only, [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)). A pull request that changes the public behavior adds its entry under the undated section of the next version: breaking changes first, each with how to move, then what is added, changed, and fixed.
+
+Before running the workflow, a merged pull request on `main` sets all of these for the new version:
+
+- `VersionPrefix` in `src/Txfio/Txfio.csproj`
+- `PackageReleaseNotes`: a short summary for the nuget.org page that starts with the version and links to `CHANGELOG.md`
+- `CHANGELOG.md`: one undated `## [{version}]` section, and its link reference at the bottom (`[{version}]: https://github.com/YUKIKEDA/Txfio/compare/v{previous}...v{version}`)
 
 A maintainer runs `Release` from the Actions tab on `main`, with the version (`0.2.0`, without `v`). It runs on the `main` commit of that moment and stops at the first failure:
 
-1. `verify`: `.github/scripts/release-check.sh` checks the version format, the project version, the start of the release notes, that no tag `v{version}` exists, and that nuget.org has no such version.
+1. `verify`: `.github/scripts/release-check.sh` checks the following.
+   - The version format and the project version.
+   - The start of the release notes.
+   - The undated changelog section and its link reference.
+   - That no tag `v{version}` and no branch `release/v{version}` exist.
+   - That nuget.org has no such version.
 2. `test`: both jobs of `build.yml` (the merge gate) on that commit.
-3. `pack`: `dotnet pack -c Release -p:ContinuousIntegrationBuild=true`, then `.github/scripts/release-check-package.sh` checks the `.nuspec` (version, commit, readme, release notes) and that the DLL and the PDB have deterministic paths and Source Link for that commit.
-4. `publish` (environment `release`): creates the annotated tag `v{version}` on that commit and pushes it, gets a short-lived API key through nuget.org Trusted Publishing, pushes the nupkg (the snupkg goes with it), and creates the GitHub Release with the release notes and both packages attached.
+3. `pack`: a dry run on that commit. It runs `dotnet pack -c Release -p:ContinuousIntegrationBuild=true`, then `.github/scripts/release-check-package.sh` checks the following.
+   - The `.nuspec`: version, commit, readme, and release notes.
+   - That the DLL and the PDB have deterministic paths and Source Link for that commit.
+4. `publish` (environment `release`):
+   - Dates the changelog heading with the day it runs (`## [{version}] - YYYY-MM-DD`) on a release commit. That commit is on the branch `release/v{version}`, a child of the `main` commit.
+   - Creates the annotated tag `v{version}` on it, packs and checks it, and pushes the branch and the tag.
+   - Gets a short-lived API key through nuget.org Trusted Publishing, and pushes the nupkg (the snupkg goes with it).
+   - Creates the GitHub Release with the changelog section as its notes and both packages attached.
+   - Dispatches `build.yml` on the release branch, and opens a pull request that brings the dated heading to `main`. A maintainer merges that pull request.
 
-The tag is pushed before the package: a tag can be deleted, a nuget.org version cannot. If the push to nuget.org fails, delete the tag, fix the cause, and run the workflow again.
+The tag is pushed before the package: a tag can be deleted, a nuget.org version cannot. If the push to nuget.org fails, delete the tag and the release branch, fix the cause, and run the workflow again.
 
 One-time setup, by the repository owner:
 
-- nuget.org › your profile › Trusted Publishing: a policy with owner `YUKIKEDA`, repository `Txfio`, workflow file `release.yml`, environment `release`. A new policy may be active for 7 days only until the first publish through it.
+- nuget.org › your profile › Trusted Publishing: a policy with these values.
+  - Repository owner `YUKIKEDA`, repository `Txfio`, workflow file `release.yml`, environment `release`.
+  - Scope "Push only new package versions", with the package `Txfio`.
+  - A new policy may be active for 7 days only, until the first publish through it.
 - GitHub › Settings › Environments: an environment named `release`. A required reviewer there makes each run wait for approval before `publish`.
-- If a ruleset restricts tag creation, allow GitHub Actions to create `v*` tags.
+- GitHub › Settings › Actions › General: "Allow GitHub Actions to create and approve pull requests".
+- If a ruleset restricts tag or branch creation, allow GitHub Actions to create `v*` tags and `release/v*` branches.
 
 ## Verification
 

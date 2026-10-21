@@ -1,0 +1,70 @@
+# Changelog
+
+All notable changes to Txfio are listed here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). A 0.x minor
+version may break the public API.
+
+## [0.2.0]
+
+A crashed transaction no longer blocks the whole work folder, and the names
+of staging entries are now part of the contract.
+
+### Breaking
+
+- **Do not share a work folder between 0.1.0 and 0.2.0 clients.** The two
+  lock the work folder in incompatible ways. Upgrade every process that
+  opens the folder together. A `share-lost.lock` left by 0.1.0 is neither
+  used nor deleted; you may delete it while no Txfio process uses the
+  folder.
+- **`BeginAsync` no longer throws `RecoveryRequiredException`.** Staging
+  methods and `CommitAsync` throw it only for paths that recovering a
+  crashed transaction may change. Its `Path` is the overlapping path (the
+  work folder when the journal cannot be read). Code that caught it around
+  `BeginAsync` should catch it around staging and commit instead; calling
+  `RecoverAsync` first when you open the folder stays the recommended
+  pattern.
+- **`RecoverAsync` runs while other transactions are alive.** It holds the
+  work folder as shared and recovers each crashed journal while holding the
+  locks on its paths. It no longer throws `LockContentionException` because
+  a transaction is alive. Journals whose paths another transaction still
+  holds are reported as the new `RecoverResult.Contended` and left for a
+  later call; handle that value where you switch on `RecoverReport.Result`.
+- **`CreateDirectoryAsync` reserves its directory until the transaction
+  ends.** Other transactions get `LockContentionException` when they stage
+  under it, instead of only during the call.
+- **Staging entry names are reserved.** `{name}.{txid}.txnew`,
+  `{name}.{txid}.txnew.prev`, and `{name}.{txid}.txold` (with `{txid}` in
+  `Guid.ToString("D")` form) are part of the contract. A path with such a
+  segment throws `InvalidOperationException` in every API, also through an
+  8.3 short name or a trailing dot. `ImportAsync` rejects a source, or an
+  entry under it, with such a name before staging. Rename such files
+  outside the work folder before importing them.
+- **Walks skip the staging entries of every transaction.**
+  `GetEntriesAsync`, a directory `CopyAsync`, `ExportAsync`, and the input
+  of `CreateArchiveAsync` no longer list or copy the `.txnew`, `.txnew.prev`,
+  or `.txold` of other transactions, or ones left by a crash.
+- **A directory `DeleteAsync` conflict names the blocking child.** When it
+  fails at staging because of an unscheduled direct child,
+  `ExternalConflictException.Path` is that child (the first in ordinal order
+  of the upper-cased paths), not the directory. The commit-time
+  `DirectoryPreconditions` report still names the directory.
+
+### Added
+
+- `Txfio.IsStagingName(string name)` returns whether a single file or
+  directory name is a staging name. Use it to skip staging entries when you
+  list the work folder with the plain file API.
+
+### Changed
+
+- Extract and archive entry names are rejected only when a segment is a
+  staging name. A name that merely ends in `.txnew`, such as `notes.txnew`,
+  is now allowed.
+
+## [0.1.0] - 2026-09-27
+
+First release of transactional file IO for Windows (NTFS and SMB).
+
+[0.2.0]: https://github.com/YUKIKEDA/Txfio/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/YUKIKEDA/Txfio/releases/tag/v0.1.0

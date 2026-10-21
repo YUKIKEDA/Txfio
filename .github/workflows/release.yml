@@ -1,9 +1,11 @@
 name: Release
 
 # Run by hand from the Actions tab on `main`, with the version to publish.
-# It checks the commit, runs the merge gate, packs and checks the package,
-# tags the commit, publishes it to nuget.org (Trusted Publishing), and creates
-# the GitHub Release. CONTRIBUTING.md "Versions" says what must be true first.
+# It checks the commit and runs the merge gate, dates the changelog section
+# on a release commit, packs and checks that commit, tags it, publishes it to
+# nuget.org (Trusted Publishing), creates the GitHub Release, and opens a
+# pull request that brings the dated changelog back to `main`.
+# CONTRIBUTING.md "Releasing" says what must be true first.
 on:
   workflow_dispatch:
     inputs:
@@ -49,6 +51,8 @@ jobs:
     needs: verify
     uses: ./.github/workflows/build.yml
 
+  # A dry run of the pack and its checks on the main commit, before anything
+  # is pushed. The publish job packs the release commit again.
   pack:
     name: pack
     needs: test
@@ -64,13 +68,6 @@ jobs:
             8.0.x
       - run: dotnet pack src/Txfio/Txfio.csproj -c Release -p:ContinuousIntegrationBuild=true
       - run: .github/scripts/release-check-package.sh "$VERSION" "$GITHUB_SHA" src/Txfio/bin/Release
-      - uses: actions/upload-artifact@v7
-        with:
-          name: package
-          path: |
-            src/Txfio/bin/Release/Txfio.${{ inputs.version }}.nupkg
-            src/Txfio/bin/Release/Txfio.${{ inputs.version }}.snupkg
-          if-no-files-found: error
 
   publish:
     name: publish
@@ -80,28 +77,35 @@ jobs:
     environment: release
     permissions:
       contents: write
+      pull-requests: write
+      actions: write
       id-token: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             10.0.x
             8.0.x
-      - uses: actions/download-artifact@v8
-        with:
-          name: package
-          path: package
-      # Push the tag before the publish: a tag can be deleted, a nuget.org
-      # version cannot.
-      - name: Tag the commit
+      - name: Date the changelog and tag the release commit
         run: |
+          today="$(date -u +%F)"
+          sed -i "s/^## \[${VERSION//./\\.}\]\$/## [${VERSION}] - ${today}/" CHANGELOG.md
+          grep -qxF "## [${VERSION}] - ${today}" CHANGELOG.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${VERSION}" -m "v${VERSION}" "$GITHUB_SHA"
-          git push origin "v${VERSION}"
+          git switch -c "release/v${VERSION}"
+          git commit -am "chore(release): ${VERSION}"
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+      - run: dotnet pack src/Txfio/Txfio.csproj -c Release -p:ContinuousIntegrationBuild=true
+      - run: .github/scripts/release-check-package.sh "$VERSION" "$(git rev-parse HEAD)" src/Txfio/bin/Release
+      # Push the tag before the package: a tag can be deleted, a nuget.org
+      # version cannot. The tag also keeps the release commit that Source Link
+      # points at after the release branch is deleted.
+      - run: git push origin "release/v${VERSION}" "v${VERSION}"
       # Request the short-lived key right before the push; it is valid for one hour.
       - uses: NuGet/login@v1
         id: login
@@ -110,14 +114,19 @@ jobs:
           user: YUKIKEDA
       # The snupkg beside the nupkg is pushed with it.
       - run: >-
-          dotnet nuget push "package/Txfio.${VERSION}.nupkg"
+          dotnet nuget push "src/Txfio/bin/Release/Txfio.${VERSION}.nupkg"
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
-      - name: GitHub Release
+      - name: GitHub Release and the pull request back to main
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The property starts with the line break after the XML tag; drop leading blank lines.
-          dotnet msbuild src/Txfio/Txfio.csproj -getProperty:PackageReleaseNotes | sed -e '/[^[:space:]]/,$!d' > notes.md
+          .github/scripts/release-notes.sh "$VERSION" > notes.md
           gh release create "v${VERSION}" --verify-tag --title "Txfio ${VERSION}" --notes-file notes.md \
-            "package/Txfio.${VERSION}.nupkg" "package/Txfio.${VERSION}.snupkg"
+            "src/Txfio/bin/Release/Txfio.${VERSION}.nupkg" "src/Txfio/bin/Release/Txfio.${VERSION}.snupkg"
+          # A pull request opened with GITHUB_TOKEN does not start workflows, so
+          # dispatch the merge gate on the branch to report its required checks.
+          gh workflow run build.yml --ref "release/v${VERSION}"
+          gh pr create --base main --head "release/v${VERSION}" \
+            --title "chore(release): date ${VERSION} in the changelog" \
+            --body "The Release workflow published ${VERSION} from this commit (tag v${VERSION}). Merging it brings the dated CHANGELOG heading back to main. The build checks were dispatched on this branch."

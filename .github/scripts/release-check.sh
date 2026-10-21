@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Checks that the tree is ready to publish VERSION: the project version, the
-# release notes, no existing tag, and no existing nuget.org version.
+# release notes, an undated changelog section, no existing tag or release
+# branch, and no existing nuget.org version.
 # Run from the repository root: .github/scripts/release-check.sh 0.2.0
 set -euo pipefail
 
@@ -20,9 +21,21 @@ project_version="$(dotnet msbuild "$project" -getProperty:Version | tr -d '\r')"
 notes="$(dotnet msbuild "$project" -getProperty:PackageReleaseNotes | tr -d '\r' | sed -e '/[^[:space:]]/,$!d')"
 [[ "$notes" == "$version "* ]] || fail "PackageReleaseNotes must start with '$version ' (update it with VersionPrefix)"
 
+heading="## [$version]"
+count="$(tr -d '\r' < CHANGELOG.md | grep -cxF "$heading" || true)"
+[[ "$count" == 1 ]] || fail "CHANGELOG.md needs exactly one undated '$heading' line (found $count)"
+if grep -qF "## [$version] - " CHANGELOG.md; then
+    fail "CHANGELOG.md already dates $version"
+fi
+grep -qF "[$version]: https://github.com/YUKIKEDA/Txfio/" CHANGELOG.md \
+    || fail "CHANGELOG.md has no link reference for [$version]"
+
 if git rev-parse -q --verify "refs/tags/v$version" >/dev/null \
     || git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
     fail "tag v$version already exists"
+fi
+if git ls-remote --exit-code --heads origin "release/v$version" >/dev/null 2>&1; then
+    fail "branch release/v$version already exists"
 fi
 
 published="$(curl -fsS https://api.nuget.org/v3-flatcontainer/txfio/index.json)"

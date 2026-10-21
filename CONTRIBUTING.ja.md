@@ -95,22 +95,44 @@ SemVer。`0.x` は破壊的変更可。版の正本は git タグ（`v0.1.0` な
 
 リリースは `Release` ワークフロー（`.github/workflows/release.yml`）で公開する。タグ、GitHub Release、nuget.org の版を手で作らない。
 
-実行の前に、`main` にマージ済みの PR で、`src/Txfio/Txfio.csproj` の `VersionPrefix` を新しい版にし、`PackageReleaseNotes` をその版で始まるノート（破壊的変更を先に）にしておく。
+変更は [`CHANGELOG.md`](CHANGELOG.md)（英語のみ、[Keep a Changelog](https://keepachangelog.com/en/1.1.0/)）に記録する。公開された振る舞いを変える PR は、次の版の日付の無い節に項目を足す。破壊的変更を先に、それぞれ移行のしかたを添えて書き、そのあとに追加、変更、修正を書く。
+
+ワークフローを実行する前に、`main` にマージ済みの PR で、新しい版について次をすべて揃えておく。
+
+- `src/Txfio/Txfio.csproj` の `VersionPrefix`
+- `PackageReleaseNotes`: nuget.org のページ向けの短い要約。版で始め、`CHANGELOG.md` へのリンクを置く
+- `CHANGELOG.md`: 日付の無い `## [{version}]` の節を 1 つと、末尾のリンク参照（`[{version}]: https://github.com/YUKIKEDA/Txfio/compare/v{previous}...v{version}`）
 
 メンテナーが Actions タブから `main` で、版（`0.2.0`。`v` は付けない）を指定して `Release` を実行する。その時点の `main` のコミットで動き、最初の失敗で止まる。
 
-1. `verify`: `.github/scripts/release-check.sh` が、版の形式、プロジェクトの版、リリースノートの先頭、タグ `v{version}` が無いこと、nuget.org にその版が無いことを確かめる。
+1. `verify`: `.github/scripts/release-check.sh` が次を確かめる。
+   - 版の形式とプロジェクトの版。
+   - リリースノートの先頭。
+   - 日付の無い changelog の節とそのリンク参照。
+   - タグ `v{version}` とブランチ `release/v{version}` が無いこと。
+   - nuget.org にその版が無いこと。
 2. `test`: そのコミットで `build.yml` の両ジョブ（マージゲート）。
-3. `pack`: `dotnet pack -c Release -p:ContinuousIntegrationBuild=true` のあと、`.github/scripts/release-check-package.sh` が `.nuspec`（版、コミット、readme、リリースノート）と、DLL と PDB のパスが決定的で Source Link がそのコミットを指すことを確かめる。
-4. `publish`（environment `release`）: そのコミットに注釈付きタグ `v{version}` を作って push し、nuget.org の Trusted Publishing で短命の API キーを得て nupkg を push し（snupkg も一緒に上がる）、リリースノートと両パッケージを添えた GitHub Release を作る。
+3. `pack`: そのコミットでの予行。`dotnet pack -c Release -p:ContinuousIntegrationBuild=true` を実行し、`.github/scripts/release-check-package.sh` が次を確かめる。
+   - `.nuspec` の版、コミット、readme、リリースノート。
+   - DLL と PDB のパスが決定的で、Source Link がそのコミットを指すこと。
+4. `publish`（environment `release`）:
+   - 実行した日の日付を changelog の見出しに入れたリリースコミット（`## [{version}] - YYYY-MM-DD`）を作る。そのコミットは、`main` のコミットの子として `release/v{version}` ブランチに載る。
+   - そこに注釈付きタグ `v{version}` を作り、パックして確かめ、ブランチとタグを push する。
+   - nuget.org の Trusted Publishing で短命の API キーを得て、nupkg を push する（snupkg も一緒に上がる）。
+   - changelog の節を本文にし、両パッケージを添えた GitHub Release を作る。
+   - リリースブランチで `build.yml` を起動し、日付入りの見出しを `main` に戻す PR を作る。その PR はメンテナーがマージする。
 
-タグはパッケージより先に push する。タグは消せるが、nuget.org の版は消せない。nuget.org への push が失敗したら、タグを消し、原因を直して、ワークフローをもう一度実行する。
+タグはパッケージより先に push する。タグは消せるが、nuget.org の版は消せない。nuget.org への push が失敗したら、タグとリリースブランチを消し、原因を直して、ワークフローをもう一度実行する。
 
 リポジトリの持ち主が一度だけする設定:
 
-- nuget.org › プロフィール › Trusted Publishing: owner `YUKIKEDA`、repository `Txfio`、workflow file `release.yml`、environment `release` のポリシー。新しいポリシーは、最初の公開までは 7 日間だけ有効のことがある。
+- nuget.org › プロフィール › Trusted Publishing: 次の値のポリシー。
+  - repository owner `YUKIKEDA`、repository `Txfio`、workflow file `release.yml`、environment `release`。
+  - スコープは「Push only new package versions」、パッケージは `Txfio`。
+  - 新しいポリシーは、最初の公開までは 7 日間だけ有効のことがある。
 - GitHub › Settings › Environments: `release` という environment。そこに必須レビュアーを置くと、各実行が `publish` の前に承認待ちになる。
-- ルールセットでタグの作成を制限しているなら、GitHub Actions が `v*` タグを作れるようにする。
+- GitHub › Settings › Actions › General: 「Allow GitHub Actions to create and approve pull requests」を有効にする。
+- ルールセットでタグやブランチの作成を制限しているなら、GitHub Actions が `v*` タグと `release/v*` ブランチを作れるようにする。
 
 ## 検証
 
