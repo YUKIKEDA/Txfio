@@ -97,7 +97,7 @@ Txfio creates three kinds of staging entries in the same directory as the target
 - These names are part of the contract. Changing the format is a breaking change (clients of different versions must not share a work folder anyway, "The share-lost marker")
 
 An application that enumerates the work folder with the plain file API sees these entries, including those of other transactions.
-It recognizes them with `Txfio.IsStagingName` below, or by the same rule.
+It recognizes them with `WorkFolder.IsStagingName` below, or by the same rule.
 Besides them, it can see:
 
 - The metadata folder `.txfio` and everything in it (the journal's temporary file is only there)
@@ -120,9 +120,9 @@ A staging entry is never user data in any view; another transaction's `.txnew` i
 A `.txold` that is a directory is skipped with everything under it; one that is a file is skipped like a `.txnew`.
 The direct-children condition of a directory `DeleteAsync` still sees them, because they are on disk. Since they are invisible through the API, the `ExternalConflictException` names the blocking child in `Path` ("DeleteAsync").
 
-#### `Txfio.IsStagingName`
+#### `WorkFolder.IsStagingName`
 
-`public static bool IsStagingName(string name)` on the static `Txfio` class returns whether a single file or directory name matches a staging name.
+`public static bool IsStagingName(string name)` on the static `WorkFolder` class returns whether a single file or directory name matches a staging name.
 
 - `name` is one name, not a path. A name that contains a directory separator (`\` or `/`) throws `ArgumentException`; null throws `ArgumentNullException`
 - It does not touch the disk and does not depend on a work folder
@@ -251,7 +251,7 @@ This matches the operation-log idea of always stating explicitly "what is being 
 The scan of direct children excludes this transaction's `.txnew` files.
 Leftover staging entries of another transaction, and any other entry, are untracked and cause an error.
 The `ExternalConflictException` at staging has `Path` set to the first such child, in lexical order of the upper-cased paths, so the caller can find a child that `GetEntriesAsync` does not show (a staging entry, "Names of staging files").
-When such a child appears between staging and commit, the commit check reports the operation with the directory's path and `DirectoryPreconditions` (an `OperationReport` has one path); the caller finds the child by listing the directory with the plain file API and `Txfio.IsStagingName`.
+When such a child appears between staging and commit, the commit check reports the operation with the directory's path and `DirectoryPreconditions` (an `OperationReport` has one path); the caller finds the child by listing the directory with the plain file API and `WorkFolder.IsStagingName`.
 
 #### Locks
 
@@ -1339,7 +1339,7 @@ A journal that cannot be read as JSON is not deleted, so staging and commit in e
 
 ### Transaction lifetime
 
-- Expressed with the pattern `await using var tx = await Txfio.BeginAsync(path);`, as `IAsyncDisposable`.
+- Expressed with the pattern `await using var tx = await WorkFolder.BeginAsync(path);`, as `IAsyncDisposable`.
   If disposed without Commit before `Committing` is written, it rolls back automatically.
   If apply throws after `Committing` is written, that exception is rethrown.
   Dispose does not roll back; it only closes the locks.
@@ -2170,9 +2170,15 @@ A flat `Txfio`. No prefix with a personal or company name.
 
 ### API naming
 
-The public type for a transaction is `ITransaction` (it is meant to be used as `Txfio.ITransaction` with the `Txfio` namespace, so the type name does not repeat a qualifier such as `WorkFolder`).
-The entry point is static methods on `Txfio`, with no dedicated class such as `Factory`:
+The public type for a transaction is `ITransaction` (it is meant to be used as `Txfio.ITransaction` with the `Txfio` namespace, so the type name does not repeat the library name, as in `TxfioTransaction`).
+The entry point is static methods on `WorkFolder`, with no factory object to create first:
 
 ```csharp
-await using var tx = await Txfio.BeginAsync(path);
+using Txfio;
+
+await WorkFolder.RecoverAsync(path);
+await using var tx = await WorkFolder.BeginAsync(path);
 ```
+
+- `WorkFolder` has `BeginAsync`, `RecoverAsync`, and `IsStagingName`. "Work folder" is the term this design uses for the folder these methods take
+- No public type has the same name as its namespace. A static class named `Txfio` in the namespace `Txfio` does not compile as `Txfio.BeginAsync` after `using Txfio;`: the name binds to the namespace (CS0234), and callers would have to write `Txfio.Txfio.BeginAsync`. The .NET design guidelines advise against this too (CA1724). 0.1.0 had that class; 0.2.0 renames it to `WorkFolder` without a forwarder, because a forwarder named `Txfio` would keep the same clash
