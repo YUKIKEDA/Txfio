@@ -101,7 +101,7 @@ Txfio は、対象と同じディレクトリに 3 種類のステージング�
 - これらの名前は契約の一部である。書式を変えるのは破壊的変更である（版の違うクライアントは、もともと同じワークフォルダを使ってはならない。「哨兵を持たないあいだのしるし」）
 
 素のファイル API でワークフォルダを列挙するアプリには、ほかのトランザクションのものも含めて、これらの項目が見える。
-アプリは下の `Txfio.IsStagingName`、または同じ規則で見分ける。
+アプリは下の `WorkFolder.IsStagingName`、または同じ規則で見分ける。
 ほかに見えるものは次のとおり。
 
 - メタデータフォルダ `.txfio` とその中身（ジャーナルの一時ファイルはその中にしかない）
@@ -124,9 +124,9 @@ Txfio は、対象と同じディレクトリに 3 種類のステージング�
 ディレクトリの `.txold` は配下ごと飛ばし、ファイルの `.txold` は `.txnew` と同じく飛ばす。
 ディレクトリの `DeleteAsync` の直下条件は、ディスクにあるのでこれらも見る。API からは見えないので、`ExternalConflictException` の `Path` に、削除を妨げている子を入れる（「DeleteAsync」）。
 
-#### `Txfio.IsStagingName`
+#### `WorkFolder.IsStagingName`
 
-静的クラス `Txfio` の `public static bool IsStagingName(string name)` は、1 つのファイル名かディレクトリ名がステージングの名前に当たるかを返す。
+静的クラス `WorkFolder` の `public static bool IsStagingName(string name)` は、1 つのファイル名かディレクトリ名がステージングの名前に当たるかを返す。
 
 - `name` はパスではなく名前 1 つである。ディレクトリの区切り（`\` か `/`）を含むと `ArgumentException`、null は `ArgumentNullException`
 - ディスクに触れず、ワークフォルダにも依らない
@@ -255,7 +255,7 @@ Update / 残る Add / `CreateDirectory` がある親もエラー。
 直下スキャンではこのトランザクションの `.txnew` を除外する。
 別トランザクションの残ったステージング項目や、それ以外のエントリは未追跡としてエラー。
 ステージ時の `ExternalConflictException` の `Path` には、そういう子のうち大文字化したパスの辞書順で最初のものを入れる。`GetEntriesAsync` に出ない子（ステージング項目。「ステージングファイルの名前」）も、呼び出し側が見つけられるようにするためである。
-そういう子がステージとコミットのあいだに現れたときは、コミット時の検証が、その操作をディレクトリのパスと `DirectoryPreconditions` で報告する（`OperationReport` が持つパスは 1 つ）。呼び出し側は、素のファイル API でディレクトリを列挙し、`Txfio.IsStagingName` でその子を見つける。
+そういう子がステージとコミットのあいだに現れたときは、コミット時の検証が、その操作をディレクトリのパスと `DirectoryPreconditions` で報告する（`OperationReport` が持つパスは 1 つ）。呼び出し側は、素のファイル API でディレクトリを列挙し、`WorkFolder.IsStagingName` でその子を見つける。
 
 #### ロック
 
@@ -1344,7 +1344,7 @@ JSON として読めないジャーナルは消さないので、直すか消す
 ### トランザクションのライフサイクル
 
 
-- `await using var tx = await Txfio.BeginAsync(path);` のパターンで表現し、`IAsyncDisposable`とする。
+- `await using var tx = await WorkFolder.BeginAsync(path);` のパターンで表現し、`IAsyncDisposable`とする。
   `Committing` を書く前に Commit されず Dispose された場合は、自動的にロールバックする。
   `Committing` を書いたあとに適用で例外が出たら、その例外を再送出する。
   Dispose はロールバックせず、ロックだけ閉じる。
@@ -2175,9 +2175,15 @@ nuget.org への公開は GitHub リポジトリを public にしたあと（Pha
 
 ### API命名
 
-トランザクションを表す公開型は`ITransaction`（名前空間`Txfio`と組み合わせて`Txfio.ITransaction`として使う前提のため、型名自体に`WorkFolder`のような修飾語を重ねない）。
-エントリポイントは`Factory`のような専用クラスを挟まず、`Txfio`の静的メソッドとする：
+トランザクションを表す公開型は`ITransaction`（名前空間`Txfio`と組み合わせて`Txfio.ITransaction`として使う前提のため、`TxfioTransaction`のように型名にライブラリ名を重ねない）。
+エントリポイントは、先に作るファクトリのオブジェクトを挟まず、`WorkFolder`の静的メソッドとする：
 
 ```csharp
-await using var tx = await Txfio.BeginAsync(path);
+using Txfio;
+
+await WorkFolder.RecoverAsync(path);
+await using var tx = await WorkFolder.BeginAsync(path);
 ```
+
+- `WorkFolder` は `BeginAsync`、`RecoverAsync`、`IsStagingName` を持つ。「ワークフォルダ」は、これらのメソッドが受け取るフォルダを指すこの設計の用語である
+- 公開型に、その名前空間と同じ名前を付けない。名前空間 `Txfio` にある静的クラス `Txfio` は、`using Txfio;` のあと `Txfio.BeginAsync` と書くとコンパイルできない。名前が名前空間に結び付くため（CS0234）で、呼び出し側は `Txfio.Txfio.BeginAsync` と書くことになる。.NET の設計ガイドラインもこれを避けるよう勧めている（CA1724）。0.1.0 はそのクラスを持っていた。0.2.0 は転送用のクラスを残さずに `WorkFolder` へ改名する。`Txfio` という名前の転送用クラスは、同じ衝突を残すからである
