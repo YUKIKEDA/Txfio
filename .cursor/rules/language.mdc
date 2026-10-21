@@ -25,17 +25,13 @@ These have a Japanese translation next to them. **English is the source of truth
 | English | Japanese |
 | --- | --- |
 | `README.md` | `README.ja.md` |
-| `CONTRIBUTING.md` | `CONTRIBUTING.ja.md` |
 | `docs/design.md` | `docs/design.ja.md` |
-| `docs/roadmap.md` | `docs/roadmap.ja.md` |
-| `docs/conventions.md` | `docs/conventions.ja.md` |
-| `docs/language.md` | `docs/language.ja.md` |
 
 - When you change one file of a pair, change the other in the **same PR**, with the same headings in the same order
 - If you cannot update the Japanese side, say so in `## Summary` and open a follow-up Issue `docs: sync <file>.ja.md`, linked in `## Related`
 - A Japanese-only change must not change the meaning. Change the English file first
 - Keep the language switch line at the top of both files
-- Do not add a new bilingual document without adding it to the table in `docs/language.md` and `docs/language.ja.md`
+- Do not add a new bilingual document without adding it to the table in `docs/language.md` and in this rule
 
 ## Where Japanese is allowed
 

@@ -51,7 +51,7 @@ The merge gate is green CI (`.github/workflows/build.yml`) on both the `windows`
 - Layout: `src/Txfio` ↔ `tests/Txfio.Tests`, shared helpers in `tests/Txfio.TestSupport`, stress tests in `tests/Txfio.Stress` (explicit `dotnet test` only, not the merge gate), TFM `net8.0`, namespace `Txfio`
 - Private fields: `_camelCase`. Do not prefix members with `this.` unless needed for disambiguation
 - **English is the repository language**: code, comments, tests, docs, commits, Issues, PRs (`.cursor/rules/language.mdc`). Chat with the user may be in any language
-- `README.md`, `CONTRIBUTING.md`, `docs/design.md`, `docs/roadmap.md`, `docs/conventions.md`, `docs/language.md` have Japanese translations (`*.ja.md`). English is the source of truth; change both files in the same PR
+- `README.md` and `docs/design.md` have Japanese translations (`*.ja.md`). English is the source of truth; change both files in the same PR
 - Comments (XML docs / inline) in **English**, full sentences, XML doc elements end with a period. Terminology lives in [`.cursor/skills/english-writing/SKILL.md`](.cursor/skills/english-writing/SKILL.md). Read it before writing comments, and add a new general rule there in the same change when a review finds one
 - Test methods use English `{Target}_{Behavior}` names plus Given / When / Then in remarks
 - When a problem is pointed out, search for the same kind of gap before fixing only the cited spot (`.cursor/rules/similar-findings.mdc`)

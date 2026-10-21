@@ -581,7 +581,7 @@ The TxFileManager features are based on its public README and `DeleteDirectoryOp
 | [`SECURITY.md`](SECURITY.md)                 | Reporting vulnerabilities            |
 | [`CHANGELOG.md`](CHANGELOG.md)               | Changes in each version, and how to move |
 
-Japanese translations: [`README.ja.md`](README.ja.md), [`docs/design.ja.md`](docs/design.ja.md), [`docs/roadmap.ja.md`](docs/roadmap.ja.md), [`docs/conventions.ja.md`](docs/conventions.ja.md), [`CONTRIBUTING.ja.md`](CONTRIBUTING.ja.md).
+Japanese translations: [`README.ja.md`](README.ja.md), [`docs/design.ja.md`](docs/design.ja.md).
 
 ## Verification
 

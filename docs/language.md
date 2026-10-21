@@ -1,7 +1,5 @@
 # Language policy
 
-English | [日本語](language.ja.md)
-
 People who install Txfio from nuget.org include readers who do not read Japanese. This page decides which language each part of the repository uses, and how the Japanese translations stay in sync with the English source.
 
 The always-applied agent rule is [`.cursor/rules/language.mdc`](../.cursor/rules/language.mdc). How to write English in this repository (terminology, sentence shape) is in [`.cursor/skills/english-writing/SKILL.md`](../.cursor/skills/english-writing/SKILL.md).
@@ -23,16 +21,12 @@ Conversations in chat, or with the maintainer, may use any language. What is com
 
 ## Bilingual documents
 
-The documents people open most often have a Japanese translation next to the English source.
+`README.md` and `docs/design.md` have a Japanese translation next to the English source. Every other document is English only.
 
 | English (source of truth) | Japanese translation |
 | --- | --- |
 | [`README.md`](../README.md) | [`README.ja.md`](../README.ja.md) |
-| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | [`CONTRIBUTING.ja.md`](../CONTRIBUTING.ja.md) |
 | [`docs/design.md`](design.md) | [`docs/design.ja.md`](design.ja.md) |
-| [`docs/roadmap.md`](roadmap.md) | [`docs/roadmap.ja.md`](roadmap.ja.md) |
-| [`docs/conventions.md`](conventions.md) | [`docs/conventions.ja.md`](conventions.ja.md) |
-| [`docs/language.md`](language.md) | [`docs/language.ja.md`](language.ja.md) |
 
 - The Japanese file has the same name with `.ja` before the extension, in the same folder
 - Both files start with a language switch line: `English | [日本語](X.ja.md)` in the English file, `[English](X.md) | 日本語` in the Japanese file
@@ -42,7 +36,7 @@ The documents people open most often have a Japanese translation next to the Eng
 
 ### Adding a bilingual document
 
-Add a document to the table above only when many readers open it. Add the row in the same PR in both `docs/language.md` and `docs/language.ja.md`. Every other document is English only.
+Add a document to the table above only when many readers open it. Add the row in `docs/language.md` in the same PR, and update the table in [`.cursor/rules/language.mdc`](../.cursor/rules/language.mdc) to match. Every other document is English only.
 
 ## Keeping translations in sync
 

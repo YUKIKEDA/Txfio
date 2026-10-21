@@ -11,7 +11,7 @@ alwaysApply: true
 - Canonical roadmap: `docs/roadmap.md` (phases are provisional)
 - Conventions: `docs/conventions.md`
 - Language policy: `docs/language.md`
-- `docs/design.md`, `docs/roadmap.md`, and `docs/conventions.md` have Japanese translations (`*.ja.md`). English is the source of truth; update both in the same PR
+- `docs/design.md` has a Japanese translation (`docs/design.ja.md`). English is the source of truth; update both in the same PR
 - `.dev/` is temporary (reviews, scratch). Do not leave permanent decisions only there
 
 ## Changing the design

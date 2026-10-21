@@ -1,7 +1,5 @@
 # Roadmap
 
-English | [日本語](roadmap.ja.md)
-
 The phases and their order are **provisional**. The implementation order and boundaries may change through grilling and design PRs.
 
 The source of truth for semantics, API, and non-functional requirements is [`design.md`](design.md). This file is only a map of the implementation order.
