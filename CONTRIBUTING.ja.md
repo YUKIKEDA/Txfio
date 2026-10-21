@@ -89,7 +89,28 @@ docs/language.md
 
 ## バージョン
 
-SemVer。`0.x` は破壊的変更可。版の正本は git タグ（`v0.1.0` など）。nuget.org への push は GitHub を public にしたあと（Phase 3 完了後）。
+SemVer。`0.x` は破壊的変更可。版の正本は git タグ（`v0.1.0` など）。
+
+### リリース
+
+リリースは `Release` ワークフロー（`.github/workflows/release.yml`）で公開する。タグ、GitHub Release、nuget.org の版を手で作らない。
+
+実行の前に、`main` にマージ済みの PR で、`src/Txfio/Txfio.csproj` の `VersionPrefix` を新しい版にし、`PackageReleaseNotes` をその版で始まるノート（破壊的変更を先に）にしておく。
+
+メンテナーが Actions タブから `main` で、版（`0.2.0`。`v` は付けない）を指定して `Release` を実行する。その時点の `main` のコミットで動き、最初の失敗で止まる。
+
+1. `verify`: `.github/scripts/release-check.sh` が、版の形式、プロジェクトの版、リリースノートの先頭、タグ `v{version}` が無いこと、nuget.org にその版が無いことを確かめる。
+2. `test`: そのコミットで `build.yml` の両ジョブ（マージゲート）。
+3. `pack`: `dotnet pack -c Release -p:ContinuousIntegrationBuild=true` のあと、`.github/scripts/release-check-package.sh` が `.nuspec`（版、コミット、readme、リリースノート）と、DLL と PDB のパスが決定的で Source Link がそのコミットを指すことを確かめる。
+4. `publish`（environment `release`）: そのコミットに注釈付きタグ `v{version}` を作って push し、nuget.org の Trusted Publishing で短命の API キーを得て nupkg を push し（snupkg も一緒に上がる）、リリースノートと両パッケージを添えた GitHub Release を作る。
+
+タグはパッケージより先に push する。タグは消せるが、nuget.org の版は消せない。nuget.org への push が失敗したら、タグを消し、原因を直して、ワークフローをもう一度実行する。
+
+リポジトリの持ち主が一度だけする設定:
+
+- nuget.org › プロフィール › Trusted Publishing: owner `YUKIKEDA`、repository `Txfio`、workflow file `release.yml`、environment `release` のポリシー。新しいポリシーは、最初の公開までは 7 日間だけ有効のことがある。
+- GitHub › Settings › Environments: `release` という environment。そこに必須レビュアーを置くと、各実行が `publish` の前に承認待ちになる。
+- ルールセットでタグの作成を制限しているなら、GitHub Actions が `v*` タグを作れるようにする。
 
 ## 検証
 
