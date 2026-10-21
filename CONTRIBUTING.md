@@ -99,6 +99,15 @@ Before running the workflow, a merged pull request on `main` sets all of these f
 - `PackageReleaseNotes`: a short summary for the nuget.org page that starts with the version and links to `CHANGELOG.md`
 - `CHANGELOG.md`: one undated `## [{version}]` section, and its link reference at the bottom (`[{version}]: https://github.com/YUKIKEDA/Txfio/compare/v{previous}...v{version}`)
 
+The release preparation pull request also records the documentation review below in its body. Each item is checked, or names the follow-up that fixed it. The README is packed into the nupkg, so after the push it cannot change for that version. Do not run `Release` while an item is open, and do not call the release ready before then.
+
+- `README.md` and `README.ja.md` describe the behavior of the version being released, not an earlier one. Read both through once, and check each changed behavior in `CHANGELOG.md` against them.
+- Every C# block in `README.md`, `README.ja.md`, and `CHANGELOG.md` compiles: `.github/scripts/readme-samples-check.sh` (CI and `verify` run it too).
+- Exception messages quoted in the README match the strings in `src/Txfio`.
+- Each breaking change in `CHANGELOG.md` has how to move, and the code does what that says.
+- Links in `README.md` and `README.ja.md` are absolute (`https://github.com/YUKIKEDA/Txfio/blob/main/...`); nuget.org renders a relative link as a dead link. `.github/scripts/release-check-package.sh` checks the packed README.
+- `PackageReleaseNotes` matches the `CHANGELOG.md` section.
+
 A maintainer runs `Release` from the Actions tab on `main`, with the version (`0.2.0`, without `v`). It runs on the `main` commit of that moment and stops at the first failure:
 
 1. `verify`: `.github/scripts/release-check.sh` checks the following.

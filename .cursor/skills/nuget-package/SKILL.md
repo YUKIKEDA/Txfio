@@ -53,7 +53,7 @@ The `Release` workflow (`.github/workflows/release.yml`) is the only way a versi
 - pushes the nupkg (with its snupkg) using a short-lived key from nuget.org Trusted Publishing
 - creates the GitHub Release from the changelog section (`.github/scripts/release-notes.sh`), and opens a pull request that brings the dated heading to `main`
 
-No API key is stored anywhere. Ready to publish means a merged pull request has set `VersionPrefix`, `PackageReleaseNotes`, and the undated `CHANGELOG.md` section, and running `Release` is the only step left.
+No API key is stored anywhere. Ready to publish means a merged pull request has set `VersionPrefix`, `PackageReleaseNotes`, and the undated `CHANGELOG.md` section, the documentation review in `CONTRIBUTING.md` "Releasing" is recorded on that pull request with no item open, and running `Release` is the only step left.
 
 nuget.org does not overwrite or delete a version. Unlisting hides that version from search. An exact version restore still works. See [Deleting packages](https://learn.microsoft.com/nuget/nuget-org/policies/deleting-packages).
 

@@ -52,3 +52,5 @@ jobs:
         run: dotnet build Txfio.slnx --no-restore -c Release
       - name: Test
         run: dotnet test tests/Txfio.Tests/Txfio.Tests.csproj --no-build -c Release
+      - name: README samples
+        run: .github/scripts/readme-samples-check.sh

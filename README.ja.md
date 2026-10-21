@@ -1,12 +1,12 @@
 # Txfio
 
-[English](README.md) | 日本語
+[English](https://github.com/YUKIKEDA/Txfio/blob/main/README.md) | 日本語
 
 Windows の共有フォルダ（NTFS / SMB）で、コミットするまで本物のファイルを変えず、落ちたら復旧できるファイル IO ライブラリです。
 
 `dotnet add package Txfio` で追加します。TFM は `net8.0` です。SMB サーバー自身のキャッシュがいつディスクへ落ちるかは保証しません。
 
-契約の正本は [`docs/design.md`](docs/design.md) です。使う手順はこの README に書いてあります。
+契約の正本は [`docs/design.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.md) です。使う手順はこの README に書いてあります。フローチャートは [GitHub](https://github.com/YUKIKEDA/Txfio/blob/main/README.ja.md) では図として表示されます。nuget.org では Mermaid のソースのまま表示されます。
 
 ## はじめ方
 
@@ -164,6 +164,7 @@ flowchart TD
   call["RecoverAsync"] --> has{"ジャーナルがある?"}
   has -->|ない| none["NoPendingTransactions"]
   has -->|JSON として読めない| unreadable["JournalUnreadable"]
+  has -->|生きているトランザクションがそのパスを持ち続けている| contended["Contended"]
   has -->|適用開始の印が無い| back["RolledBack"]
   has -->|印がある| match{"Before / After と一致する?"}
   match -->|適用済み、または再実行できた| forward["RolledForward"]
@@ -244,10 +245,10 @@ await tx.WriteAllLinesAsync("lines.txt", new[] { "a", "b" });
 JSON も、書くときは同じ Add と Update です。オプションを省略すると `System.Text.Json` の既定なので、プロパティ名はそのままです。壊れた JSON は `JsonException` のままです。
 
 ```csharp
-sealed record Note(string Title);
-
 await tx.WriteAsJsonAsync("note.json", new Note("hello"));
 Note? note = await tx.ReadFromJsonAsync<Note>("note.json");
+
+sealed record Note(string Title);
 ```
 
 ```mermaid
@@ -573,15 +574,15 @@ TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`�
 
 | 文書                                         | 役割                 |
 | -------------------------------------------- | -------------------- |
-| [`docs/design.md`](docs/design.md)           | 設計の正本           |
-| [`docs/roadmap.md`](docs/roadmap.md)         | 実装順（Phase は仮） |
-| [`docs/conventions.md`](docs/conventions.md) | コーディング規約     |
-| [`docs/language.md`](docs/language.md)       | 言語ポリシーと翻訳   |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md)         | 進め方               |
-| [`SECURITY.md`](SECURITY.md)                 | 脆弱性の報告         |
-| [`CHANGELOG.md`](CHANGELOG.md)               | 版ごとの変更と移行のしかた（英語） |
+| [`docs/design.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.md)           | 設計の正本           |
+| [`docs/roadmap.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/roadmap.md)         | 実装順（Phase は仮） |
+| [`docs/conventions.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/conventions.md) | コーディング規約     |
+| [`docs/language.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/language.md)       | 言語ポリシーと翻訳   |
+| [`CONTRIBUTING.md`](https://github.com/YUKIKEDA/Txfio/blob/main/CONTRIBUTING.md)         | 進め方               |
+| [`SECURITY.md`](https://github.com/YUKIKEDA/Txfio/blob/main/SECURITY.md)                 | 脆弱性の報告         |
+| [`CHANGELOG.md`](https://github.com/YUKIKEDA/Txfio/blob/main/CHANGELOG.md)               | 版ごとの変更と移行のしかた（英語） |
 
-日本語訳: [`docs/design.ja.md`](docs/design.ja.md)。英語版が正本です。
+日本語訳: [`docs/design.ja.md`](https://github.com/YUKIKEDA/Txfio/blob/main/docs/design.ja.md)。英語版が正本です。
 
 ## 検証
 
@@ -593,4 +594,4 @@ TxFileManager の機能一覧は、公開 README と `DeleteDirectoryOperation`�
 
 ## ライセンス
 
-[MIT](LICENSE)
+[MIT](https://github.com/YUKIKEDA/Txfio/blob/main/LICENSE)
