@@ -5,7 +5,7 @@
     <AssemblyName>Txfio</AssemblyName>
     <IsPackable>true</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <VersionPrefix>0.2.0</VersionPrefix>
+    <VersionPrefix>0.3.0</VersionPrefix>
     <PackageId>Txfio</PackageId>
     <Authors>YUKIKEDA</Authors>
     <Description>Transactional file IO for Windows (NTFS/SMB), inspired by git staging and commit.</Description>
@@ -22,16 +22,15 @@
     <PackageTags>filesystem;transaction;windows;ntfs;smb</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes>
-0.2.0 has breaking changes. A crashed transaction no longer blocks the whole work folder, and the names of staging entries are reserved.
+0.3.0 detects a client of another on-disk protocol version instead of letting it corrupt the work folder. No breaking changes.
 
-- The static entry class Txfio is now TxFileIO (TxFileIO.BeginAsync, TxFileIO.RecoverAsync), so the calls compile after `using Txfio;`.
-- Do not share a work folder between 0.1.0 and 0.2.0 clients.
-- RecoveryRequiredException comes from staging and CommitAsync for overlapping paths only, not from BeginAsync. RecoverAsync runs while other transactions are alive and reports RecoverResult.Contended.
-- CreateDirectoryAsync reserves its directory until the transaction ends.
-- Paths with a staging name ({name}.{txid}.txnew, .txnew.prev, .txold) throw InvalidOperationException. Listings and copies skip every transaction's staging entries. New: TxFileIO.IsStagingName.
-- A directory DeleteAsync conflict names the blocking child in ExternalConflictException.Path.
+- Clients that share a work folder need the same protocol version, not the same library version. This release is protocol 1.
+- New: IncompatibleClientException. The write operations and RecoverAsync wait within their lock wait, then throw it while a client of another protocol version uses the work folder. Detection works on Windows only.
+- Journals record their protocol version. RecoverAsync reports a journal of another protocol version as JournalUnreadable and does not touch it.
+- 0.2.0 clients can share a work folder with 0.3.0, but cannot be detected.
+- Before upgrading the clients of a work folder, call RecoverAsync with the old version.
 
-Full notes and how to move: https://github.com/YUKIKEDA/Txfio/blob/main/CHANGELOG.md
+Full notes: https://github.com/YUKIKEDA/Txfio/blob/main/CHANGELOG.md
     </PackageReleaseNotes>
   </PropertyGroup>
 

@@ -32,7 +32,7 @@ CommitReport report = await tx.CommitAsync();
 | `PartialConflict` | 適用の途中で外部干渉があった。確定は進んでいる       |
 | `Failed`          | 適用前の検証で失敗した。本物のパスはまだ変えていない |
 
-落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` / `Contended` です。処理したジャーナルは `Journals` に、パスの大文字小文字を無視した辞書順で載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、それが触ったパスへのステージと `CommitAsync` は `RecoveryRequiredException` です。ほかのパスはそのまま使えます。JSON として読めないジャーナルは消さず、直すか消すまですべてのパスを止めます。
+落ちたジャーナルは、次の `RecoverAsync` が戻すか進めます。`RecoverReport.Result` は `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` / `Contended` です。処理したジャーナルは `Journals` に、パスの大文字小文字を無視した辞書順で載ります。`ConflictDetected` のときは、飛ばした操作もそこに載ります。別のプロセスやこのプロセスで生きているトランザクションのジャーナルには触れず、`Journals` にも入れません。落ちたジャーナルが残っているあいだ、それが触ったパスへのステージと `CommitAsync` は `RecoveryRequiredException` です。ほかのパスはそのまま使えます。JSON として読めないジャーナルと、別のプロトコルの版が書いたジャーナルは消さず、直すか消すまですべてのパスを止めます（「同時に使う」）。
 
 ## できないこと
 
@@ -163,7 +163,7 @@ string staged = await tx.ReadAllTextAsync("a.txt"); // "new"
 flowchart TD
   call["RecoverAsync"] --> has{"ジャーナルがある?"}
   has -->|ない| none["NoPendingTransactions"]
-  has -->|JSON として読めない| unreadable["JournalUnreadable"]
+  has -->|JSON として読めない、または別のプロトコルの版| unreadable["JournalUnreadable"]
   has -->|生きているトランザクションがそのパスを持ち続けている| contended["Contended"]
   has -->|適用開始の印が無い| back["RolledBack"]
   has -->|印がある| match{"Before / After と一致する?"}
