@@ -78,6 +78,7 @@ public static class TxFileIO
     /// <returns>The overall result and the journals processed or left (in lexical order ignoring case; <see cref="RecoverResult.JournalUnreadable"/> if a journal cannot be read as JSON, <see cref="RecoverResult.Contended"/> if another transaction holds the paths of a journal).</returns>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="LockContentionException">The work-folder lock is held exclusively (by the lock-file cleanup of another call).</exception>
     /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>
     public static Task<RecoverReport> RecoverAsync(string path, CancellationToken cancellationToken = default)
@@ -95,6 +96,7 @@ public static class TxFileIO
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lockWait"/> is negative (other than <see cref="Timeout.InfiniteTimeSpan"/>).</exception>
     /// <exception cref="ExternalConflictException">The work folder does not exist.</exception>
     /// <exception cref="IOException">The long name of the work folder cannot be obtained.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="LockContentionException">The work-folder lock cannot be taken as shared by the deadline.</exception>
     /// <exception cref="OperationCanceledException">The wait for the work-folder lock was canceled (cancelling while retrying journals returns the report instead).</exception>
     /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>

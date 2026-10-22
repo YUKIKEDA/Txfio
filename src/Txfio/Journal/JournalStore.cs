@@ -82,7 +82,7 @@ internal static class JournalStore
     /// </summary>
     /// <param name="journalPath">The path to read from.</param>
     /// <param name="cancellationToken">The token to cancel the operation.</param>
-    /// <returns>The document that was read, or why it cannot be read (not readable as JSON, a JSON null value, a kind that is not a name, an empty path, an empty Move newPath, a different version, or a combined path outside the work folder, at the work folder itself, at the metadata folder, or under the metadata folder).</returns>
+    /// <returns>The document that was read, or why it cannot be read (not readable as JSON, a JSON null value, a kind that is not a name, an empty path, an empty Move newPath, a different version or protocol, or a combined path outside the work folder, at the work folder itself, at the metadata folder, or under the metadata folder).</returns>
     /// <exception cref="IOException">The read failed.</exception>
     internal static async Task<JournalReadResult> ReadAsync(string journalPath, CancellationToken cancellationToken)
     {
@@ -204,8 +204,8 @@ internal static class JournalStore
 
     private static JournalReadResult Parse(byte[] payload, string journalPath)
     {
-        // If the version on the first line is not 1, return "different version" before interpreting operations (so .txnew files are not deleted even if deserialization fails on an unknown kind).
-        if (IsUnsupportedVersion(FirstRecord(payload)))
+        // If the version or the protocol on the first line is not this library's, return "different version" before interpreting operations (so .txnew files are not deleted even if deserialization fails on an unknown kind).
+        if (IsFromOtherVersion(FirstRecord(payload)))
         {
             return JournalReadResult.OtherVersion();
         }
@@ -367,8 +367,8 @@ internal static class JournalStore
         return line;
     }
 
-    // If the version field is not the number 1, return "different version" without interpreting operations.
-    private static bool IsUnsupportedVersion(byte[] payload)
+    // If the version field is not the number 1, or the protocol field is neither missing, null, nor this library's protocol, return "different version" without interpreting operations.
+    private static bool IsFromOtherVersion(byte[] payload)
     {
         try
         {
@@ -380,25 +380,37 @@ internal static class JournalStore
 
             bool sawVersion = false;
             bool supported = false;
+
+            // A missing or null protocol was written by 0.2.0 or earlier, and is protocol 1.
+            bool otherProtocol = ProtocolLock.Version != 1;
             foreach (JsonProperty property in parsed.RootElement.EnumerateObject())
             {
-                if (!property.Name.Equals("version", StringComparison.OrdinalIgnoreCase))
+                if (property.Name.Equals("version", StringComparison.OrdinalIgnoreCase))
                 {
-                    continue;
+                    sawVersion = true;
+                    supported = IsNumber(property.Value, CurrentVersion);
                 }
-
-                sawVersion = true;
-                supported = property.Value.ValueKind == JsonValueKind.Number
-                    && property.Value.TryGetInt32(out int version)
-                    && version == CurrentVersion;
+                else if (property.Name.Equals("protocol", StringComparison.OrdinalIgnoreCase))
+                {
+                    otherProtocol = property.Value.ValueKind == JsonValueKind.Null
+                        ? ProtocolLock.Version != 1
+                        : !IsNumber(property.Value, ProtocolLock.Version);
+                }
             }
 
-            return sawVersion && !supported;
+            return (sawVersion && !supported) || otherProtocol;
         }
         catch (JsonException)
         {
             return false;
         }
+    }
+
+    private static bool IsNumber(JsonElement value, int expected)
+    {
+        return value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out int number)
+            && number == expected;
     }
 
     private static void EnsureReplaceable(string journalPath)

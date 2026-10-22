@@ -17,6 +17,7 @@ internal static class RecoverService
     /// <param name="cancellationToken">The token to cancel the waits.</param>
     /// <returns>The overall result and the journals processed or left (in lexical order of the path, ignoring case).</returns>
     /// <exception cref="IOException">Reading a journal failed (that journal stays).</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is still alive at the deadline.</exception>
     /// <exception cref="LockContentionException">The work-folder lock cannot be taken by the deadline.</exception>
     /// <exception cref="OperationCanceledException">The wait for the work-folder lock was canceled (cancelling between rounds returns the report instead).</exception>
     internal static async Task<RecoverReport> RecoverAsync(
@@ -64,15 +65,17 @@ internal static class RecoverService
             }
 
             DeleteOrphanJournalTemps(metadataFolder);
+
+            // Keep the protocol lock through the cleanup, so no client of another protocol version starts meanwhile.
+            workFolderLock.ReleaseKeepingProtocol();
+            if (!cancelled)
+            {
+                await TryDeleteLockFilesAsync(workFolder, workFolderLock).ConfigureAwait(false);
+            }
         }
         finally
         {
             workFolderLock.Release();
-        }
-
-        if (!cancelled)
-        {
-            await TryDeleteLockFilesAsync(workFolder).ConfigureAwait(false);
         }
 
         return tally.ToReport();
@@ -248,9 +251,8 @@ internal static class RecoverService
     }
 
     // Optional last step: only when the exclusive work-folder lock is free right now. No failure here is thrown, because every journal has already been processed.
-    private static async Task TryDeleteLockFilesAsync(string workFolder)
+    private static async Task TryDeleteLockFilesAsync(string workFolder, PathLockSet exclusive)
     {
-        PathLockSet exclusive = new PathLockSet();
         try
         {
             LockAttempt once = LockAttempt.Start(TimeSpan.Zero, CancellationToken.None);
@@ -264,10 +266,6 @@ internal static class RecoverService
         catch (Exception exception) when (IoErrors.IsIo(exception))
         {
             // Lock files that stay only use disk space.
-        }
-        finally
-        {
-            exclusive.Release();
         }
     }
 

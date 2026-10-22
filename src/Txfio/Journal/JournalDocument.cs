@@ -36,6 +36,15 @@ internal sealed class JournalDocument
     public int Version { get; }
 
     /// <summary>
+    /// Gets the on-disk protocol version of the client that wrote the document.
+    /// </summary>
+    /// <remarks>
+    /// It is always this library's version: a journal of another protocol is rejected before it is read into a document.
+    /// The name and the place of this field on the first line are the same in every version of the library.
+    /// </remarks>
+    public int Protocol => ProtocolLock.Version;
+
+    /// <summary>
     /// Gets the ID of the transaction.
     /// </summary>
     public Guid TransactionId { get; }
