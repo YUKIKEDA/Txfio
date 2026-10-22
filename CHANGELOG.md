@@ -5,7 +5,7 @@ All notable changes to Txfio are listed here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). A 0.x minor
 version may break the public API.
 
-## [0.3.0]
+## [0.3.0] - 2026-10-22
 
 Clients that share a work folder now need the same on-disk protocol
 version, not the same library version, and a client of another protocol
