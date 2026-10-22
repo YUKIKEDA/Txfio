@@ -20,7 +20,9 @@ version is detected instead of corrupting the work folder.
   lock wait, then throw `IncompatibleClientException` without touching the
   work folder. `BeginAsync`, `ReadAsync`, `ExistsAsync`, `ExportAsync`, and
   `ExportArchiveAsync` do not check. Catch it where you catch
-  `LockContentionException`, and update the other clients.
+  `LockContentionException`, and update the other clients. Detection
+  relies on Windows file sharing modes, including over SMB, and detects
+  nothing on Linux.
 
   ```csharp
   using Txfio;
@@ -49,6 +51,10 @@ version is detected instead of corrupting the work folder.
   no protocol lock, so they cannot be detected, but they follow the rest of
   protocol 1. They must not share a work folder with a later protocol
   version.
+- **Upgrade after recovering.** Before you upgrade the clients of a work
+  folder, call `RecoverAsync` with the old version, so no crashed journal
+  of the old protocol is left. A later protocol reads only the journals of
+  the protocol just before it.
 
 ## [0.2.0] - 2026-10-21
 

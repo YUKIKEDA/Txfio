@@ -32,7 +32,7 @@ Until you call `CommitAsync`, the new content is kept in a `.txnew` file in the 
 | `PartialConflict` | External interference during apply. The commit still went through    |
 | `Failed`          | The check before apply failed. The real paths have not changed yet   |
 
-The next `RecoverAsync` rolls a crashed journal back or forward. `RecoverReport.Result` is `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` / `Contended`. The journals it processed are in `Journals`, in lexical order of the path ignoring case. For `ConflictDetected`, the skipped operations are listed there too. Journals of transactions that are still alive, in another process or in this one, are not touched and are not in `Journals`. While a crashed journal remains, staging and `CommitAsync` on a path it touched throw `RecoveryRequiredException`; other paths stay usable. A journal that cannot be read as JSON is not deleted, and blocks every path until you fix or delete it.
+The next `RecoverAsync` rolls a crashed journal back or forward. `RecoverReport.Result` is `NoPendingTransactions` / `RolledBack` / `RolledForward` / `ConflictDetected` / `JournalUnreadable` / `Contended`. The journals it processed are in `Journals`, in lexical order of the path ignoring case. For `ConflictDetected`, the skipped operations are listed there too. Journals of transactions that are still alive, in another process or in this one, are not touched and are not in `Journals`. While a crashed journal remains, staging and `CommitAsync` on a path it touched throw `RecoveryRequiredException`; other paths stay usable. A journal that cannot be read as JSON, or that another protocol version wrote, is not deleted, and blocks every path until you fix or delete it ("Concurrent use").
 
 ## What it cannot do
 
@@ -163,7 +163,7 @@ A journal that crashed before the marker was written is rolled back by the next 
 flowchart TD
   call["RecoverAsync"] --> has{"Is there a journal?"}
   has -->|No| none["NoPendingTransactions"]
-  has -->|Not readable as JSON| unreadable["JournalUnreadable"]
+  has -->|Not readable as JSON, or another protocol version| unreadable["JournalUnreadable"]
   has -->|A live transaction keeps holding its paths| contended["Contended"]
   has -->|No apply-started marker| back["RolledBack"]
   has -->|Marker present| match{"Matches Before / After?"}
