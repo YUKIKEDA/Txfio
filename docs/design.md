@@ -1527,7 +1527,7 @@ A transaction or `RecoverAsync` that finds a live client of another protocol ver
 #### Protocol version
 
 - An integer fixed in the library. The caller cannot set it
-- The on-disk protocol is the names and meaning of the files in `.txfio` (journals, their temporary files, liveness locks, path locks, intent locks), the lock order, the journal format, and staging names ("Names of staging files"). The protocol lock and the journal's `protocol` field are not part of it ("Fixed across all versions")
+- The on-disk protocol is the names and meaning of the files in `.txfio` (journal temporary files, path locks, intent locks), the lock order, the journal format, and staging names ("Names of staging files"). The protocol lock, the journal's `protocol` field, the journal file names, and the liveness lock are not part of it ("Fixed across all versions")
 - The protocol version increases when a release changes any of these in a way that a client of the earlier version could misread or break. A release that only adds API or fixes bugs keeps it, so its clients can share a work folder with clients of the earlier release
 - A change of the journal document `version` always increases the protocol version. A protocol change does not always change the journal `version` (for example, a change of the lock order)
 - After 1.0, it increases only in a major version
@@ -1544,8 +1544,11 @@ So these are fixed for all versions, outside the protocol version, and no releas
 - The holder's open mode and the probe's open mode ("The lock file")
 - The steps of the check, including the grace for its own lock, and that the check ends before the work-folder lock is taken ("The check")
 - The journal's `protocol` field: its name, that it is a JSON number at the top level of the first line, and that a missing or null value means protocol 1 ("The protocol in the journal")
+- The journal file name `tx-{guid}.journal` and its place directly in `.txfio` ("One journal per transaction")
+- The liveness lock: its name `tx-{guid}.lock`, its place directly in `.txfio`, the owner's open (`FileMode.CreateNew`, `FileShare.None`, `FileOptions.DeleteOnClose`), and the stale check (`FileMode.OpenOrCreate`, `FileShare.None`, `FileOptions.DeleteOnClose`), and its two orderings: it is opened before the journal is written, and it stays open until the journal is deleted or the transaction ends leaving the journal for `RecoverAsync`. These orderings make "the journal exists and its liveness lock opens" mean a journal without a live owner in every version ("Transaction liveness lock", "Recover API")
 
 A change to any of them could not be detected by construction: a client of one version would no longer see a client of the other.
+The last two let a client find the journals of the previous protocol and tell whether their owners are alive ("Journals of the previous protocol"). A client takes no protocol lock between `BeginAsync` and its first locking call, so during that time only its liveness lock shows that its journal is alive.
 
 #### The lock file
 
@@ -1566,10 +1569,23 @@ A change to any of them could not be detected by construction: a client of one v
 #### The protocol in the journal
 
 - The first line of a journal (the document) has `protocol`: the protocol version of the client that wrote it, as a JSON number. Append records do not have it
-- A journal whose `protocol` is not this client's protocol version is an "unreadable journal", decided before the operations are interpreted, as for a different document `version`: nothing is touched, and the walk that deletes `.txnew` files does not run ("Unreadable journals"). Staging names and the meaning of operations may differ between protocols, so neither rolling forward or back nor computing the footprint is safe
+- A journal of the previous protocol version (N−1) is read with the rules of that protocol ("Journals of the previous protocol")
+- A journal whose `protocol` is neither this client's protocol version nor the previous one is an "unreadable journal", decided before the operations are interpreted, as for a different document `version`: nothing is touched, and the walk that deletes `.txnew` files does not run ("Unreadable journals"). Staging names and the meaning of operations may differ between protocols, so neither rolling forward or back nor computing the footprint is safe. This covers a newer protocol, and protocols older than N−1
 - A journal without `protocol`, or with null, was written by 0.2.0 or earlier, and is read as protocol 1
 - Adding the field does not change the document `version`. A 0.2.0 reader ignores unknown fields, so it reads a protocol 1 journal as before
-- Such a journal blocks staging and commit in the whole work folder, as any unreadable journal does, until a `RecoverAsync` of its protocol processes it, or someone deletes it
+- Such a journal blocks staging and commit in the whole work folder, as any unreadable journal does, until a `RecoverAsync` of its protocol (or of the next protocol) processes it, or someone deletes it
+
+#### Journals of the previous protocol
+
+A client of protocol N recovers journals of protocol N−1 too, so a crash just before an upgrade does not block the work folder after every client is upgraded.
+
+- It reads such a journal with the rules of protocol N−1: its document version, staging names, operation kinds and their meaning, and how its footprint is computed. This applies to `RecoverAsync` and to the orphan check of transactions ("Rejecting while an orphaned journal exists")
+- Whether its owner is alive is decided by the liveness lock, which is the same in every version ("Fixed across all versions"). A client of protocol N−1 can be alive without holding a protocol lock, between its `BeginAsync` and its first locking call, so the protocol lock does not decide this
+- The footprint locks are taken as protocol N takes them. A client of protocol N−1 takes path locks and intent locks only after its protocol check, so none holds them while this client holds its protocol lock ("The check")
+- In every release that reads journals of protocol N−1, the staging names of protocol N−1 are staging names under protocol N too (a client cannot know whether such a journal is left, so this is not a runtime condition): reserved ("Reserved names"), skipped in walks ("Skipping staging entries"), and matched by `TxFileIO.IsStagingName`. Otherwise a transaction of protocol N could list, copy, delete, or overwrite a `.txnew` that a `Committing` journal of protocol N−1 still needs. When protocol N keeps the staging-name format, there is nothing extra to do
+- Only one earlier protocol is read. Reading every earlier protocol would keep every old reader and its tests forever; journals older than N−1 stay "unreadable journals"
+- A release that increases the protocol version states in this document how it reads the journals of the protocol before it, or that it does not read them and why. Until that release, there is no earlier protocol to read: protocol 1 is the first
+- To avoid leftover journals of an older protocol, call `RecoverAsync` with the old version before upgrading the clients of a work folder
 
 #### The check
 
@@ -2061,11 +2077,11 @@ Like the write APIs, it is an async API.
 
 A journal whose liveness lock could be opened is read (step 1 of "Recover API"); when it cannot be interpreted as JSON (`JsonException`, or deserialization returns null), it is unreadable.
 Even when it can be read as JSON, it is unreadable when:
-`version` is not 1;
-`protocol` is not this client's protocol version ("The protocol in the journal");
+`version` is not the document version of its protocol (1 for protocol 1);
+`protocol` is neither this client's protocol version nor the previous one ("The protocol in the journal");
 an operation kind is not a name in `PendingChangeKind` (numeric kinds are not accepted either);
 an operation's `path` is empty, or a Move's `newPath` is empty.
-A journal whose `version` is not 1, or whose `protocol` is not this client's protocol version ("The protocol in the journal"), is decided before interpreting the operations; it may have been left by another version of the library, so the `.txnew` and `.prev` cleanup below does not run either, nothing is touched, and it is `JournalUnreadable`.
+A journal whose `version` is not the document version of its protocol, or whose `protocol` is neither this client's protocol version nor the previous one ("The protocol in the journal"), is decided before interpreting the operations; it may have been left by another version of the library, so the `.txnew` and `.prev` cleanup below does not run either, nothing is touched, and it is `JournalUnreadable`.
 The journal is not deleted.
 Directories created by `CreateDirectory` cannot be identified, because the document cannot be read, so they stay.
 Files whose names end in `.{guid}.txnew`, and those with `.prev` appended, are deleted from under the work folder (excluding `.txfio`).
