@@ -1527,13 +1527,25 @@ A transaction or `RecoverAsync` that finds a live client of another protocol ver
 #### Protocol version
 
 - An integer fixed in the library. The caller cannot set it
-- The on-disk protocol is the names and meaning of the files in `.txfio` (journals, their temporary files, liveness locks, path locks, intent locks, the protocol lock), the lock order, the journal format, and staging names ("Names of staging files")
+- The on-disk protocol is the names and meaning of the files in `.txfio` (journals, their temporary files, liveness locks, path locks, intent locks), the lock order, the journal format, and staging names ("Names of staging files"). The protocol lock and the journal's `protocol` field are not part of it ("Fixed across all versions")
 - The protocol version increases when a release changes any of these in a way that a client of the earlier version could misread or break. A release that only adds API or fixes bugs keeps it, so its clients can share a work folder with clients of the earlier release
 - A change of the journal document `version` always increases the protocol version. A protocol change does not always change the journal `version` (for example, a change of the lock order)
 - After 1.0, it increases only in a major version
 - Protocol 1 is the on-disk protocol of 0.2.0 with the protocol lock added. If the release that adds the protocol lock also changes anything else above, it starts at 2 instead
 - Clients of 0.2.0 and earlier take no protocol lock, so they cannot be detected. A 0.2.0 client follows the rest of protocol 1 and may share a work folder with protocol 1 clients. A 0.1.0 client must not ("The share-lost marker")
 - A 0.2.0 client may share a work folder only with protocol 1 clients. Once protocol 2 exists, 0.2.0 clients must not share a work folder with protocol 2 clients either, and this is still not detected
+
+#### Fixed across all versions
+
+Detection works only while clients of every version agree on how to detect each other.
+So these are fixed for all versions, outside the protocol version, and no release changes them:
+
+- The protocol lock's name `proto-{N}.lock`, its place directly in `.txfio`, and how `{N}` is written ("The lock file")
+- The holder's open mode and the probe's open mode ("The lock file")
+- The steps of the check, including the grace for its own lock, and that the check ends before the work-folder lock is taken ("The check")
+- The journal's `protocol` field: its name, that it is a JSON number at the top level of the first line, and that a missing or null value means protocol 1 ("The protocol in the journal")
+
+A change to any of them could not be detected by construction: a client of one version would no longer see a client of the other.
 
 #### The lock file
 
@@ -1568,12 +1580,12 @@ Before the work-folder lock, with these steps:
 3. When none is alive, open its own protocol lock, then probe again as in step 1
 4. When one is alive now, close its own protocol lock, wait, and go back to step 1. Otherwise the check is done, and it keeps its own protocol lock
 
-- The waits follow "When contention is detected": the 100 ms interval, and the call's one deadline shared with the work-folder lock and the other locks. With `TimeSpan.Zero`, there is one try
+- The waits follow "When contention is detected": the 100 ms interval, and the call's one deadline shared with the work-folder lock and the other locks. With `TimeSpan.Zero`, there is one try, except for the grace below
 - At the deadline, it throws `IncompatibleClientException`. The message names both protocol versions and the work folder
 - When cancelled while waiting, `OperationCanceledException`. In `RecoverAsync` this happens before any journal is processed, so the report is not lost
-- A sharing violation when it opens its own protocol lock (another version's probe has it open for a moment) is waited for the same way. If the deadline passes there, it is `IncompatibleClientException` too
+- A sharing violation when it opens its own protocol lock can only be another version's probe, which has the file open for a moment (holders of the same version do not block each other). The probe finds the file free only when no client of this version holds it, so this is the same moment as two versions starting at once. It is retried on the 100 ms interval for at least 1 second from the first sharing violation, even with `TimeSpan.Zero` and past the call's deadline. The library fixes this grace, so a client of the version in use does not fail because of one probe with the default `lockWait`. When it still cannot open the file after both the grace and the deadline, it is `IncompatibleClientException`. Cancellation still ends the wait with `OperationCanceledException`
 - Other IO failures are not waited for, and are returned as they are
-- A waiting client opens its own file only when it sees no client of another version, so it does not disturb the clients that are already using the work folder. The work folder stays with the version in use, and the newcomer fails at its deadline
+- A waiting client opens its own file only when it sees no client of another version, so it does not disturb the clients that are already using the work folder. Its probes still have their files open for a moment; a client of the version in use that opens its own lock at that moment waits within the grace above instead of failing. The work folder stays with the version in use, and the newcomer fails at its deadline
 - A client keeps its own lock only after it probes again while holding it (step 3), so when clients of two versions start at the same time, at least one sees the other. Both may see each other and both may fail at the deadline; neither has touched the work folder
 
 ### When contention is detected
@@ -1599,7 +1611,7 @@ On a sharing violation, it retries every 100 ms.
 If less than 100 ms remains, it waits only for the remaining time and tries one last time.
 The interval cannot be passed by the caller.
 On SMB each attempt is a CreateFile that opens a lock file, so the library fixes the interval.
-`TimeSpan.Zero` does not sleep and tries once, as before.
+`TimeSpan.Zero` does not sleep and tries once, as before, except for the fixed grace when it opens its own protocol lock ("The protocol lock" › "The check").
 The sleep while waiting is cut short by that call's `CancellationToken`.
 Then it throws `OperationCanceledException`, not `LockContentionException` (except between the rounds of `RecoverAsync`, "Recover API").
 Cancellation after the locks are taken works as each API already does (after the commit's apply starts, the token is not observed).
