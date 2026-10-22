@@ -94,7 +94,7 @@ Txfio creates three kinds of staging entries in the same directory as the target
 - `{txid}` is the transaction ID formatted with `Guid.ToString("D")`: 32 lowercase hexadecimal digits in groups of 8, 4, 4, 4, and 12, separated by hyphens
 - Txfio writes these names in lowercase. A name matches when it ends in `.`, a `{txid}` in that form, and `.txnew`, `.txnew.prev`, or `.txold`, after a non-empty `{name}`, compared ignoring case (`OrdinalIgnoreCase`), like every path in the work folder
 - The transaction ID in the name lets Recover tell exactly which transaction an entry left after a crash belongs to. Rollback deletes the restage backup too ("Created directories")
-- These names are part of the contract. Changing the format is a breaking change (clients of different versions must not share a work folder anyway, "The share-lost marker")
+- These names are part of the contract. Changing the format changes the protocol version ("The protocol lock")
 
 An application that enumerates the work folder with the plain file API sees these entries, including those of other transactions.
 It recognizes them with `TxFileIO.IsStagingName` below, or by the same rule.
@@ -1332,6 +1332,7 @@ Commit success or failure is not an exception; it is returned as `CommitReport`.
 | `InvalidDataException` | A dangerous entry name in a ZIP extract |
 | `System.IO.Compression` exceptions | The ZIP itself cannot be read |
 | `LockContentionException` | Another transaction holds the path, an intent lock on an ancestor directory, or the work folder. Has one failed path. No inner exception. The same exception after waiting until the deadline. Cancelling the wait is `OperationCanceledException` ("When contention is detected"), except between the rounds of `RecoverAsync` ("Recover API") |
+| `IncompatibleClientException` | A client of another protocol version holds its protocol lock in the work folder until the deadline ("The protocol lock"). Thrown by the operations that take the work-folder lock, and by `RecoverAsync`. No `Path` and no inner exception; the message names both protocol versions and the work folder |
 | `RecoveryRequiredException` | Staging on a path that overlaps the footprint of an orphaned journal, and `CommitAsync` while this transaction holds such a path ("Rejecting while an orphaned journal exists"). `Path` is the overlapping path, or the work folder for an unreadable journal. No inner exception |
 
 A readable journal is resolved with `RecoverAsync`.
@@ -1424,6 +1425,7 @@ For both files and directories, the lock for a path is `.txfio/locks/{hex}.lock`
 - Transactions that touch different paths can run in parallel while they share the work-folder lock
 - `RecoverAsync` holds it as shared too. Only the lock-file cleanup at the end of `RecoverAsync` takes it exclusively, once and without waiting ("Cleaning up lock files")
 - Every operation holds the work-folder lock as shared; intent locks protect what is under a directory
+- The protocol lock is taken right before the work-folder lock, every time, and closed right after it ("The protocol lock")
 - A transaction holds the shared work-folder lock for as long as it holds any path lock or intent lock, including while it waits for another lock. When it ends, it closes its path locks and intent locks first, then the work-folder lock
 - Scheduling under a directory: "Intent locks"
 
@@ -1493,10 +1495,11 @@ The same exception when another transaction already holds something under it as 
 
 The order is below. The waits share the one deadline from "When contention is detected".
 
-1. The shared work-folder lock
-2. The ancestors of each target (from the root down), in lexical order of the upper-cased absolute target paths
-3. The exclusive intent lock of the directory being scheduled
-4. Path locks
+1. The protocol lock and its check ("The protocol lock")
+2. The shared work-folder lock
+3. The ancestors of each target (from the root down), in lexical order of the upper-cased absolute target paths
+4. The exclusive intent lock of the directory being scheduled
+5. Path locks
 
 `RecoverAsync` takes the locks on an orphaned journal's footprint in the same order ("Recover API").
 
@@ -1506,7 +1509,7 @@ Removed.
 A transaction never lets go of the shared work-folder lock while it holds a path lock or intent lock ("The work-folder lock"), so there is nothing for a marker to report.
 An existing `.txfio/share-lost.lock` left by an earlier version is neither opened nor deleted, because deleting it is not needed.
 
-Clients of an earlier version must not share a work folder with this version.
+Clients of 0.1.0 must not share a work folder with later versions, and the protocol lock cannot detect them ("The protocol lock").
 For example, a 0.1.0 transaction lets go of the shared work-folder lock while it waits for an exclusive intent lock and relies on the marker, but the lock-file cleanup no longer checks the marker, so it could delete lock files that transaction holds.
 A 0.1.0 `BeginAsync` also rejects any orphan, and a 0.1.0 `RecoverAsync` holds the work-folder lock exclusively for the whole call.
 
@@ -1514,6 +1517,52 @@ Previously, a transaction let go of the shared work-folder lock while it waited 
 Before letting go, it opened this marker, and the exclusive holder checked that the marker was free.
 When it could not take the shared lock back, it remembered the work-folder lock as lost.
 Nothing waits for the exclusive work-folder lock any more ("Cleaning up lock files"), so the drop, the marker, and the lost state are gone.
+
+### The protocol lock
+
+Processes that share a work folder share its on-disk protocol, not the library code.
+They need the same protocol version, not the same library version.
+A transaction or `RecoverAsync` that finds a live client of another protocol version in the work folder throws `IncompatibleClientException` before it takes the work-folder lock, so the two never touch the work folder at the same time.
+
+#### Protocol version
+
+- An integer fixed in the library. The caller cannot set it
+- The on-disk protocol is the names and meaning of the files in `.txfio` (journals, their temporary files, liveness locks, path locks, intent locks, the protocol lock), the lock order, the journal format, and staging names ("Names of staging files")
+- The protocol version increases when a release changes any of these in a way that a client of the earlier version could misread or break. A release that only adds API or fixes bugs keeps it, so its clients can share a work folder with clients of the earlier release
+- A change of the journal document `version` always increases the protocol version. A protocol change does not always change the journal `version` (for example, a change of the lock order)
+- After 1.0, it increases only in a major version
+- Protocol 1 is the on-disk protocol of 0.2.0 with the protocol lock added. If the release that adds the protocol lock also changes anything else above, it starts at 2 instead
+- Clients of 0.2.0 and earlier take no protocol lock, so they cannot be detected. A 0.2.0 client follows the rest of protocol 1 and may share a work folder with protocol 1 clients. A 0.1.0 client must not ("The share-lost marker")
+
+#### The lock file
+
+- `.txfio/proto-{N}.lock`. `{N}` is the protocol version in decimal digits with no leading zeros (`ToString(CultureInfo.InvariantCulture)`)
+- It is in `.txfio`, not in `.txfio/locks/`, so the lock-file cleanup does not delete it ("Cleaning up lock files"). Nothing deletes it; there is one empty file per protocol version that has used the work folder
+- It is opened as shared: `FileMode.OpenOrCreate`, `FileAccess.ReadWrite`, `FileShare.ReadWrite`. The file stays after the handle is closed
+
+#### When it is taken
+
+- Right before the shared work-folder lock, every time that lock is taken: in a transaction ("The work-folder lock") and in `RecoverAsync` ("Recover API")
+- It is held as long as the work-folder lock, and closed right after it. A transaction holds it until it ends, and does not check again while it holds it
+- `BeginAsync` does not take it, because it takes no locks ("When contention is detected"). A transaction that only reads never takes it
+- `Read`, `Exists`, `Export`, and `ExportArchive` do not take it, as they do not take the work-folder lock. They write nothing in the work folder, and what they see while a client of another version writes is a dirty read, which is already allowed
+- The journal and liveness lock that `BeginAsync` writes are not protected by it. A live journal is never read ("Recover API"). A journal left by a crashed client of another version is processed by any `RecoverAsync`; when its document `version` differs, it is an "unreadable journal" and nothing is touched ("Unreadable journals")
+
+#### The check
+
+After its own protocol lock is open, and before the work-folder lock:
+
+1. List `.txfio/proto-*.lock` (one level). Skip its own file, and names whose `{N}` is not decimal digits
+2. For each, open it with `FileMode.Open`, `FileAccess.ReadWrite`, `FileShare.None`, and close it right away. If it opens, or the file is gone, no client of that version is alive. A sharing violation means a client of that version is alive
+3. When a client of another version is alive, close its own protocol lock, wait, and start again from opening its own protocol lock
+
+- The waits follow "When contention is detected": the 100 ms interval, and the call's one deadline shared with the work-folder lock and the other locks. With `TimeSpan.Zero`, there is one try
+- At the deadline, it throws `IncompatibleClientException`. The message names both protocol versions and the work folder
+- When cancelled while waiting, `OperationCanceledException`. In `RecoverAsync` this happens before any journal is processed, so the report is not lost
+- A sharing violation when it opens its own protocol lock (another version's check holds it for a moment) is waited for the same way. If the deadline passes there, it is `IncompatibleClientException` too
+- Other IO failures are not waited for, and are returned as they are
+- It closes its own lock while it waits, so a waiting client never stops the clients that are already using the work folder. The work folder stays with the version in use, and the newcomer fails at its deadline
+- Each client opens its own file before it checks the others, so when clients of two versions start at the same time, at least one sees the other. Both may see each other and both may fail at the deadline; neither has touched the work folder
 
 ### When contention is detected
 
@@ -1543,8 +1592,8 @@ The sleep while waiting is cut short by that call's `CancellationToken`.
 Then it throws `OperationCanceledException`, not `LockContentionException` (except between the rounds of `RecoverAsync`, "Recover API").
 Cancellation after the locks are taken works as each API already does (after the commit's apply starts, the token is not observed).
 
-It waits only when it opens something intending to hold it as a lock and gets a sharing violation:
-the shared work-folder lock, intent locks, path locks, and the shared work-folder lock of `RecoverAsync`. `RecoverAsync` retries the footprint locks of a journal in rounds within the same deadline ("Recover API").
+It waits only when it opens something intending to hold it as a lock and gets a sharing violation, or when a client of another protocol version is alive ("The protocol lock"):
+the protocol lock, the shared work-folder lock, intent locks, path locks, and the shared work-folder lock of `RecoverAsync`. `RecoverAsync` retries the footprint locks of a journal in rounds within the same deadline ("Recover API").
 The exclusive work-folder lock of the lock-file cleanup does not wait ("Cleaning up lock files").
 The exclusive intent lock is held until the transaction ends ("Intent locks").
 While waiting for a path lock or intent lock, including an exclusive intent lock, the work-folder lock already taken and the locks taken earlier in lexical order are kept.
@@ -1603,7 +1652,7 @@ This is not an error and is not reported. Lock files that stay only use disk spa
 Other failures in this step are not thrown either: every journal has already been processed, and throwing would lose the `RecoverReport`.
 When an operation locks the same path after the delete, it recreates the file with `FileMode.OpenOrCreate`.
 Files that cannot be deleted (sharing violation, access denied) are left and it continues.
-The liveness locks (`tx-{guid}.lock`) and a `share-lost.lock` left by an earlier version are not deleted.
+The liveness locks (`tx-{guid}.lock`), the protocol locks (`proto-{N}.lock`), and a `share-lost.lock` left by an earlier version are not deleted.
 Only one level of `.txfio/locks/` is enumerated; the work folder is not walked.
 If `.txfio/` does not exist, nothing happens.
 
@@ -1741,6 +1790,7 @@ The document version stays 1 (there is no migration, since the library is not pu
 `PendingChangeKind` is Add = 0, Update = 1, Delete = 2, Move = 3, DeleteTree = 4, CreateDirectory = 5.
 There are no gaps.
 The journal document version stays 1.
+Changing it changes the protocol version ("The protocol lock").
 Documents with the Attach kind are not read or migrated.
 Journals that cannot be read as JSON, have a different version, or have an unknown kind follow "Unreadable journals".
 
@@ -1933,7 +1983,8 @@ A hash of the contents would mean reading the whole file at each comparison, whi
 
 Nothing happens automatically.
 Only when the application explicitly calls `RecoverAsync()`, at the time it opens the work folder, are the journals in `.txfio/` processed in lexical order ignoring case, and stale transactions detected.
-Before listing the journals, it takes the work-folder lock as shared, as operations do, waiting with the `lockWait` passed to `RecoverAsync` ("When contention is detected").
+Before listing the journals, it takes the protocol lock and checks for clients of another protocol version ("The protocol lock"), then takes the work-folder lock as shared, as operations do, waiting with the `lockWait` passed to `RecoverAsync` ("When contention is detected").
+When a client of another protocol version is still alive at the deadline, it throws `IncompatibleClientException`, processing nothing.
 When none is passed, `TimeSpan.Zero`.
 When the work-folder lock cannot be opened by the deadline, it returns `LockContentionException` (`Path` is the work folder), processing nothing.
 When cancelled while waiting, it also processes nothing and returns `OperationCanceledException`.
