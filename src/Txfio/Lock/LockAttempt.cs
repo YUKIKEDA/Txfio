@@ -61,18 +61,31 @@ internal readonly struct LockAttempt
     /// </summary>
     /// <returns><see langword="true"/> to try again after waiting (<see langword="false"/> without waiting if the deadline has passed).</returns>
     /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
-    internal async Task<bool> WaitForRetryAsync()
+    internal Task<bool> WaitForRetryAsync()
     {
-        if (!_armed || (!_waitForever && Environment.TickCount64 >= _deadlineTick))
+        return WaitForRetryAsync(long.MinValue);
+    }
+
+    /// <summary>
+    /// Waits a little if the deadline or a fixed grace has not passed (without blocking the caller's thread).
+    /// </summary>
+    /// <remarks>
+    /// The grace lets a call wait even with a zero lock wait or after its deadline, for a sharing violation that can only last a moment.
+    /// </remarks>
+    /// <param name="graceEndTick">The <see cref="Environment.TickCount64"/> until which to wait even after the deadline.</param>
+    /// <returns><see langword="true"/> to try again after waiting (<see langword="false"/> without waiting if both the deadline and the grace have passed).</returns>
+    /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
+    internal async Task<bool> WaitForRetryAsync(long graceEndTick)
+    {
+        if (!_armed)
         {
             return false;
         }
 
-        _cancellationToken.ThrowIfCancellationRequested();
         int delay = RetryIntervalMilliseconds;
         if (!_waitForever)
         {
-            long remaining = _deadlineTick - Environment.TickCount64;
+            long remaining = Math.Max(_deadlineTick, graceEndTick) - Environment.TickCount64;
             if (remaining <= 0)
             {
                 return false;
@@ -81,6 +94,7 @@ internal readonly struct LockAttempt
             delay = (int)Math.Min(RetryIntervalMilliseconds, remaining);
         }
 
+        _cancellationToken.ThrowIfCancellationRequested();
         try
         {
             await Task.Delay(delay, _cancellationToken).ConfigureAwait(false);

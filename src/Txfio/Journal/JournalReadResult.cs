@@ -17,7 +17,7 @@ internal sealed class JournalReadResult
     internal JournalDocument? Document { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the version differs from this library's version (it may have been left by a newer version of the library, so nothing is touched).
+    /// Gets a value indicating whether the document version or the protocol differs from this library's (it may have been left by another version of the library, so nothing is touched).
     /// </summary>
     internal bool UnsupportedVersion { get; }
 
@@ -41,9 +41,9 @@ internal sealed class JournalReadResult
     }
 
     /// <summary>
-    /// Creates a result for a journal with a different version that cannot be read.
+    /// Creates a result for a journal with a different document version or protocol that cannot be read.
     /// </summary>
-    /// <returns>The result for a different version.</returns>
+    /// <returns>The result for a different version or protocol.</returns>
     internal static JournalReadResult OtherVersion()
     {
         return new JournalReadResult(document: null, unsupportedVersion: true);

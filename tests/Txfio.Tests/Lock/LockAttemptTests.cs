@@ -39,6 +39,38 @@ public sealed class LockAttemptTests
     }
 
     /// <summary>
+    /// A grace lets a zero wait try again until the grace ends.
+    /// </summary>
+    /// <remarks>
+    /// <para>Given: a LockAttempt started with TimeSpan.Zero.</para>
+    /// <para>When: WaitForRetryAsync is called with a grace that ends in one minute.</para>
+    /// <para>Then: <see langword="true"/>.</para>
+    /// </remarks>
+    [Fact]
+    public async Task WaitForRetryAsync_TriesAgainWithinGraceAfterDeadline()
+    {
+        LockAttempt attempt = LockAttempt.Start(TimeSpan.Zero, CancellationToken.None);
+
+        Assert.True(await attempt.WaitForRetryAsync(Environment.TickCount64 + 60_000));
+    }
+
+    /// <summary>
+    /// When both the deadline and the grace have passed, it gives up without waiting.
+    /// </summary>
+    /// <remarks>
+    /// <para>Given: a LockAttempt started with TimeSpan.Zero.</para>
+    /// <para>When: WaitForRetryAsync is called with a grace that has already ended.</para>
+    /// <para>Then: <see langword="false"/>.</para>
+    /// </remarks>
+    [Fact]
+    public async Task WaitForRetryAsync_GivesUpAfterDeadlineAndGrace()
+    {
+        LockAttempt attempt = LockAttempt.Start(TimeSpan.Zero, CancellationToken.None);
+
+        Assert.False(await attempt.WaitForRetryAsync(Environment.TickCount64 - 1));
+    }
+
+    /// <summary>
     /// Within the deadline, it waits and tries again.
     /// </summary>
     /// <remarks>

@@ -5,6 +5,51 @@ All notable changes to Txfio are listed here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). A 0.x minor
 version may break the public API.
 
+## [0.3.0]
+
+Clients that share a work folder now need the same on-disk protocol
+version, not the same library version, and a client of another protocol
+version is detected instead of corrupting the work folder.
+
+### Added
+
+- **`IncompatibleClientException`.** Each client holds
+  `.txfio/proto-{N}.lock` (protocol 1 in this release) together with the
+  work-folder lock. When a client of another protocol version is using the
+  work folder, the write operations and `RecoverAsync` wait within their
+  lock wait, then throw `IncompatibleClientException` without touching the
+  work folder. `BeginAsync`, `ReadAsync`, `ExistsAsync`, `ExportAsync`, and
+  `ExportArchiveAsync` do not check. Catch it where you catch
+  `LockContentionException`, and update the other clients.
+
+  ```csharp
+  using Txfio;
+
+  try
+  {
+      await using ITransaction tx = await TxFileIO.BeginAsync(@"D:\share\work");
+      await tx.WriteAllTextAsync("a.txt", "a");
+      await tx.CommitAsync();
+  }
+  catch (IncompatibleClientException)
+  {
+      // A client of another protocol version is using the folder.
+  }
+  ```
+
+- **Journals record their protocol version.** The first line has
+  `"protocol":1`. `RecoverAsync` reports a journal of another protocol
+  version as `JournalUnreadable` and does not touch it, and staging and
+  commit throw `RecoveryRequiredException` while it remains. A journal
+  without the field, as 0.2.0 writes it, is read as protocol 1.
+
+### Changed
+
+- **0.2.0 clients can share a work folder with this version.** They take
+  no protocol lock, so they cannot be detected, but they follow the rest of
+  protocol 1. They must not share a work folder with a later protocol
+  version.
+
 ## [0.2.0] - 2026-10-21
 
 A crashed transaction no longer blocks the whole work folder, and the names
@@ -79,5 +124,6 @@ of staging entries are now part of the contract.
 
 First release of transactional file IO for Windows (NTFS and SMB).
 
+[0.3.0]: https://github.com/YUKIKEDA/Txfio/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/YUKIKEDA/Txfio/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/YUKIKEDA/Txfio/releases/tag/v0.1.0

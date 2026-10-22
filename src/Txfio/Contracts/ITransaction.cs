@@ -23,6 +23,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The target already exists and is not the source of a file Move, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the Add targets the source of a directory Move, or the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -42,6 +43,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The target does not exist, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, or the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -59,6 +61,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the operation is scheduled.</returns>
     /// <exception cref="ExternalConflictException">The target does not exist, or the directory has an unexpected direct child (then <see cref="ExternalConflictException.Path"/> is the first such child on disk, which may be a staging entry of another transaction).</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, or the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -72,6 +75,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the operation is scheduled.</returns>
     /// <exception cref="ExternalConflictException">The target directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="UnsupportedOperationException">The target is a file.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, this transaction has an operation under the directory, the path is under a directory Move, or the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
@@ -87,6 +91,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the operation is scheduled.</returns>
     /// <exception cref="ExternalConflictException">The source does not exist, the destination is occupied and is not the source of another Move, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the source, the destination, or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="UnsupportedOperationException">The move crosses volumes.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the move is to the same path (including a difference only in case), the path is already staged by another operation, the move has no free end, the move is into a directory scheduled for deletion, an operation is under the source or destination, a directory is moved under itself, or the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
@@ -113,6 +118,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the operation is scheduled.</returns>
     /// <exception cref="ExternalConflictException">The source does not exist, the destination is occupied while <paramref name="overwrite"/> is <see langword="false"/>, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the source, the destination, or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="UnsupportedOperationException">The move crosses volumes.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the move is to the same path, the path is already staged by another operation, an operation targets the source or destination of a replacing or swapping Move, an operation is under the destination of a swap, the move has no free end, the move is into a directory scheduled for deletion, an operation is under the source or destination, a directory is moved under itself, or the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
@@ -127,6 +133,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the directory is created.</returns>
     /// <exception cref="ExternalConflictException">The target already exists, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, there is an operation under it, or the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -145,6 +152,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The source does not exist, the destination already exists, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the source, the destination, or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the copy is to the same path or under itself, or the path is a symbolic link, a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -164,6 +172,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The source does not exist, the destination already exists, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the destination or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the import is under itself, the source or a file or directory under it has a staging name (nothing is staged), or the path is a symbolic link, a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">The source is inside the work folder, or the destination is outside the work folder.</exception>
@@ -208,6 +217,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The input does not exist, the ZIP path already exists, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the input, the ZIP path, or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, there is an operation under the input, the ZIP path is under the input, or the path is a symbolic link, a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -234,6 +244,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException">The sequence, an element, or an element's path is <see langword="null"/>.</exception>
     /// <exception cref="ExternalConflictException">The input does not exist, the ZIP path already exists, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the input, the ZIP path, or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, an input is already staged, there is an operation under an input, the ZIP path is under an input, or the path is a symbolic link, a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>).</exception>
     /// <exception cref="ArgumentException">A path is outside the work folder, or entry names are invalid, duplicated, or shared by a file and a directory.</exception>
@@ -303,6 +314,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The ZIP does not exist, the destination already exists, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the destination or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="UnsupportedOperationException">The ZIP path is a directory.</exception>
     /// <exception cref="InvalidDataException">A name leaves the destination, is not valid on Windows, or has a segment that is a staging name; names are duplicated; a file and a directory share a name; or the declared total extracted size or the bytes actually read exceed <paramref name="maxExtractedBytes"/> (also when the total does not fit in a <see langword="long"/>, a file's Length is negative, or the ZIP itself cannot be read).</exception>
@@ -329,6 +341,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The ZIP does not exist, the destination already exists, or the parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the destination or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="UnsupportedOperationException">The ZIP path is a directory.</exception>
     /// <exception cref="InvalidDataException">A name leaves the destination, is not valid on Windows, or has a segment that is a staging name; names are duplicated; a file and a directory share a name; or the declared total extracted size or the bytes actually read exceed <paramref name="maxExtractedBytes"/> (also when the total does not fit in a <see langword="long"/>, a file's Length is negative, or the ZIP itself cannot be read).</exception>
@@ -447,6 +460,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -466,6 +480,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="encoding"/> is <see langword="null"/>.</exception>
     /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -485,6 +500,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="contents"/> is <see langword="null"/>.</exception>
     /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -504,6 +520,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="contents"/> or <paramref name="encoding"/> is <see langword="null"/>.</exception>
     /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -525,6 +542,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -544,6 +562,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="encoding"/> is <see langword="null"/>.</exception>
     /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -563,6 +582,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="contents"/> is <see langword="null"/>.</exception>
     /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -582,6 +602,7 @@ public interface ITransaction : IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="contents"/> or <paramref name="encoding"/> is <see langword="null"/>.</exception>
     /// <exception cref="ExternalConflictException">The parent directory does not exist, or the target is a directory.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>
@@ -620,6 +641,7 @@ public interface ITransaction : IAsyncDisposable
     /// <returns>A task that completes when the content is staged.</returns>
     /// <exception cref="ExternalConflictException">The parent directory does not exist.</exception>
     /// <exception cref="LockContentionException">Another transaction holds the target or the work folder.</exception>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is using the work folder.</exception>
     /// <exception cref="RecoveryRequiredException">A path this call would lock overlaps the footprint of an orphaned journal; nothing is staged and no lock is taken.</exception>
     /// <exception cref="InvalidOperationException">Calls overlap, the path is already staged by another operation, the path is a reparse point, under the metadata folder, or has a segment that is a staging name (see <see cref="TxFileIO.IsStagingName"/>), or the transaction is already committed.</exception>
     /// <exception cref="ArgumentException">The path is outside the work folder.</exception>

@@ -28,6 +28,9 @@ internal sealed class PathLockSet
 
     private WorkFolderState _workFolderState;
 
+    // The protocol lock, taken right before the shared work-folder lock and closed after it.
+    private FileStream? _protocolHandle;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PathLockSet"/> class that neither fails nor stops partway.
     /// </summary>
@@ -116,10 +119,11 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// Opens the work-folder lock as shared (does not reopen if already held).
+    /// Takes the protocol lock after checking for clients of another protocol version, then opens the work-folder lock as shared (does not reopen if already held).
     /// </summary>
     /// <param name="workFolder">The work folder.</param>
     /// <param name="attempt">The lock wait of this call.</param>
+    /// <exception cref="IncompatibleClientException">A client of another protocol version is still alive at the deadline.</exception>
     /// <exception cref="LockContentionException">The work-folder lock cannot be taken by the deadline.</exception>
     /// <exception cref="OperationCanceledException">The wait was canceled.</exception>
     /// <returns><see langword="true"/> when taken (otherwise an exception is thrown).</returns>
@@ -130,6 +134,7 @@ internal sealed class PathLockSet
             return;
         }
 
+        _protocolHandle ??= await ProtocolLock.AcquireAsync(workFolder, attempt).ConfigureAwait(false);
         try
         {
             _workFolderHandle = await OpenWaitingAsync(FilePath(workFolder, workFolder), FileShare.ReadWrite, attempt)
@@ -138,13 +143,23 @@ internal sealed class PathLockSet
         }
         catch (IOException exception) when (IsSharingViolation(exception))
         {
+            ReleaseProtocol();
             throw Contention(workFolder);
+        }
+        catch
+        {
+            // The protocol lock is held only as long as the work-folder lock.
+            ReleaseProtocol();
+            throw;
         }
     }
 
     /// <summary>
     /// Opens the work-folder lock exclusively (the lock-file cleanup of <c>RecoverAsync</c>; this set must hold no work-folder lock yet).
     /// </summary>
+    /// <remarks>
+    /// It does not take the protocol lock. The cleanup keeps the protocol lock it took with the shared work-folder lock (<see cref="ReleaseKeepingProtocol"/>).
+    /// </remarks>
     /// <param name="workFolder">The work folder.</param>
     /// <param name="attempt">The lock wait of this call.</param>
     /// <exception cref="LockContentionException">The work-folder lock cannot be taken by the deadline.</exception>
@@ -248,9 +263,21 @@ internal sealed class PathLockSet
     }
 
     /// <summary>
-    /// Closes the handles held (the lock files stay).
+    /// Closes the handles held, the protocol lock last (the lock files stay).
     /// </summary>
     internal void Release()
+    {
+        ReleaseKeepingProtocol();
+        ReleaseProtocol();
+    }
+
+    /// <summary>
+    /// Closes the handles held except the protocol lock (the lock files stay).
+    /// </summary>
+    /// <remarks>
+    /// The lock-file cleanup of <c>RecoverAsync</c> swaps the shared work-folder lock for the exclusive one this way, so no client of another protocol version can start meanwhile.
+    /// </remarks>
+    internal void ReleaseKeepingProtocol()
     {
         foreach (FileStream handle in _handles.Values)
         {
@@ -378,6 +405,12 @@ internal sealed class PathLockSet
         {
             throw new LockContentionException("Another transaction is using this path: " + fullPath, fullPath);
         }
+    }
+
+    private void ReleaseProtocol()
+    {
+        _protocolHandle?.Dispose();
+        _protocolHandle = null;
     }
 
     private void ReleaseWorkFolder()

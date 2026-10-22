@@ -122,7 +122,8 @@ One process, one transaction. Cooperative locks are skipped. `tx.ReadAsync` is o
 - [x] Issue #108: the order in which Recover processes several orphaned journals is not defined
 - [x] Issue #171: merge directory import into one plan-and-apply path
 - [x] Issue #290: make English the repository language, with Japanese translations of frequently read documents
-- [ ] Issue #339: design: detect clients of another on-disk protocol version in a work folder
+- [x] Issue #339: design: detect clients of another on-disk protocol version in a work folder
+- [x] Issue #342: detect clients of another protocol version with the protocol lock
 
 ## Publishing (after Phase 3)
 
