@@ -124,6 +124,7 @@ One process, one transaction. Cooperative locks are skipped. `tx.ReadAsync` is o
 - [x] Issue #290: make English the repository language, with Japanese translations of frequently read documents
 - [x] Issue #339: design: detect clients of another on-disk protocol version in a work folder
 - [x] Issue #342: detect clients of another protocol version with the protocol lock
+- [ ] Issue #341: design: recover journals left by a client of an earlier protocol version (rule only; implemented with protocol 2)
 
 ## Publishing (after Phase 3)
 

@@ -1566,10 +1566,21 @@ A change to any of them could not be detected by construction: a client of one v
 #### The protocol in the journal
 
 - The first line of a journal (the document) has `protocol`: the protocol version of the client that wrote it, as a JSON number. Append records do not have it
-- A journal whose `protocol` is not this client's protocol version is an "unreadable journal", decided before the operations are interpreted, as for a different document `version`: nothing is touched, and the walk that deletes `.txnew` files does not run ("Unreadable journals"). Staging names and the meaning of operations may differ between protocols, so neither rolling forward or back nor computing the footprint is safe
+- A journal of the previous protocol version (N−1) is read with the rules of that protocol ("Journals of the previous protocol")
+- A journal whose `protocol` is neither this client's protocol version nor the previous one is an "unreadable journal", decided before the operations are interpreted, as for a different document `version`: nothing is touched, and the walk that deletes `.txnew` files does not run ("Unreadable journals"). Staging names and the meaning of operations may differ between protocols, so neither rolling forward or back nor computing the footprint is safe. This covers a newer protocol, and protocols older than N−1
 - A journal without `protocol`, or with null, was written by 0.2.0 or earlier, and is read as protocol 1
 - Adding the field does not change the document `version`. A 0.2.0 reader ignores unknown fields, so it reads a protocol 1 journal as before
-- Such a journal blocks staging and commit in the whole work folder, as any unreadable journal does, until a `RecoverAsync` of its protocol processes it, or someone deletes it
+- Such a journal blocks staging and commit in the whole work folder, as any unreadable journal does, until a `RecoverAsync` of its protocol (or of the next protocol) processes it, or someone deletes it
+
+#### Journals of the previous protocol
+
+A client of protocol N recovers journals of protocol N−1 too, so a crash just before an upgrade does not block the work folder after every client is upgraded.
+
+- It reads such a journal with the rules of protocol N−1: its document version, staging names, operation kinds and their meaning, and how its footprint is computed. This applies to `RecoverAsync` and to the orphan check of transactions ("Rejecting while an orphaned journal exists")
+- The locks are this client's own: the footprint locks and the liveness lock are taken as protocol N takes them. A client of protocol N−1 cannot be alive while this client holds its protocol lock ("The check"), so no one takes them the N−1 way at the same time
+- Only one earlier protocol is read. Reading every earlier protocol would keep every old reader and its tests forever; journals older than N−1 stay "unreadable journals"
+- A release that increases the protocol version states in this document how it reads the journals of the protocol before it, or that it does not read them and why. Until that release, there is no earlier protocol to read: protocol 1 is the first
+- To avoid leftover journals of an older protocol, call `RecoverAsync` with the old version before upgrading the clients of a work folder
 
 #### The check
 
@@ -2061,11 +2072,11 @@ Like the write APIs, it is an async API.
 
 A journal whose liveness lock could be opened is read (step 1 of "Recover API"); when it cannot be interpreted as JSON (`JsonException`, or deserialization returns null), it is unreadable.
 Even when it can be read as JSON, it is unreadable when:
-`version` is not 1;
-`protocol` is not this client's protocol version ("The protocol in the journal");
+`version` is not the document version of its protocol (1 for protocol 1);
+`protocol` is neither this client's protocol version nor the previous one ("The protocol in the journal");
 an operation kind is not a name in `PendingChangeKind` (numeric kinds are not accepted either);
 an operation's `path` is empty, or a Move's `newPath` is empty.
-A journal whose `version` is not 1, or whose `protocol` is not this client's protocol version ("The protocol in the journal"), is decided before interpreting the operations; it may have been left by another version of the library, so the `.txnew` and `.prev` cleanup below does not run either, nothing is touched, and it is `JournalUnreadable`.
+A journal whose `version` is not the document version of its protocol, or whose `protocol` is neither this client's protocol version nor the previous one ("The protocol in the journal"), is decided before interpreting the operations; it may have been left by another version of the library, so the `.txnew` and `.prev` cleanup below does not run either, nothing is touched, and it is `JournalUnreadable`.
 The journal is not deleted.
 Directories created by `CreateDirectory` cannot be identified, because the document cannot be read, so they stay.
 Files whose names end in `.{guid}.txnew`, and those with `.prev` appended, are deleted from under the work folder (excluding `.txfio`).
