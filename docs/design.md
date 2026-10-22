@@ -1533,36 +1533,48 @@ A transaction or `RecoverAsync` that finds a live client of another protocol ver
 - After 1.0, it increases only in a major version
 - Protocol 1 is the on-disk protocol of 0.2.0 with the protocol lock added. If the release that adds the protocol lock also changes anything else above, it starts at 2 instead
 - Clients of 0.2.0 and earlier take no protocol lock, so they cannot be detected. A 0.2.0 client follows the rest of protocol 1 and may share a work folder with protocol 1 clients. A 0.1.0 client must not ("The share-lost marker")
+- A 0.2.0 client may share a work folder only with protocol 1 clients. Once protocol 2 exists, 0.2.0 clients must not share a work folder with protocol 2 clients either, and this is still not detected
 
 #### The lock file
 
 - `.txfio/proto-{N}.lock`. `{N}` is the protocol version in decimal digits with no leading zeros (`ToString(CultureInfo.InvariantCulture)`)
 - It is in `.txfio`, not in `.txfio/locks/`, so the lock-file cleanup does not delete it ("Cleaning up lock files"). Nothing deletes it; there is one empty file per protocol version that has used the work folder
-- It is opened as shared: `FileMode.OpenOrCreate`, `FileAccess.ReadWrite`, `FileShare.ReadWrite`. The file stays after the handle is closed
+- A client that holds it opens it with `FileMode.OpenOrCreate`, `FileAccess.ReadWrite`, `FileShare.ReadWrite`. Holders of the same version do not block each other. The file stays after the handle is closed
+- The check opens another version's file with `FileMode.Open`, `FileAccess.Read`, `FileShare.Read` ("The check"). This fails with a sharing violation only while a holder has it open for writing. Two checks of the same file do not block each other, so clients of one version that check a file left by another version never take each other for a live client
 
 #### When it is taken
 
 - Right before the shared work-folder lock, every time that lock is taken: in a transaction ("The work-folder lock") and in `RecoverAsync` ("Recover API")
 - It is held as long as the work-folder lock, and closed right after it. A transaction holds it until it ends, and does not check again while it holds it
+- `RecoverAsync` holds it until the end of the call, including the lock-file cleanup. The cleanup swaps the shared work-folder lock for the exclusive one while it keeps the protocol lock open, and does not check again ("Cleaning up lock files"). A client of another version cannot start its check successfully while this lock is held, so no client of another version is in the work folder during the cleanup, even if it names its lock files differently
 - `BeginAsync` does not take it, because it takes no locks ("When contention is detected"). A transaction that only reads never takes it
 - `Read`, `Exists`, `Export`, and `ExportArchive` do not take it, as they do not take the work-folder lock. They write nothing in the work folder, and what they see while a client of another version writes is a dirty read, which is already allowed
-- The journal and liveness lock that `BeginAsync` writes are not protected by it. A live journal is never read ("Recover API"). A journal left by a crashed client of another version is processed by any `RecoverAsync`; when its document `version` differs, it is an "unreadable journal" and nothing is touched ("Unreadable journals")
+- The journal and liveness lock that `BeginAsync` writes are not protected by it. A live journal is never read ("Recover API"). A journal left by a crashed client of another version can be read by any `RecoverAsync`, and by the orphan check of any transaction ("Rejecting while an orphaned journal exists"). The journal records the protocol version that wrote it ("The protocol in the journal") so that it is never interpreted by the rules of another protocol
+
+#### The protocol in the journal
+
+- The first line of a journal (the document) has `protocol`: the protocol version of the client that wrote it, as a JSON number. Append records do not have it
+- A journal whose `protocol` is not this client's protocol version is an "unreadable journal", decided before the operations are interpreted, as for a different document `version`: nothing is touched, and the walk that deletes `.txnew` files does not run ("Unreadable journals"). Staging names and the meaning of operations may differ between protocols, so neither rolling forward or back nor computing the footprint is safe
+- A journal without `protocol`, or with null, was written by 0.2.0 or earlier, and is read as protocol 1
+- Adding the field does not change the document `version`. A 0.2.0 reader ignores unknown fields, so it reads a protocol 1 journal as before
+- Such a journal blocks staging and commit in the whole work folder, as any unreadable journal does, until a `RecoverAsync` of its protocol processes it, or someone deletes it
 
 #### The check
 
-After its own protocol lock is open, and before the work-folder lock:
+Before the work-folder lock, with these steps:
 
-1. List `.txfio/proto-*.lock` (one level). Skip its own file, and names whose `{N}` is not decimal digits
-2. For each, open it with `FileMode.Open`, `FileAccess.ReadWrite`, `FileShare.None`, and close it right away. If it opens, or the file is gone, no client of that version is alive. A sharing violation means a client of that version is alive
-3. When a client of another version is alive, close its own protocol lock, wait, and start again from opening its own protocol lock
+1. Probe the other versions without holding its own protocol lock: list `.txfio/proto-*.lock` (one level), skip its own file and names whose `{N}` is not decimal digits, and open each with the probe mode of "The lock file", then close it right away. If it opens, or the file is gone, no client of that version is alive. A sharing violation means a client of that version is alive
+2. When one is alive, wait and go back to step 1. Its own protocol lock is still not open
+3. When none is alive, open its own protocol lock, then probe again as in step 1
+4. When one is alive now, close its own protocol lock, wait, and go back to step 1. Otherwise the check is done, and it keeps its own protocol lock
 
 - The waits follow "When contention is detected": the 100 ms interval, and the call's one deadline shared with the work-folder lock and the other locks. With `TimeSpan.Zero`, there is one try
 - At the deadline, it throws `IncompatibleClientException`. The message names both protocol versions and the work folder
 - When cancelled while waiting, `OperationCanceledException`. In `RecoverAsync` this happens before any journal is processed, so the report is not lost
-- A sharing violation when it opens its own protocol lock (another version's check holds it for a moment) is waited for the same way. If the deadline passes there, it is `IncompatibleClientException` too
+- A sharing violation when it opens its own protocol lock (another version's probe has it open for a moment) is waited for the same way. If the deadline passes there, it is `IncompatibleClientException` too
 - Other IO failures are not waited for, and are returned as they are
-- It closes its own lock while it waits, so a waiting client never stops the clients that are already using the work folder. The work folder stays with the version in use, and the newcomer fails at its deadline
-- Each client opens its own file before it checks the others, so when clients of two versions start at the same time, at least one sees the other. Both may see each other and both may fail at the deadline; neither has touched the work folder
+- A waiting client opens its own file only when it sees no client of another version, so it does not disturb the clients that are already using the work folder. The work folder stays with the version in use, and the newcomer fails at its deadline
+- A client keeps its own lock only after it probes again while holding it (step 3), so when clients of two versions start at the same time, at least one sees the other. Both may see each other and both may fail at the deadline; neither has touched the work folder
 
 ### When contention is detected
 
@@ -1644,7 +1656,7 @@ While it does, no live transaction holds a path that overlaps the footprint.
 
 `.txfio/locks/*.lock` for path locks and intent locks grows by one per touched path and each of its ancestors.
 `RecoverAsync` deletes them as a last step, after every journal is processed and the locks taken for the journals are closed.
-It closes its shared work-folder lock and opens the work-folder lock exclusively, once and without waiting.
+It closes its shared work-folder lock and opens the work-folder lock exclusively, once and without waiting. It keeps its protocol lock open through this step, and closes it after the exclusive work-folder lock ("The protocol lock").
 If that opens, it deletes `*.lock` in `.txfio/locks/`, then closes the work-folder lock.
 At that point no other transaction holds a path lock or intent lock (holding one requires the shared work-folder lock, "The work-folder lock"), so there is no race where someone has a deleted file open.
 When the work-folder lock is in use (a sharing violation), it deletes nothing and returns the report as usual.
@@ -1792,7 +1804,7 @@ There are no gaps.
 The journal document version stays 1.
 Changing it changes the protocol version ("The protocol lock").
 Documents with the Attach kind are not read or migrated.
-Journals that cannot be read as JSON, have a different version, or have an unknown kind follow "Unreadable journals".
+Journals that cannot be read as JSON, have a different version or protocol ("The protocol in the journal"), or have an unknown kind follow "Unreadable journals".
 
 ### Overwriting the journal
 
@@ -2038,9 +2050,10 @@ Like the write APIs, it is an async API.
 A journal whose liveness lock could be opened is read (step 1 of "Recover API"); when it cannot be interpreted as JSON (`JsonException`, or deserialization returns null), it is unreadable.
 Even when it can be read as JSON, it is unreadable when:
 `version` is not 1;
+`protocol` is not this client's protocol version ("The protocol in the journal");
 an operation kind is not a name in `PendingChangeKind` (numeric kinds are not accepted either);
 an operation's `path` is empty, or a Move's `newPath` is empty.
-A journal whose `version` is not 1 is decided before interpreting the operations; it may have been left by a newer version of the library, so the `.txnew` and `.prev` cleanup below does not run either, nothing is touched, and it is `JournalUnreadable`.
+A journal whose `version` is not 1, or whose `protocol` is not this client's protocol version ("The protocol in the journal"), is decided before interpreting the operations; it may have been left by another version of the library, so the `.txnew` and `.prev` cleanup below does not run either, nothing is touched, and it is `JournalUnreadable`.
 The journal is not deleted.
 Directories created by `CreateDirectory` cannot be identified, because the document cannot be read, so they stay.
 Files whose names end in `.{guid}.txnew`, and those with `.prev` appended, are deleted from under the work folder (excluding `.txfio`).
